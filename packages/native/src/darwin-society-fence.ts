@@ -47,7 +47,7 @@ export type HeldDarwinSocietyFence = { readonly kind: "held"; readonly fd: numbe
 
 export function holdDarwinSocietyFence(name: string, run: DarwinSocietyFenceRunner): HeldDarwinSocietyFence {
   const tag = identity(name), port = String(darwinSocietyFencePort(name)), image = assets(), channel = controlSocketPair();
-  let fence: number | undefined, owner: number | undefined;
+  let fence: number | undefined;
   let parent: number | undefined = channel.parent, child: number | undefined = channel.child;
   return withCleanup<HeldDarwinSocietyFence>(() => {
     const acquired = invoke(run, image.control, ["acquire", image.producer, tag, image.hash, port], channel.child);
@@ -59,20 +59,19 @@ export function holdDarwinSocietyFence(name: string, run: DarwinSocietyFenceRunn
     if (acquired.kind !== "held") throw new StoreError("BROKER_UNAVAILABLE", "Society fence acquisition was not confirmed");
     receive ??= load(fileURLToPath(new URL("./society-fence/oma-society-fence-bridge.dylib", import.meta.url)))
       .func("int oma_fence_receive(int channel, _Out_ int *descriptors)");
-    const descriptors = new Int32Array([-1, -1]), result = receive(channel.parent, descriptors);
+    const descriptors = new Int32Array([-1]), result = receive(channel.parent, descriptors);
     if (result !== 0) throw new StoreError("BROKER_UNAVAILABLE", `Society fence private handoff failed (errno ${result})`);
-    fence = descriptors[0]!; owner = descriptors[1]!; closeOnExec(fence); closeOnExec(owner);
+    fence = descriptors[0]!; closeOnExec(fence);
     if (invoke(run, image.control, ["identify", tag, image.hash, port], fence).kind !== "matched")
       throw new StoreError("BROKER_UNAVAILABLE", "Society fence handoff differs from its authenticated instance");
-    const returnedParent = channel.parent, returnedChild = channel.child; parent = undefined; child = undefined;
-    cleanupAll([() => closeSync(returnedParent), () => closeSync(returnedChild)]);
-    const held = fence, lifetime = owner; fence = undefined; owner = undefined; let released = false;
+    const returnedChild = channel.child; child = undefined; closeSync(returnedChild);
+    const held = fence, lifetime = channel.parent; fence = undefined; parent = undefined; let released = false;
     return { kind: "held", fd: held, release() {
       if (released) return; released = true;
       try { invoke(run, image.control, ["release", tag, image.hash, port], lifetime); }
       finally { cleanupAll([() => closeSync(held), () => closeSync(lifetime)]); }
     } };
-  }, () => cleanupAll([() => { if (fence !== undefined) closeSync(fence); }, () => { if (owner !== undefined) closeSync(owner); },
+  }, () => cleanupAll([() => { if (fence !== undefined) closeSync(fence); },
     () => { if (parent !== undefined) closeSync(parent); }, () => { if (child !== undefined) closeSync(child); }]));
 }
 export function identifyDarwinSocietyFence(fd: number, name: string, run: DarwinSocietyFenceRunner): { readonly kind: "matched" | "other" } {

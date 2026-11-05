@@ -15,14 +15,14 @@ int oma_fence_receive(int channel,int *result){
     headers++;
     if(right->cmsg_level!=SOL_SOCKET || right->cmsg_type!=SCM_RIGHTS || right->cmsg_len<CMSG_LEN(0)){invalid=1;continue;}
     size_t bytes=right->cmsg_len-CMSG_LEN(0);
-    if(bytes!=2*sizeof(int))invalid=1;
+    if(bytes!=sizeof(int))invalid=1;
     for(size_t offset=0;offset+sizeof(int)<=bytes;offset+=sizeof(int)){
       int fd;memcpy(&fd,(unsigned char *)CMSG_DATA(right)+offset,sizeof fd);
       if(count<16)received[count++]=fd;else close(fd);
     }
   }
-  if(length==sizeof body && !(message.msg_flags&(MSG_TRUNC|MSG_CTRUNC)) && !invalid && headers==1 && count==2 && body[0]==0x4f4d5373U && body[1]==1){
-    result[0]=received[0];result[1]=received[1];return 0;
+  if(length==sizeof body && !(message.msg_flags&(MSG_TRUNC|MSG_CTRUNC)) && !invalid && headers==1 && count==1 && body[0]==0x4f4d5373U && body[1]==2){
+    result[0]=received[0];return 0;
   }
   for(int i=0;i<count;i++)close(received[i]);return EINVAL;
 }

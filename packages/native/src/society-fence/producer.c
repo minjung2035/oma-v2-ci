@@ -16,8 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-static void require(int okay,const char *label){if(!okay){int error=errno;dprintf(3,"E%s: errno=%d\n",label,error);errno=error;perror(label);exit(70);}}
-static void kernel(kern_return_t result,const char *label){if(result){dprintf(3,"E%s: kernel=%d\n",label,result);fprintf(stderr,"%s=%d\n",label,result);exit(71);}}
+static int diagnostic=3;
+static void require(int okay,const char *label){if(!okay){int error=errno;dprintf(diagnostic,"E%s: errno=%d\n",label,error);errno=error;perror(label);exit(70);}}
+static void kernel(kern_return_t result,const char *label){if(result){dprintf(diagnostic,"E%s: kernel=%d\n",label,result);fprintf(stderr,"%s=%d\n",label,result);exit(71);}}
 int main(int argc,char **argv){
   if(argc!=3 || getuid()==0 || strlen(argv[1])!=64)return 64;
   struct oma_fence_publication publication={0};
@@ -37,10 +38,13 @@ int main(int argc,char **argv){
   }
   int owner_type=0;socklen_t owner_length=sizeof owner_type;
   require(getsockopt(3,SOL_SOCKET,SO_TYPE,&owner_type,&owner_length)==0 && owner_type==SOCK_STREAM,"private owner stream");
+  owner_length=sizeof owner_type;
+  require(getsockopt(4,SOL_SOCKET,SO_TYPE,&owner_type,&owner_length)==0 && owner_type==SOCK_STREAM,"original Host owner stream");
   int no_pipe=1;require(setsockopt(3,SOL_SOCKET,SO_NOSIGPIPE,&no_pipe,sizeof no_pipe)==0,"private owner closed-peer observation");
+  require(setsockopt(4,SOL_SOCKET,SO_NOSIGPIPE,&no_pipe,sizeof no_pipe)==0,"Host owner closed-peer observation");
   require(ptrace(PT_DENY_ATTACH,0,NULL,0)==0,"deny tracing");
   int fd=socket(AF_INET6,SOCK_DGRAM,0),one=1;
-  require(fd>=4,"fence socket");
+  require(fd>=5,"fence socket");
   require(setsockopt(fd,IPPROTO_IPV6,IPV6_V6ONLY,&one,sizeof one)==0,"fence v6-only");
   struct sockaddr_in6 address={.sin6_len=sizeof address,.sin6_family=AF_INET6,.sin6_port=htons((uint16_t)port)};
   if(bind(fd,(struct sockaddr *)&address,sizeof address)){
@@ -73,9 +77,10 @@ int main(int argc,char **argv){
   int sink=open("/dev/null",O_WRONLY|O_CLOEXEC);require(sink>=0,"resident stderr");
   require(dup2(sink,2)==2 && close(sink)==0,"resident stderr handback");
   char ready='R';require(write(3,&ready,1)==1,"discovery readiness");
-  int flags=fcntl(3,F_GETFL);require(flags>=0 && fcntl(3,F_SETFL,flags|O_NONBLOCK)==0,"owner observation");
+  diagnostic=4;
+  int flags=fcntl(4,F_GETFL);require(flags>=0 && fcntl(4,F_SETFL,flags|O_NONBLOCK)==0,"owner observation");
   for(;;){
-    char byte=0;ssize_t owner=read(3,&byte,1);
+    char byte=0;ssize_t owner=read(4,&byte,1);
     if(owner==0)break;
     if(owner==1)require(0,"unexpected private owner payload");
     if(owner<0 && errno!=EINTR && errno!=EAGAIN)require(0,"owner lifetime");
@@ -98,7 +103,7 @@ int main(int argc,char **argv){
    * task teardown; do not revoke a bootstrap-owned receive right before the
    * private socket-return acknowledgement can be delivered. */
   require(close(fd)==0,"creator fence return");
-  char closed='C';ssize_t returned=write(3,&closed,1);
+  char closed='C';ssize_t returned=write(4,&closed,1);
   if(returned<0 && errno==EPIPE)return 10; /* Diagnostic: own copy returned, acknowledgement peer absent. */
   require(returned==1,"fence return acknowledgement");
   return 0;

@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `682dd45af9150872a81a177503c984b939236d933cd994987761959d91674c13` (15946 files).
+verification input digest `41b05918fc216373f063480366576cd0e9181e2c3c9aae5bb7dcdcd5e8866dd1` (15946 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4383,3 +4383,22 @@ half-close 변경도 성공한 해결책으로 판정하지 않는다. status0�
 SOURCE96은 실패 때 해제 직전의 Host/creator private socket opaque identity·connected peer·kernel state와 해제 뒤 Host state를 기록한다.
 creator가 자기 copy를 닫은 뒤 acknowledgement EPIPE를 받은 경로는 diagnostic exit10으로 구분한다.
 이 exit status 자체를 제품 성공이나 전체 scope 사망으로 해석하지 않는다. 최종 review/독립 설치/전체 architecture는 계속 미완료다.
+
+### SOURCE96 actual endpoint와 SOURCE97 원래 Host channel 유지
+
+SOURCE96 `d77423b5d1f4b48ea37cb8a2e81a4a04d1e94fbc`, Native42067951318·Architecture42067951832이다.
+canonical15946/`682dd45af9150872a81a177503c984b939236d933cd994987761959d91674c13`다.
+Intel Society ZIP13434144773 SHA-256 `9464a39f2109d28c42fbc4e6f95df38fd5735a1f94b4824907c9d12388536f64`를 대조했다.
+동일 source/input/runtime Society 전후 동일, runtime15549/27 `e3ab2806d38285b515c83dff50244097606914f71142faad7eda9a603db42ee7`다.
+3 PASS /2 FAIL·기타0이다. 두 실패의 Host/creator socket info는 모두792 bytes였고 양 endpoint의 connected peer는 서로 정확히 일치했다.
+반환 요청 이전 Host state34(0x22: connected + receive closed), creator258(0x102: connected + nonblocking), 요청 뒤 Host50(0x32)다.
+creator는 원래 등록한 kernel event에서 status0으로 종료했다. diagnostic exit10이 아니므로 C write가 EPIPE였다고 판정하지 않는다.
+인계된 endpoint가 이미 receive-closed인 것을 확인했으며 전체 kernel 실행 경로 자체를 관측한 것은 아니다.
+
+SOURCE97은 SCM_RIGHTS로 AF_UNIX lifetime endpoint를 재인계하지 않는다.
+Host가 처음 만든 socketpair의 parent를 계속 소유하고, child는 고정 controller에서 고정 creator의 별도 FD4로 직접 상속한다.
+초기 publication/ready는 기존 controller↔creator의 별도 setup stream으로만 흐른다.
+Host에 SCM으로 전달하는 것은 실제 새 IPv6 fence FD 하나뿐이며 private handoff version2는 다른 descriptor 수/버전을 거절한다.
+Host 채널은 actual fence 인식 뒤 child copy만 반환하고 parent를 creator의 EOF/ack 수명으로 유지한다.
+정상 반환의 양성 응답, Host/creator 사망 거절, full identity/collision/mutation 조건은 유지한다.
+수정의 actual Mac은 아직 NOT_RUN이다. 최종 review/독립 설치/전체 architecture 마감도 아직 미완료이며 세 gate OPEN·제품 BLOCKED다.

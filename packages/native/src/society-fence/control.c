@@ -81,10 +81,13 @@ static void deadline(int fd){struct timeval timeout={.tv_sec=3};require(setsocko
 static int acquire(const char *producer,const char *tag,const char *hash,const char *port_text){
   unsigned port=parse_port(port_text);uint8_t identity[32];tag_bytes(tag,identity);
   int lifetime[2];require(socketpair(AF_UNIX,SOCK_STREAM,0,lifetime)==0,"private creator channel");deadline(lifetime[1]);
+  /* Keep the Host's original endpoint out of SCM_RIGHTS transit. */
+  int owner=fcntl(3,F_DUPFD_CLOEXEC,64);require(owner>=64,"Host owner channel source");
   posix_spawnattr_t attributes;posix_spawn_file_actions_t actions;
   require(posix_spawnattr_init(&attributes)==0 && posix_spawn_file_actions_init(&actions)==0,"creator spawn setup");
   require(posix_spawnattr_setflags(&attributes,POSIX_SPAWN_START_SUSPENDED|POSIX_SPAWN_CLOEXEC_DEFAULT|POSIX_SPAWN_SETSIGMASK)==0,"creator spawn flags");
   require(posix_spawn_file_actions_adddup2(&actions,lifetime[0],3)==0,"private creator handoff");
+  require(posix_spawn_file_actions_adddup2(&actions,owner,4)==0,"original Host lifetime channel");
   require(posix_spawn_file_actions_addopen(&actions,0,"/dev/null",O_RDONLY,0)==0 && posix_spawn_file_actions_addopen(&actions,1,"/dev/null",O_WRONLY,0)==0 && posix_spawn_file_actions_adddup2(&actions,2,2)==0,"creator stdio");
   char *arguments[]={(char *)producer,(char *)tag,(char *)port_text,NULL},*environment[]={"PATH=/usr/bin:/bin",NULL};pid_t launched=0;
   sigset_t blocked,prior;sigemptyset(&blocked);sigaddset(&blocked,SIGALRM);sigaddset(&blocked,SIGTERM);sigaddset(&blocked,SIGINT);
@@ -93,7 +96,7 @@ static int acquire(const char *producer,const char *tag,const char *hash,const c
   int spawned=posix_spawn(&launched,producer,&actions,&attributes,arguments,environment);if(spawned==0)child=launched;
   require(sigprocmask(SIG_SETMASK,&prior,NULL)==0,"creator acquisition signal return");
   require(spawned==0,"direct creator spawn");
-  require(posix_spawnattr_destroy(&attributes)==0 && posix_spawn_file_actions_destroy(&actions)==0,"creator setup return");require(close(lifetime[0])==0,"creator child-end return");
+  require(posix_spawnattr_destroy(&attributes)==0 && posix_spawn_file_actions_destroy(&actions)==0,"creator setup return");require(close(lifetime[0])==0 && close(owner)==0,"creator child-end return");
   int status=0;pid_t observed=0;
   for(unsigned i=0;i<5000;i++){observed=observe(WUNTRACED,&status);if(observed!=0)break;usleep(1000);}
   require(observed==launched && WIFSTOPPED(status),"unreaped stopped creator");
@@ -121,7 +124,7 @@ static int acquire(const char *producer,const char *tag,const char *hash,const c
   char ready=0;require(read(lifetime[1],&ready,1)==1 && ready=='R',"creator discovery ready");
   audit_token_t discovered={0};struct oma_fence_publication discovery=discover(tag,hash,port,&discovered);
   require(discovery.socket==packet.socket && discovery.generation==packet.generation && !memcmp(&discovered,&token,sizeof token),"fresh creator discovery matches handed fence");
-  uint32_t header[2]={OMA_FENCE_HANDOFF,1};int descriptors[2]={fence,lifetime[1]};
+  uint32_t header[2]={OMA_FENCE_HANDOFF,2};int descriptors[1]={fence};
   union{struct cmsghdr align;unsigned char bytes[CMSG_SPACE(sizeof descriptors)];} handoff={0};
   struct iovec result={.iov_base=header,.iov_len=sizeof header};struct msghdr returned={.msg_iov=&result,.msg_iovlen=1,.msg_control=handoff.bytes,.msg_controllen=sizeof handoff};
   right=CMSG_FIRSTHDR(&returned);right->cmsg_level=SOL_SOCKET;right->cmsg_type=SCM_RIGHTS;right->cmsg_len=CMSG_LEN(sizeof descriptors);memcpy(CMSG_DATA(right),descriptors,sizeof descriptors);
@@ -154,7 +157,7 @@ int main(int argc,char **argv){
     (void)discover(argv[2],argv[3],port,&after);require(!memcmp(&before,&after,sizeof before),"creator return generation");
     struct socket_fdinfo owner_before={0},creator_before={0},owner_after={0};
     int owner_bytes=proc_pidfdinfo(getpid(),3,PROC_PIDFDSOCKETINFO,&owner_before,sizeof owner_before);
-    int creator_bytes=proc_pidfdinfo((pid_t)before.val[5],3,PROC_PIDFDSOCKETINFO,&creator_before,sizeof creator_before);
+    int creator_bytes=proc_pidfdinfo((pid_t)before.val[5],4,PROC_PIDFDSOCKETINFO,&creator_before,sizeof creator_before);
     deadline(3);char answer=0;errno=0;require(shutdown(3,SHUT_WR)==0,"creator owner send return");
     errno=0;ssize_t received=read(3,&answer,1);
     if(received!=1 || answer!='C'){
