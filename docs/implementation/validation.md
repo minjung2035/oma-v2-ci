@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `dbfffb1ef8ece91f0d8efd6eba39bfb445ac4e013725a8f65b6827bda8b1a951` (15937 files).
+verification input digest `b228805eff452513f3315e56baecab3b097049b611e950ba420381b20234a842` (15938 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4055,3 +4055,53 @@ workspace FD나 임의 pathname cwd로 대체하지 않는다. production entry/
 worker-bootstrap/tools6건은 실제 Pi의 client-preload가 기존 G-PROCESS/G-FILES/G-AUTH guard에서 거절한 결과다.
 그 guard를 제거하거나 이 관측을 Pi 실행 성공으로 바꾸지 않는다.
 SOURCE85는 이 입력의 부모로 포함하며 별도 CI를 발행하지 않는다. 새 직접 전달/discovery와 정정된 gate fixture의 actual Mac은 NOT_RUN이다.
+
+### SOURCE87 world navigation도 같은 retained directory 사용
+
+SOURCE84 Mac15 main ZIP13419450516 SHA-256 `81fdd28a9c0a98e0e8b00a15587659cb4d4a4b6cc042004d6bddcfcf03f4cb11`를 대조했다.
+같은 source/canonical15937 및 runtime15540/27 `59d7bac89f01bede77cf2c205c3c6aff04334eb96073c2383a6f1b93516d9ef8`가 main 전후 동일이다.
+main460/455 PASS/5 FAIL·기타0다. discovery1건 외에 새 snapshot4건이 sealed staging의 renameAt에서 EACCES로 실패했다.
+ARM26·Intel26에서 통과한 snapshot 근거를 Mac15로 옮겨 적지 않는다. 이 차이는 미해결이며 mode/게시 계약이나 OS floor를 바꾸지 않았다.
+SOURCE84 Intel shared ZIP13418409054 SHA-256 `33d342fbe9cf3eca7325728348375411a512af93e3ffba71115f33542f06de8d`,
+full ZIP13419216083 SHA-256 `9a7f26be25e2cb562ea61f0f16acd27b25300bc67c4795dc430cf1511f3a98b1`도 대조했다.
+같은 canonical/runtime의 전후 동일이나 generation001은 기존240000ms timeout,3건 중2 PASS/1 cancelled다.
+전체 scope 종료 증거로 승격하지 않는다. full artifact의 package rows는0개로 설치 검사는 완료되지 않았다.
+
+다음 production 변경은 world의 agents.tsv/topics.tsv/START.md/Principal mail navigation4개를 같은 directory FD로 게시한다.
+ViewsModule은 trusted control에서 빌린 world FD를 반환하지 않으며, default는 한 번 열어 네 게시 뒤 반환한다.
+Broker는 context snapshot에 주는 기존 world cache/resolver를 Views에도 공유한다. missing-root 생성 후에도 같은 resolver로 capture한다.
+mode000 복구는 그 held inode에서만 하고, 유효하지 않은 capability는 파일 게시 전에 거절한다.
+Storage의 replaceDerivedFileAt은 기존 replaceDerivedFile과 같은 leased temporary/collector/rename/fsync/cleanup/세 번의 bounded restart를 공유한다.
+새 unleased temporary나 별도 pathname replacement 구현을 사용하지 않는다. 기존 path wrapper도 같은 FD owner에 위임한다.
+새 world3건+snapshot/Views/status/조립/게시 중단·불확실 rename·재시도·collector race 회귀73/73 PASS·기타0다.
+원시는 `/tmp/oma-source87-publication-regression.log`이며 checkout .git을 read-only bind했다.
+최초 선택 회귀42/42도 통과했다(`/tmp/oma-source87-world-regression.log`).
+전체 StateRoot 최초 capture·status/mail notice·collaboration/diagnostic 등 다른 writer까지 완료했다는 근거는 아니다.
+세 gate OPEN·제품 BLOCKED·실행 guard·현재 권한/receipt/recovery 정책을 유지한다.
+새 world control의 actual Mac은 NOT_RUN이다.
+
+SOURCE86 발행 source `95aa07b51d65f7cfb3e70920e50fc768bd16c1e2` / tree `faf6170ebf900f308ae3bdc6034400efd85b6b35`,
+Native42037189141·Architecture42037189169의 ARM26 main ZIP13419576248 SHA-256
+`787527d1cd7d4f061b716d45856486feb7912621749c8a800f39b339dd13c3bb`를 대조했다.
+canonical15937/`dbfffb1ef8ece91f0d8efd6eba39bfb445ac4e013725a8f65b6827bda8b1a951` 및
+runtime15540/27 `e61fab460bf03009ba4cc0acda9a0aa6662814f2c22a397491902c4f7d522225`가 main 전후 동일이다.
+main460/460 PASS·fail/cancel/skip/todo0다. 기존 bootstrap-peer와 정상 bootstrap/socketpair discovery의 wrong-CDHash 거절 및 올바른 CDHash 양성이 모두 통과했다.
+직접 생성/검증한 fixed producer의 fresh FD 전달, 별도 lookup/nonce의 actual kernel sender, 동일 full tag/socket/generation,
+creator-live last-close와 unreaped child 반환까지의 한정된 근거다. Host crash·포트 충돌·이름 교체·전체 Society takeover는 증명하지 않았다.
+production Society lease 채택 및 제품 gate 통과로 승격하지 않는다. 새 world control 및 다른 OS 결과로도 옮겨 적지 않는다.
+
+SOURCE86 Intel26 main ZIP13419526523 SHA-256 `46903a89eca397b14c77347f8e0ac780698e4f41522d599882da24117ac06638`도 대조했다.
+같은 canonical 및 runtime15540/27 `615cab3164a9ea06d4d0844c3642c83568a11c14fec8d35c9994833cf4df0c93`의 main 전후 동일,
+main460/460 PASS·기타0다. ARM26 gate ZIP13420151206 SHA-256
+`dde94fe2ceb08b12dd91b3fc4fb3b1aab0cf9ccbf990268dffc67de872ef85db`는 같은 source/input 전후 동일이며120 executed/114 OBSERVED다.
+정정한 Git candidate3건은 모두 OBSERVED다. 남은6건은 Worker/Pi guard의 SETUP_FAILED이며 product BLOCKED를 유지한다.
+
+SOURCE87 최종 production build·fresh27/27 packed installation(App 실제 installed runtime 포함)·review metadata는 exit0다.
+production14398, review CHANGED_WITHOUT_ORACLE30 / NOT_REVIEWED14368 / REMOVED220이다.
+원시는 `/tmp/oma-source87-build-final.log`·`/tmp/oma-source87-package-isolation.log`·`/tmp/oma-source87-review.log`다.
+첫 full architecture는 새 replaceDerivedFileAt을 durable primitive로 인식하지 못해 기존 ViewsModule.refreshWorld 등록을 stale로 거절했다.
+실제 새 shared primitive를 extractor의 file-publication 목록에 등록하고 alias 검사를 양 API 모두에 적용했다.
+기존 durable boundary 등록·injection 조건·정확한 owner assertion을 삭제하거나 예외 처리하지 않았다.
+원시는 `/tmp/oma-source87-architecture.log`이며 정정 뒤 boundary4/4 PASS는 `/tmp/oma-source87-boundary-regression-final.log`다.
+workflow YAML 및 기존21개 bash block 문법은 통과했다.
+정정 후 full architecture·transaction·durable boundary·document·spec inventory도 exit0다(`/tmp/oma-source87-architecture-final.log`).

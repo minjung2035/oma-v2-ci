@@ -37,11 +37,13 @@ test("003. A primitive imported under another name is still a boundary", () => {
   try {
     mkdirSync(join(root, "apps/oma/src"), {recursive:true}); mkdirSync(join(root, "implementation"));
     writeFileSync(join(root, "production-files.txt"), "apps/oma/src/owner.ts\n");
-    writeFileSync(join(root, "apps/oma/src/owner.ts"),
-      'import { replaceDerivedFile as recordIt } from "./storage/durable-fs.js";\nexport function keep(path) { recordIt(path, "x"); }\n');
-    writeFileSync(join(root, "implementation/durable-boundaries.json"), JSON.stringify({ boundaries: [] }));
-    assert.deepEqual(durableBoundaries(root).map(entry => entry.owner), ["apps/oma/src/owner.ts#keep"]);
-    assert.match(checkDurableBoundaries(root).join("\n"), /src\/owner\.ts#keep: a durable boundary \(file-publication\) has no registered/);
+    writeFileSync(join(root, "implementation/durable-boundaries.json"), '{"boundaries":[]}');
+    for (const primitive of ["replaceDerivedFile", "replaceDerivedFileAt"]) {
+      writeFileSync(join(root, "apps/oma/src/owner.ts"),
+        `import { ${primitive} as recordIt } from "./storage/durable-fs.js";\nexport function keep(path) { recordIt(path, "x"); }\n`);
+      assert.deepEqual(durableBoundaries(root).map(entry => entry.owner), ["apps/oma/src/owner.ts#keep"]);
+      assert.match(checkDurableBoundaries(root).join("\n"), /#keep: a durable boundary \(file-publication\) has no registered/);
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

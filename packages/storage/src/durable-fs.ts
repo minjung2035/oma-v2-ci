@@ -343,16 +343,17 @@ export function replaceDerivedEntry(parent: number, name: string, target: string
  */
 export function replaceDerivedFile(target: string, bytes: string | Uint8Array, mode = 0o600, faults?: DurabilityObserver): void {
   ensureDurableDirectory(dirname(target), 0o755, faults);
-  // The directory is resolved once per attempt, and the temporary, the rename
-  // and the flush all address it through that descriptor. Creating the
-  // temporary by pathname after checking the directory -- which is what this
-  // did -- let any process of this user swap a component of the path in
-  // between, so the file the product believed it had replaced under its state
-  // tree was created, written and renamed somewhere else entirely.
-  // `ensureDurableDirectory` having just succeeded proved nothing about the
-  // walk that followed it: it was a different walk.
+  withinDirectory(target, (parent, name) => replaceDerivedFileAt(parent, name, target, bytes, mode, faults));
+}
+
+/** Same leased temporary, replacement and durability ordering under a borrowed
+ * parent. The target string is a diagnostic/fault label, never reopened. */
+export function replaceDerivedFileAt(parent: number, name: string, target: string, bytes: string | Uint8Array,
+  mode = 0o600, faults?: DurabilityObserver): void {
+  if (!name || name.includes("/") || name.includes("\0") || name === "." || name === ".." || basename(target) !== name)
+    throw new TypeError("derived replacement requires one matching entry name");
   for (let attempt = 0; ; attempt++) {
-    const result = withinDirectory(target, (parent, name) => {
+    const result = (() => {
       // P0V-96: what a killed writer of this name left is collected first, and
       // this writer's temporary is locked until it is renamed away.
       collectDeadTemporaries(parent);
@@ -393,7 +394,7 @@ export function replaceDerivedFile(target: string, bytes: string | Uint8Array, m
         try { closeSync(fd); } catch { /* the kernel released it either way */ }
       }
       return "replaced";
-    });
+    })();
     if (result !== "restart") return;
     if (attempt >= 2) throw new StoreError("INTERNAL_ERROR", "a derived replacement's temporary kept being removed");
   }

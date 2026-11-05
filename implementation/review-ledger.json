@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 32,
-  "NOT_REVIEWED": 14366,
+  "CHANGED_WITHOUT_ORACLE": 30,
+  "NOT_REVIEWED": 14368,
   "REMOVED": 220
  },
  "lanes": {
@@ -837,12 +837,10 @@
   {
    "path": "apps/oma/src/views.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "75aa3e215eb557b38dfa394df616aa1d9dfb515498a32aca8f66be2eaa02b1bb"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/views/collaboration-history.ts",
@@ -3815,8 +3813,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/storage/src/context-stream.ts",
@@ -3855,12 +3852,10 @@
   {
    "path": "packages/storage/src/durable-fs.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR62"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "4abbfa5956306613473150edae640c9e0109ef9a6cb1b5f6994a533090f21c43"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/storage/src/execution-journal.ts",

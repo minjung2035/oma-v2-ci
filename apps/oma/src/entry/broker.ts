@@ -293,7 +293,6 @@ async function main(): Promise<void> {
             { ...(developerTools === undefined ? {} : { developerTools }),
                 ...(transport === undefined || runtimeGeneration === undefined ? {} : { darwin: { launchNode: runtimeGeneration.launchNode, reservePeer: transport.reservePeer } }) });
         residents = units;
-        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface);
         const resolveSpec = createChildSpecResolver(() => readCurrentHostPolicy(configPath, society), () => store.inTransaction);
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
@@ -313,6 +312,8 @@ async function main(): Promise<void> {
                     try { return contextDirectory = openDirectory(gitPaths.contextGit); }
                     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
                 } };
+        const views = new ViewsModule(store, stateRoot, society, cfg.principalProfile, cfg.limits, units.workerSurface,
+            canonicalExecution === undefined ? {} : { worldDirectory: () => canonicalExecution.directory(gitPaths.worldDir) });
         const executionOwner = executions;
         const checks = new CandidateChecks(gitPaths, (command, signal, authorize, inheritedFds, prepared, physicalLaunch) => executionOwner.run("candidate", command, signal, authorize, inheritedFds, undefined, prepared, physicalLaunch), undefined, preparationAbort.signal,
             () => executionOwner.confirmDead("candidate"), cfg.resources, runtimeGeneration?.launchNode);

@@ -1,11 +1,13 @@
 import {renderBatchView} from "@oma/mail/batch-view";
 // MUST [VIEW-001/002]: views are derived from SQLite, Maildir and unit observations.
 import { join } from "node:path";
+import { closeSync, fchmodSync, fstatSync } from "node:fs";
+import { withCleanup } from "@oma/native/cleanup";
 import type { Actor, AgentStatus, PreparedBatch } from "@oma/contracts";
 import { Store } from "@oma/storage";
 import { publishMailNoticeView } from "./views/mail-notices.js";
-import { replaceDerivedFile as writeAtomic } from "@oma/storage/durable-fs";
-import { ensureOwnedDirectory } from "@oma/storage/directory";
+import { replaceDerivedFile as writeAtomic, replaceDerivedFileAt } from "@oma/storage/durable-fs";
+import { ensureOwnedDirectory, openOwnedDirectoryPath } from "@oma/storage/directory";
 import { NO_UNIT_REASON, encodeStatusView, statusViewPath } from "@oma/protocol/status-view";
 import { publishBatchView } from "@oma/storage/batch-view";
 import { operationMessage } from "@oma/mail/materializer";
@@ -100,7 +102,8 @@ export class ViewsModule {
   private runnerObservedAt: ((agent: Actor) => Readonly<{ incarnation: number; observedAtMs: number }> | null) | null = null;
   constructor(private readonly store: Store, private readonly stateRoot: string,
     private readonly society: string, private readonly principalProfile: string,
-    private readonly viewLimits?: BatchViewLimits, private readonly workerSurface: "legacy" | "collaboration-v1" = "legacy") {
+    private readonly viewLimits?: BatchViewLimits, private readonly workerSurface: "legacy" | "collaboration-v1" = "legacy",
+    private readonly directories: { readonly worldDirectory?: () => number | undefined } = {}) {
     if (workerSurface !== "legacy" && workerSurface !== "collaboration-v1")
       throw new StoreError("UNSUPPORTED_PROFILE", "unknown world navigation surface");
   }
@@ -116,21 +119,33 @@ export class ViewsModule {
   }
   refreshWorld(): void {
     const world = join(this.stateRoot, "world");
-    ensureOwnedDirectory(world, this.stateRoot);
-    const agents = this.store.listAgents();
-    const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEscape).join("\t"))
-      .join("\n") + (agents.length > 0 ? "\n" : "");
-    writeAtomic(join(world, "agents.tsv"), tsv, 0o444);
-    const byTopic = new Map<string, string[]>();
-    for (const subscription of this.store.allSubscriptions()) {
-      const list = byTopic.get(subscription.topic) ?? [];
-      list.push(subscription.agent); byTopic.set(subscription.topic, list);
+    let held = this.directories.worldDirectory?.();
+    if (held === undefined) {
+      ensureOwnedDirectory(world, this.stateRoot);
+      held = this.directories.worldDirectory?.();
     }
-    const topicLines = [...byTopic.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
-      .map(([topic, subscribers]) => `${fieldEscape(topic)}\t${fieldEscape([...subscribers].sort().join(","))}`);
-    writeAtomic(join(world, "topics.tsv"), topicLines.length > 0 ? `${topicLines.join("\n")}\n` : "", 0o444);
-    writeAtomic(join(world, "START.md"), this.startText(), 0o444);
-    writeAtomic(join(world, PRINCIPAL_MAIL_FILENAME), this.principalMailText(), 0o444);
+    const borrowed = held !== undefined;
+    const directory = held ?? openOwnedDirectoryPath(world);
+    withCleanup(() => {
+      const stat = fstatSync(directory);
+      if (!stat.isDirectory()) throw new StoreError("STORE_CORRUPT", "world view requires a directory");
+      if ((stat.mode & 0o700) !== 0o700) fchmodSync(directory, (stat.mode & 0o7777) | 0o700);
+      const write = (name: string, bytes: string) => replaceDerivedFileAt(directory, name, join(world, name), bytes, 0o444);
+      const agents = this.store.listAgents();
+      const tsv = agents.map(agent => [agent.name, agent.role, agent.desired, agent.profile].map(fieldEscape).join("\t"))
+        .join("\n") + (agents.length > 0 ? "\n" : "");
+      write("agents.tsv", tsv);
+      const byTopic = new Map<string, string[]>();
+      for (const subscription of this.store.allSubscriptions()) {
+        const list = byTopic.get(subscription.topic) ?? [];
+        list.push(subscription.agent); byTopic.set(subscription.topic, list);
+      }
+      const topicLines = [...byTopic.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
+        .map(([topic, subscribers]) => `${fieldEscape(topic)}\t${fieldEscape([...subscribers].sort().join(","))}`);
+      write("topics.tsv", topicLines.length > 0 ? `${topicLines.join("\n")}\n` : "");
+      write("START.md", this.startText());
+      write(PRINCIPAL_MAIL_FILENAME, this.principalMailText());
+    }, () => { if (!borrowed) closeSync(directory); });
   }
   /** The environment map only: what each path and surface is. Behavior and
    * policy belong to the role's system prompt, mechanics to each tool's
