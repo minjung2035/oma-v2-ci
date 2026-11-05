@@ -20,7 +20,30 @@ static int join_child(pid_t child) {
   do { result = waitpid(child, &status, 0); } while (result < 0 && errno == EINTR);
   require(result == child, "join own child"); return status;
 }
+static void observe_mach(pid_t own, mach_vm_address_t address) {
+  mach_port_t control = MACH_PORT_NULL, read = MACH_PORT_NULL, inspect = MACH_PORT_NULL;
+  kern_return_t c = task_for_pid(mach_task_self(), own, &control);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  errno = 0; int r = (int)syscall(SYS_task_read_for_pid, mach_task_self(), own, &read), read_errno = errno;
+  errno = 0; int i = (int)syscall(SYS_task_inspect_for_pid, mach_task_self(), own, &inspect), inspect_errno = errno;
+#pragma clang diagnostic pop
+  uint64_t observed = 0; mach_vm_size_t count = 0;
+  mach_port_t selected = MACH_PORT_VALID(control) ? control : read;
+  kern_return_t memory = MACH_PORT_VALID(selected) ? mach_vm_read_overwrite(selected,
+    address, sizeof observed, (mach_vm_address_t)(uintptr_t)&observed, &count) : KERN_INVALID_RIGHT;
+  printf("{\"kind\":\"mach\",\"control\":%d,\"read\":%d,\"readErrno\":%d,\"inspect\":%d,\"inspectErrno\":%d,\"memory\":%d,\"bytes\":%llu,\"canaryRead\":%s}\n",
+    c, r, read_errno, i, inspect_errno, memory, (unsigned long long)count, observed == canary && count == sizeof observed ? "true" : "false");
+  if (MACH_PORT_VALID(control)) mach_port_deallocate(mach_task_self(), control);
+  if (MACH_PORT_VALID(read)) mach_port_deallocate(mach_task_self(), read);
+  if (MACH_PORT_VALID(inspect)) mach_port_deallocate(mach_task_self(), inspect);
+}
 int main(int argc, char **argv) {
+  if (argc == 3 && !strcmp(argv[1], "own-parent")) {
+    char *end = NULL; errno = 0; unsigned long long address = strtoull(argv[2], &end, 10);
+    require(getuid() > 0 && getppid() > 1 && !errno && address && end && !*end, "own parent canary address");
+    observe_mach(getppid(), (mach_vm_address_t)address); return 0;
+  }
   require((argc == 2 || (argc == 3 && !strcmp(argv[2], "mach-only"))) &&
     (!strcmp(argv[1], "ordinary") || !strcmp(argv[1], "guard")), "mode");
   setvbuf(stdout, NULL, _IONBF, 0); alarm(15);
@@ -40,23 +63,7 @@ int main(int argc, char **argv) {
   if (MACH_PORT_VALID(after)) require(mach_port_deallocate(mach_task_self(), after) == KERN_SUCCESS, "release after");
   pid_t own = getpid(), attacker = fork(); require(attacker >= 0, "fork own Mach observer");
   if (!attacker) {
-    mach_port_t control = MACH_PORT_NULL, read = MACH_PORT_NULL, inspect = MACH_PORT_NULL;
-    kern_return_t c = task_for_pid(mach_task_self(), own, &control);
-    /* Observation-only SDK syscall selectors; no production ABI adoption. */
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    errno = 0; int r = (int)syscall(SYS_task_read_for_pid, mach_task_self(), own, &read), read_errno = errno;
-    errno = 0; int i = (int)syscall(SYS_task_inspect_for_pid, mach_task_self(), own, &inspect), inspect_errno = errno;
-#pragma clang diagnostic pop
-    uint64_t observed = 0; mach_vm_size_t count = 0;
-    mach_port_t selected = MACH_PORT_VALID(control) ? control : read;
-    kern_return_t memory = MACH_PORT_VALID(selected) ? mach_vm_read_overwrite(selected,
-      (mach_vm_address_t)(uintptr_t)&canary, sizeof observed, (mach_vm_address_t)(uintptr_t)&observed, &count) : KERN_INVALID_RIGHT;
-    printf("{\"kind\":\"mach\",\"control\":%d,\"read\":%d,\"readErrno\":%d,\"inspect\":%d,\"inspectErrno\":%d,\"memory\":%d,\"bytes\":%llu,\"canaryRead\":%s}\n",
-      c, r, read_errno, i, inspect_errno, memory, (unsigned long long)count, observed == canary && count == sizeof observed ? "true" : "false");
-    if (MACH_PORT_VALID(control)) mach_port_deallocate(mach_task_self(), control);
-    if (MACH_PORT_VALID(read)) mach_port_deallocate(mach_task_self(), read);
-    if (MACH_PORT_VALID(inspect)) mach_port_deallocate(mach_task_self(), inspect);
+    observe_mach(own, (mach_vm_address_t)(uintptr_t)&canary);
     _exit(0);
   }
   int mach_status = join_child(attacker); require(WIFEXITED(mach_status) && WEXITSTATUS(mach_status) == 0, "Mach observer exit");

@@ -2815,10 +2815,58 @@ SOURCE60 로컬 새 시험3/3의 Linux NOT_RUN/refusal 가지와 최종 SDK arm6
 전체 architecture·transaction·durable boundary·document·spec inventory도 exit0이다.
 새 관측 입력은 실제 Mac 실행 전까지 NOT_RUN이며 production gate를 완료로 바꾸지 않는다.
 
+
+### SOURCE60 양 Mac 공통405/405와 다음 Node/외부 Git 경계
+
+SOURCE60 `c918ae7dd0b239b7e6f8bba9220022bbfda00ab0`, Native41952271814/Architecture41952271565를 발행했다.
+ARM26 shared ZIP13382715328 SHA-256 `3ceb7f52dd748fa848a82d593956cc87b021d43b29f9c92925d9268b0f013931`,
+Intel26 shared ZIP13382072760 SHA-256 `ee1b5358558e89db755548bb71c3bfb46524adc5146268275d499b6700059b07`를 대조했다.
+양쪽405/405 PASS·fail/cancel/skip/todo0다. canonical15904/`453aff5376b9848e8bc37cec4a95fc72d9e13a17b023a783f46ae869547343a1`가 전후 같다.
+runtime15528/27은 SOURCE59의 ARM c5a44a12/Intel e58bd08b와 각각 같고 실행 전후도 같다.
+공통 scope/복구·현재 Actor/Run·private Git/Node generation 시험이 통과했지만 세 product gate 완료가 아니다.
+
+Mach-only C 대조는 실제 get-task-allow=true baseline에서 control/read/inspect가 모두0이고8-byte canary read도 성공했다.
+PT_DENY_ATTACH가0이어도 같은 Mach read가 성공했다. 이 방식만으로 supervisor 보호를 구현하는 후보는 배제한다.
+get-task-allow가 없는 hardened C는 ordinary/guard 모두 control5·read/inspect EPERM1·canary 미관측이었다.
+모든 실제 scope와 journal을 반납했다. 이는 해당 C image의 양성/음성 대조이며 현재 Node는 여전히 get-task-allow=true다.
+다음 SOURCE61은 실제 선택 Node의 owned copy를 ad-hoc runtime sign하여 그 entitlement만 제외하고,
+동일 JIT·native FFI와 자기 direct debugger child의 실제 parent-canary 관측을 비교한다.
+source Node hash는 전후 보존하며 product installation·generation의 Node 선택과 guard는 바꾸지 않는다.
+
+IPv6 multicast 후보는 full source filter metadata의 읽기/동일성 및 shutdown 뒤 변경 EINVAL을 보존했다.
+그러나 shutdown 뒤 same-name contender bind가 성공했고 disconnectx는 local address도 바꿨다.
+private DENY_OUT 조합에서도 동일 namespace 독점이 깨졌다. 두 조합 모두 Society lease로 배제하며 metadata 성공만 채택하지 않는다.
+기존 IPv4 ANY/private selector 후보의 전체 identity·생산자·상속 검증도 아직 미완료다.
+
+외부 Git의 현재 Mac recipe는 root FD를 보유하지만 Git operand에는 절대 pathname을 사용한다.
+그러므로 성공한 SOURCE59/60 Git 시험은 namespace replacement에 대한 root FD 결박의 완성 증거가 아니다.
+다음 작은 시험은 실제 held directory를 CWD로 넘기고 Git setup trace 이후·입력 소비 전에 root 이름을 교체한다.
+ordinary/실제 Seatbelt scope에서 상대 repository operand의 효과가 원래 inode에 남고 replacement에 생기지 않아야 한다.
+trace는 조율 전용이며 실제 내용·scope death·빈 journal을 따로 확인한다. 해당 controller는 자기 시험 root를 허용하므로
+전체 App policy의 alias 방어·복수 root 결박 또는 실제 caller 통합을 대신하지 않는다.
+[Apple QA1113](https://developer.apple.com/library/archive/qa/qa2001/qa1113.html)는 /.vol 직접 구성은 debugging/performance 분석 전용이라고 명시한다.
+이 deprecated/private 경로를 production 해법으로 채택하지 않으며, 출판 입력에는 그 경로를 쓰는 실행 시험도 넣지 않았다.
+openbyid_np의 기존 privilege/entitlement 제약도 그대로다.
+
+SOURCE58의 후속 전체 Linux ZIP13379904101 SHA-256 `784678b0a763a528acf9bf92ea65439d22f3a8a4e94e8f32eeeedc6c980c1011`는
+4859/4859 PASS·fail/cancel/skip/todo0·errors[]다. 15901 per-file identity가 전후 같고 sourceChanges[]다.
+baseline ZIP13380659360 SHA-256 `127b53d93082cac65f500b0783e18f31322d784f43e064b38d1677860397a814`도 대조했다.
+provenance는 같은 SOURCE58/15901/a9a66b2c이고 inventory/LOC/typecheck/build/storage/package/architecture/spec/test/5 lane exit가 모두0이다.
+standalone kernel/crash는 NOT_RUN이다. 이를 SOURCE61 새 Mac 시험의 runtime PASS로 재사용하지 않는다.
+
+SOURCE61 C parent-observer refactor는 SDK arm64/x64 object compile PASS, 새 Node/Git 및 기존 C 시험의 Linux 가지4/4도 PASS다.
+새 C child는 body PID를 받지 않고 자기 getppid의 고정 canary만 관측하며 ptrace attach는 하지 않는다.
+production bytes·공개 API·package는 SOURCE59/60과 같고 새 Mac Node/Git 가지는 NOT_RUN이다.
+Society lease·supervisor 생산자 통합·외부 Git root 결박·전체 product Runner/Worker·CLI/reboot/release qualification은 남는다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·native-support/default launch guard를 유지한다.
+
+SOURCE61 전체 architecture·transaction·durable boundary·document·spec inventory는 exit0이다.
+이 결과는 구조 검사이며 새 protected Node/Git FD 경로의 Mac 실행은 아직 NOT_RUN이다.
+
 ## 검증 입력과 LOC
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `453aff5376b9848e8bc37cec4a95fc72d9e13a17b023a783f46ae869547343a1` (15904 files).
+verification input digest `51054476befe2a4fdf11fecdaf240e3f83d163737a3a7900e186d187efbddb2e` (15906 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
