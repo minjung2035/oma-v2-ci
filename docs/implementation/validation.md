@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `978a35c1a24332290616c747c29f2bf3e85086476db811358e6bc5e5ebecb7fa` (15915 files).
+verification input digest `24d8a47531858cf21884afc19e7017762ab294cae06d1856b7ee23ce24c0227a` (15917 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3225,3 +3225,40 @@ full architecture·transaction·durable boundary·document·spec inventory도 ex
 production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
 원시는 `/tmp/oma-source68-{build,canonical-final,linux-regression,package-isolation,review,architecture}.log`다.
 최종 구조 검증을 아직 미실행인 SOURCE68 Mac consumer qualification로 쓰지 않는다.
+
+### SOURCE67 Intel cold-generation timeout와 SOURCE69 creator-instance 후보
+
+SOURCE67 Intel shared ZIP13398368753 SHA-256 `1ac46f64c8e296b28d13cdc005054c49ffcd9f48065d581b6f909dc82ed53ec6`를 대조했다.
+canonical15914/`c907d33abb69dcb0ecc7b3198e86010aa5d338c5b69b2cb5ff265726f020ea9e`와
+runtime15532/27/`d6e90bace4e3d6bfc5393dd407b79087150c96c3c41a6ee5176795845df9f51e` 전후 동일이다.
+415 tests /414 PASS /1 cancelled /fail0·skip0·todo0이다. 새 directory mode3건은 모두 PASS다.
+whole-generation은 기존240000ms test deadline 초과로 cancelled(duration273289ms)이며 PASS로 바꾸지 않는다.
+fixture installation30301ms·source digest8027ms·protected Node7147ms 뒤 generation 완료 phase에 도달하지 못했다.
+cleanup을 포함한 wall time과 timeout을 구분하고 budget을 넓히거나 다른 source 성공으로 이 관측을 덮지 않는다.
+이는 SOURCE65 populated-scope cleanup unknown과 별개로 기록하며 원인 동일성을 추정하지 않는다.
+
+SOURCE68 `2c4c65afc1a9d282e21f20e910a9d46ea58e0692` / local checkpoint `fe4871d84c145b1c0f46ce05c7126fabc6dabd84`,
+Native41993196099·Architecture41993195956를 발행했다.
+canonical15915/`978a35c1a24332290616c747c29f2bf3e85086476db811358e6bc5e5ebecb7fa`다.
+해당 Host canonical consumer의 Mac 결과는 아직 NOT_RUN이다.
+
+SOURCE69는 production 변경 없이 고정 C producer/instance 후보를 추가한다.
+helper는 새 no-reuse IPv6 wildcard bind만 수행하고 기존 socket FD를 adoption하는 mode나 임의 exec mode를 제공하지 않는다.
+full256 identity와 자기 socket opaque handle/generation을 Mach kernel-audited publication으로 전달한다.
+test는 hardened/no-debugging/no-loader-exception으로 서명한 해당 고정 image의 CDHash를 실제 audit-origin과 대조한다.
+socket은 fileport로 이전한 뒤 producer 자신의 FD와 fileport SEND reference를 반납한다.
+고정 producer가 살아 있는 동안 duplicate/last-close·동일 frozen namespace의 독립 alias instance·다른 image의 body replay를 대조한다.
+이 시험은 authenticated creator와 현재 socket instance를 결박할 수 있는지 묻는 primitive 후보다.
+keeper namespace discovery/replacement·Host crash 후 claim·Society full identity의 장기 발견·port collision·endpoint 소실·강한 FD4 상속 계약은 미구현이며,
+Linux Society lease를 바꾸거나 Mac backend로 채택하지 않는다. 앞선 plain frozen-state 위조 반례도 그대로 유효하다.
+
+양 architecture SDK object compile PASS, JS syntax/Linux NOT_RUN 경로는 PASS다.
+실제 Mach publication·cross-process opaque/generation 비교·alias/replay 거절·producer-live last-close는 아직 NOT_RUN이다.
+원시는 `/tmp/oma-source69-producer-{arm,intel}.log`와 `/tmp/oma-source69-producer-linux.log`다.
+production은 SOURCE68과 동일하므로 build·packed installation을 새로운 source의 실행 근거로 합성하지 않는다.
+G-PROCESS/G-FILES/G-AUTH OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+SOURCE69 full architecture·transaction·durable boundary·document·spec inventory는 exit0다.
+고정 publication C layout은88 bytes로 SDK compile-time 검증하며 생존 상태는 실제 audit-token과 일치하는 kernel process pin으로
+last-close 대조 전후에 확인한다. producer exit와 동기화해 last-close를 성공시킨 것으로 간주하지 않는다.
+새 실제 Mac candidate 결과는 여전히 NOT_RUN이다. 구조 검증 원시는 `/tmp/oma-source69-architecture.log`다.
