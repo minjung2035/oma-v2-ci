@@ -18,8 +18,8 @@ export interface CanonicalExecution {
   readonly executable: string;
   readonly directories: ReadonlyMap<string, number>;
 }
-function execute(spec: CommandSpec, execution?: CanonicalExecution) {
-  if (execution === undefined) return runProcessSync(spec);
+export function bindCanonicalCommand(spec: CommandSpec, execution?: CanonicalExecution): { readonly command: CommandSpec; readonly directoryFd?: number } {
+  if (execution === undefined) return { command: spec };
   if (!execution.executable.startsWith("/") || execution.executable.includes("\0"))
     throw new StoreError("UNSUPPORTED_PROFILE", "canonical execution requires an absolute trusted Git executable");
   // Only the adapter's fixed repository operand may be rebound. Never scan
@@ -30,8 +30,11 @@ function execute(spec: CommandSpec, execution?: CanonicalExecution) {
   const directoryFd = execution.directories.get(spec.argv[at + 1]!);
   const argv = [...spec.argv];
   if (directoryFd !== undefined) argv[at + 1] = ".";
-  return runProcessSync({ ...spec, executable: execution.executable, argv }, undefined, [],
-    directoryFd === undefined ? {} : { directoryFd });
+  return { command: { ...spec, executable: execution.executable, argv }, ...(directoryFd === undefined ? {} : { directoryFd }) };
+}
+function execute(spec: CommandSpec, execution?: CanonicalExecution) {
+  const physical = bindCanonicalCommand(spec, execution);
+  return runProcessSync(physical.command, undefined, [], physical.directoryFd === undefined ? {} : { directoryFd: physical.directoryFd });
 }
 
 /** UX-09/DR33: `GitObserver.gitlinks` is the one observation that enumerates a

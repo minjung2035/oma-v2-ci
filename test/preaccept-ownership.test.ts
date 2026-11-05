@@ -532,13 +532,13 @@ test("014. Native preparation uncertainty retains only the tree that preparation
     const executor: unknown = Reflect.get(f.repository(), "preparation");
     assert.ok(executor instanceof PreparationExecutor);
     const run = PreparationExecutor.prototype.run;
-    t.mock.method(executor, "run", function (this: PreparationExecutor, ...[spec, signal, fds]: Parameters<PreparationExecutor["run"]>) {
+    t.mock.method(executor, "run", function (this: PreparationExecutor, ...[spec, signal, fds, sinks, controls]: Parameters<PreparationExecutor["run"]>) {
       // The commit child is one whose exit the executor never observes.
       // The substitute keeps a silence window under its own ceiling: the
       // caller's 120 s window against a 100 ms timeout is a contradiction
       // the command validator refuses, not the uncertainty this proves.
       const unobserved = spec.argv.includes("commit") ? { ...spec, executable: "/usr/bin/sleep" as const, argv: ["30"], timeoutMs: 100, silenceMs: 50 } : spec;
-      return run.call(this, unobserved, signal, fds);
+      return run.call(this, unobserved, signal, fds, sinks, controls);
     });
     await assert.rejects(f.publish("context-uncertain"), { code: "REF_STATE_UNKNOWN" });
     assert.equal(executor.quiescence, "unknown");

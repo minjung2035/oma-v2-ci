@@ -1232,7 +1232,7 @@
     },
     {
       "path": "packages/git/src/canonical-command.ts",
-      "sha256": "3be21083afbc50e5b82a28f3a4750b7bbce40af2c8760ea57e75950bfa9e0907"
+      "sha256": "0dc6039a25605dc14d6821ac8495f342541e587461043c23c33fbb3c448bea15"
     },
     {
       "path": "packages/git/src/canonical-health.ts",
@@ -1328,11 +1328,11 @@
     },
     {
       "path": "packages/git/src/repository.ts",
-      "sha256": "6a156ae71d8fefe1b9bb57078e11f44345974a5b8574a2b1a46f2983623df0a1"
+      "sha256": "97f789d500cc1f59dc73c8ba3cc02a8b4675ff65542713f965deae80b897f900"
     },
     {
       "path": "packages/git/src/review-artifact.ts",
-      "sha256": "02469c5741767e4eba04ee63a6796cdb588bf0f9867dd6c2f065bf38324ea116"
+      "sha256": "3446ea6f014a39c4aa20b6fe3decdcce6806b55fff4cad120f926c9f2f53b19a"
     },
     {
       "path": "packages/git/src/review-record.ts",
@@ -2120,7 +2120,7 @@
     },
     {
       "path": "packages/storage/src/immutable-file.ts",
-      "sha256": "2ae8c02c63327e54b2c29fef4d30b6043bef4f04b970f8405ea93706b04f87da"
+      "sha256": "072ff8ea37e8f0d056f40997c8c8103754db5bbfc05cbfbd624af23e5405b4f2"
     },
     {
       "path": "packages/storage/src/installation-surface.ts",
@@ -2164,7 +2164,7 @@
     },
     {
       "path": "packages/storage/src/preaccept-artifact.ts",
-      "sha256": "abee73f5b7c8aef562c22d4e76f124880ba7594c33e3c4912c8800548e157642"
+      "sha256": "1fda8b566a423a3c36651b6cd23861beb992dde842733b66457c4e46f51e6893"
     },
     {
       "path": "packages/storage/src/preaccept-collection.ts",

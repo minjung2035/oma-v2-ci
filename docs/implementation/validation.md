@@ -2867,7 +2867,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a276281b26cb095fac63eaa0aaf5e6422e1fb1105b79f4799a6b35885719d08b` (15918 files).
+verification input digest `14b33bf4e38374c1b9bf198ad5e1cd1be1b70bb7c6cac32e98f4b8344ac0a901` (15919 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -3370,3 +3370,61 @@ source 고정 뒤 단일 production build·fresh27/27 packed installation(App �
 production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
 구조 원시는 `/tmp/oma-source71-{build,package-isolation,review,architecture}.log`다.
 새 result directory port·producer signing·expanded owned-failure 진단의 실제 Mac 결과는 여전히 NOT_RUN이며 세 gate OPEN·product BLOCKED를 유지한다.
+
+### SOURCE72 review diff의 held-root 업무 연결과 test forwarding 수리
+
+ReviewArtifacts는 기존 CanonicalExecution의 project directory를 기준으로 oma-results를 열고,
+SDK result writer·preaccept owner·async trusted Git diff에 같은 root capability를 전달한다.
+preaccept owner는 자기 directory cursor를 소유하며 수락 또는 확인된 폐기 때 file pin과 함께 반납한다.
+이미 발생한 descriptor-return 실패는 이후 호출에서도 보존하며 재사용된 숫자 FD를 다시 닫지 않는다.
+GitRepository의 diff 검증·checked patch bytes·changed-path record도 같은 project capability에서 읽는다.
+bindCanonicalCommand는 기존 고정 Git operand 선택을 공유할 뿐 argv 전체를 검색하거나 Model FD를 받지 않는다.
+legacy string-only/default Linux composition·result reference/accepted byte/cleanup disposition grammar는 유지한다.
+큰 patch를 반복 page hash로 읽지 않고 기존 immutable bounded-chunk byte 검증을 재사용한다.
+
+실제 rename-before-prepare와 등록 직후 rename-during-prepare에서 original-only diff 생성/수락 후 읽기,
+unaccepted 원본만 폐기·replacement 동명 bytes 보존·registration 거절의 원본 정리를 확인했다.
+canonical refs와 Host cwd는 보존됐다. 새4건과 기존 canonical8건을 관측했고 최종4건 원시는 `/tmp/oma-source72-review-final.log`다.
+review source-record·비동기 integration merge·context/private workspace/SQLite와 전체 G-FILES는 아직 미완료다.
+
+첫66건 Linux regression은 모두 PASS를 출력했지만 오래된 preaccept-ownership014 mock이 PreparationExecutor의
+새 sinks/directory controls를 전달하지 않아 context의 `git -C . read-tree --empty`와 update-index가 실제 checkout index를 수정했다.
+HEAD/ref와 작업 파일은 바뀌지 않았고 임시 GOAL.md index entry만 남았다. 이 실행을 올바른 held-context 검증으로 쓰지 않는다.
+변경 전 index·HEAD/ref/log·config·원시 status를 `/tmp/oma-source72-index-observation-1793869797312427201/`에 보존했다.
+동일 HEAD 및 관측한 index bytes를 비교한 뒤 별도 read-tree index를 O_EXCL lock/atomic replace로 복구했다.
+reset/clean·working-tree checkout·fixture object prune를 하지 않았고 기존 변경과 untracked review 시험을 보존했다.
+해당 test mock은5개 인자를 모두 전달하도록 고쳤고 최종 regression은 checkout `.git`을 read-only bind해 같은 사고를 차단한다.
+initial 원시는 `/tmp/oma-source72-linux-regression.log`이며 수정 후 새 원시를 별도로 기록한다.
+
+SOURCE71 Mac15 shared ZIP13402010221 SHA-256 `52e321db34b5f5858013a3a706c0526e240cf7544717ee682ef2023f53ca7e74`,
+Intel shared ZIP13401702292 SHA-256 `7b0a8e81c3c6daf79a365ae79440a6f9514ebd1075ba96afb78a43b73b17e716`를 대조했다.
+각 canonical15918/`a276281b26cb095fac63eaa0aaf5e6422e1fb1105b79f4799a6b35885719d08b` 전후 동일이며,
+runtime15532/27은 각각 `36b78335048b02c6aa909928fc936e00cebc8c636d1126f42b6e11d26d747199`와
+`16232172c1ebf3605a7213879bbcdf3ff825d335ef725f17d445b1b5f649315a` 전후 동일이다.
+양쪽 main425/424 PASS/1 FAIL·기타0, isolated generation3/3 PASS·기타0이다.
+새 result directory4건과 canonical8건은 실제 양 Mac 모두 PASS다. 기존 cleanup unknown을 이 성공으로 수정했다고 하지 않는다.
+producer는 이제 실행됐으나 expected audit-origin이 unavailable로 거절됐다. 이를 matched나 lease-held로 바꾸지 않는다.
+SOURCE72 test는 전체 OSStatus·expected hashes·kernel sender·unconstrained origin(진단 전용)·fresh producer 상태를 기록한다.
+채택 predicate는 expected CDHash matched 그대로다. opaque/generation·alias·last-close 결과는 아직 NOT_RUN이다.
+세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.
+
+수정된 mock을 새 dist로 빌드한 뒤 readonly `.git` namespace에서 동일 regression66/66 PASS를 확인했다.
+실행 뒤 checkout index는 HEAD와 동일하며 staged 변화가 없다. 원시는 `/tmp/oma-source72-linux-regression-readonly-git.log`와
+빈 `/tmp/oma-source72-checkout-index.patch`다. 초기 잘못된 실행과 최종 실행을 합산하지 않는다.
+Architecture CI baseline/native-all도 source bytes 외에 checkout index diff를 별도 검사하고 원시 patch를 보존하도록 했다.
+두 workflow의 YAML 및 모든 bash run block syntax를 확인했다.
+
+SOURCE71 ARM26 shared ZIP13401318930 SHA-256 `598ce26138c07c83f74713eea304b4ad87d470416deeeb7939edc7218064d68b`도 대조했다.
+같은 canonical15918과 runtime15532/27/`9d1ce4991e1d92cbd0183a99db4170122a509e91f966f197d7a955ec53a8d77a` 전후 동일이다.
+main425/424 PASS/1 FAIL와 generation3/3 PASS·각 기타0이며 유일한 main failure도 producer expected-origin 거절이다.
+따라서 result port4건·canonical8건·isolated protected runtime은 세 Mac에서 관측했지만 producer instance/alias/last-close 후보는 NOT_RUN이다.
+SOURCE71 Mac15 full ZIP13402365134/`e0fea93d1caf67b661799cb565f273195d801adc34445f07e99a6f5dea94e18c`,
+Intel full ZIP13402161909/`a7fd55a39b9635a9b4328430733fcb55051b894efc1f1426046564cd882a05a2`의 SHA-256도 대조했고
+각27/27 packed installation(App installed runtime 포함)과 최종 input/runtime 전후 동일을 확인했다.
+전체 PASS로 합산하거나 SOURCE72에 이 실행 증거를 승계하지 않는다.
+
+SOURCE72 최종 production build와 fixture forwarding 수정 후 root build는 exit0다.
+fresh27/27 packed installation(App 포함)·installed runtime·declaration 및 full architecture·transaction·durable boundary·document·spec inventory도 exit0다.
+production14394, review CHANGED_WITHOUT_ORACLE32 / NOT_REVIEWED14362 / REMOVED220이다.
+원시는 `/tmp/oma-source72-{build,package-isolation,review,architecture}.log`다. 초기 build와 test-forwarding 전 build도 별도 보존했다.
+새 review root consumer와 producer origin 진단의 실제 Mac 결과는 NOT_RUN이다. 세 gate OPEN·product BLOCKED·기본 실행 guard를 유지한다.

@@ -4,7 +4,9 @@ import { withReviewSourceRecord } from "./review-record.js";
 import { IntegrationPreparation } from "./integration-preparation.js";
 import { readResult } from "@oma/tool-files/results";
 import { join } from "node:path";
-import { ReviewArtifacts } from "./review-artifact.js";
+import { closeSync } from "node:fs";
+import { withCleanup } from "@oma/native/cleanup";
+import { ReviewArtifacts, openReviewDirectory } from "./review-artifact.js";
 import { readImmutableBytes } from "@oma/storage/immutable-file";
 import { isResultReference } from "@oma/tool-files/results";
 import type { ReviewDiffArtifact } from "@oma/contracts/files";
@@ -59,7 +61,8 @@ export class GitRepository implements GitRepositoryPort {
     this.integration = { ...facts,
       preparedRef: ref => this.observations.ref(paths.projectGit, ref),
       verifyDiff: diff => {
-        try { const page = readResult(join(paths.projectGit, "oma-results"), diff.reference, { byteLimit: 4, encoding: "base64" });
+        try { const page = this.withReviewDirectory(directory => readResult(join(paths.projectGit, "oma-results"), diff.reference,
+            { byteLimit: 4, encoding: "base64" }, directory === undefined ? {} : { directoryFd: directory }));
           if (page.bytes !== diff.bytes || page.sha256 !== diff.sha256) throw new Error("diff metadata changed"); }
         catch (cause) { throw new StoreError("INTEGRATION_CONDITIONS", "exact diff attachment is unavailable or changed", { cause }); }
       },
@@ -90,7 +93,7 @@ export class GitRepository implements GitRepositoryPort {
       compareAndSwap: (base, candidate) => this.casRef(paths.contextGit, "refs/heads/main", candidate, base),
       publishSnapshot: (operation, proof) => this.contextRepository.publishSnapshot(operation, proof),
     } satisfies GitRepositoryPort["context"];
-    const artifacts = new ReviewArtifacts(paths.projectGit);
+    const artifacts = new ReviewArtifacts(paths.projectGit, canonicalExecution);
     const preparation = new IntegrationPreparation(paths.projectGit, paths.society);
     this.review = { ...facts,
       prepareIntegration: (id, base, candidate, main, own) => preparation.prepare(id,base,candidate,main,own),
@@ -105,7 +108,17 @@ export class GitRepository implements GitRepositoryPort {
       throw new StoreError("STORE_CORRUPT", "invalid frozen review diff descriptor");
     const [, id, digest] = diff.reference.split(":");
     if (digest !== diff.sha256) throw new StoreError("STORE_CORRUPT", "review diff reference and manifest have different digests");
-    return readImmutableBytes(join(this.paths.projectGit, "oma-results", `${id}.result`), diff.sha256, diff.bytes);
+    return this.withReviewDirectory(directory => readImmutableBytes(join(this.paths.projectGit, "oma-results", `${id}.result`), diff.sha256, diff.bytes, directory));
+  }
+  private withReviewDirectory<T>(consume: (directory: number | undefined) => T): T {
+    let directory: number | undefined;
+    try { directory = openReviewDirectory(this.paths.projectGit, this.canonicalExecution); }
+    catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ENOENT") throw new StoreError("STORE_CORRUPT", "immutable review directory is missing", { cause });
+      if (cause instanceof StoreError) throw cause;
+      throw new StoreError("BROKER_UNAVAILABLE", "immutable review directory is unavailable", { cause });
+    }
+    return withCleanup(() => consume(directory), () => { if (directory !== undefined) closeSync(directory); });
   }
   readDiffRecord(diff: ReviewDiffArtifact) {
     const patch = this.readDiffPatch(diff);

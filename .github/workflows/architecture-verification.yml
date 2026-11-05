@@ -149,6 +149,9 @@ jobs:
             touch "$EVIDENCE/failed"
           fi
           printf '%s\n' 'Exit codes and lane result.json files are authoritative. SETUP_FAILED, skips, NOT_RUN and timeouts are not PASS. This workflow runs baseline and full native lanes; each result certifies only its executed cases. Darwin OPEN gates and power loss remain separate.' > "$EVIDENCE/README.txt"
+      - name: Confirm tests preserved the checkout index
+        if: always()
+        run: git diff --cached --exit-code > "$EVIDENCE/checkout-index.patch"
       - name: Upload raw evidence even when a check failed
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -216,6 +219,7 @@ jobs:
         run: |
           node --input-type=module -e 'import {verificationInputDigest} from "./scripts/source-digest.mjs"; console.log(JSON.stringify(verificationInputDigest()))' > "$EVIDENCE/input-after.json"
           cmp "$EVIDENCE/input-before.json" "$EVIDENCE/input-after.json"
+          git diff --cached --exit-code > "$EVIDENCE/checkout-index.patch"
       - name: Preserve native all raw results
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

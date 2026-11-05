@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/file-descriptors";
+import { unlinkAt, reopenDirectory } from "@oma/file-descriptors";
 /** Pre-accept artifact ownership.
  *
  * An immutable artifact published before its acceptance transaction belongs to
@@ -12,6 +12,7 @@ import { closeSync, fstatSync, fsyncSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { openDirectory, openRegularBeneath } from "@oma/native/files";
+import { cleanupAll } from "@oma/native/cleanup";
 
 import type { PreacceptOwner } from "@oma/contracts/files";
 
@@ -28,10 +29,10 @@ type PublishedIdentityObservation =
   | { readonly kind: "absent" }
   | { readonly kind: "unavailable" };
 
-function observePublished(path: string): PublishedIdentityObservation {
+function observePublished(path: string, directoryFd?: number): PublishedIdentityObservation {
   let parent: number | undefined;
   try {
-    parent = openDirectory(dirname(path));
+    parent = directoryFd === undefined ? openDirectory(dirname(path)) : reopenDirectory(directoryFd);
     const fd = openRegularBeneath(parent, basename(path));
     let transferred = false;
     try {
@@ -57,8 +58,8 @@ export function observePublishedIdentity(path: string): PublishedIdentity | null
  * A replaced or removed name is left alone: absence is already the goal, and a
  * different inode is somebody else's artifact.
  */
-function removeOwnedInode(path: string, identity: PublishedIdentity): "removed" | "absent" | "identity-mismatch" {
-  const parent = openDirectory(dirname(path));
+function removeOwnedInode(path: string, identity: PublishedIdentity, directoryFd?: number): "removed" | "absent" | "identity-mismatch" {
+  const parent = directoryFd === undefined ? openDirectory(dirname(path)) : reopenDirectory(directoryFd);
   try {
     let fd: number;
     try { fd = openRegularBeneath(parent, basename(path)); }
@@ -83,8 +84,10 @@ function removeOwnedInode(path: string, identity: PublishedIdentity): "removed" 
 export class PreacceptArtifact implements PreacceptOwner {
   private owner: "preaccept" | "accepted" | "released" = "preaccept";
   private pin: number | undefined;
+  private directory: number | undefined;
+  private returnFailure: unknown;
   constructor(readonly path: string, private readonly identity: PublishedIdentity | null,
-      private readonly knownAbsent = false, descriptor?: number) {
+      private readonly knownAbsent = false, descriptor?: number, ownedDirectory?: number) {
     if (identity === null) return;
     let observed: PublishedIdentityObservation;
     if (descriptor === undefined) observed = observePublished(path);
@@ -100,19 +103,23 @@ export class PreacceptArtifact implements PreacceptOwner {
     }
     // A live descriptor prevents inode-number reuse after unlink. The
     // publisher must acquire this pin while its original descriptor is held.
-    this.pin = observed.descriptor;
+    this.pin = observed.descriptor; this.directory = ownedDirectory;
   }
   private closePin(): void {
-    const pin = this.pin; this.pin = undefined;
-    if (pin !== undefined) closeSync(pin);
+    if (this.returnFailure !== undefined) throw this.returnFailure;
+    const pin = this.pin, directory = this.directory; this.pin = undefined; this.directory = undefined;
+    try { cleanupAll([pin, directory].filter((fd): fd is number => fd !== undefined).map(fd => () => closeSync(fd))); }
+    catch (error) { this.returnFailure = error; throw error; }
   }
   retainForOperation(): void {
+    if (this.returnFailure !== undefined) throw this.returnFailure;
     if (this.owner === "released")
       throw new StoreError("INTERNAL_ERROR", "released artifact cannot become accepted evidence");
     this.owner = "accepted";
     this.closePin();
   }
   discardUnaccepted(): void {
+    if (this.returnFailure !== undefined) throw this.returnFailure;
     if (this.owner !== "preaccept") return;
     if (this.identity === null) {
       if (this.knownAbsent) { this.owner = "released"; return; }
@@ -121,7 +128,7 @@ export class PreacceptArtifact implements PreacceptOwner {
     if (this.pin === undefined)
       throw new StoreError("REF_STATE_UNKNOWN", "preaccept cleanup lost its inode pin; evidence retained");
     try {
-      const removed = removeOwnedInode(this.path, this.identity);
+      const removed = removeOwnedInode(this.path, this.identity, this.directory);
       if (removed === "identity-mismatch")
         throw new StoreError("REF_STATE_UNKNOWN", "preaccept artifact identity changed; replacement retained");
       this.owner = "released";
@@ -130,10 +137,16 @@ export class PreacceptArtifact implements PreacceptOwner {
 }
 
 /** The artifact a publication just put at this name, owned by nobody yet. */
-export function publishedArtifact(path: string): PreacceptArtifact {
-  const observed = observePublished(path);
-  return new PreacceptArtifact(path, observed.kind === "present" ? observed.identity : null,
-    observed.kind === "absent", observed.kind === "present" ? observed.descriptor : undefined);
+/** The optional directory is borrowed from trusted composition; the returned
+ * owner retains its own cursor through acceptance or confirmed cleanup. */
+export function publishedArtifact(path: string, directoryFd?: number): PreacceptArtifact {
+  let directory = directoryFd === undefined ? undefined : reopenDirectory(directoryFd);
+  try {
+    const observed = observePublished(path, directory);
+    if (observed.kind !== "present") return new PreacceptArtifact(path, null, observed.kind === "absent");
+    const owner = new PreacceptArtifact(path, observed.identity, false, observed.descriptor, directory);
+    directory = undefined; return owner;
+  } finally { if (directory !== undefined) closeSync(directory); }
 }
 
 export type PreacceptDisposition =

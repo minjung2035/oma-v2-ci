@@ -39,9 +39,12 @@ test('001. Actual fixed producer binds a new socket, authenticates its instance 
  const identity=randomBytes(32),command={executable,argv:[identity.toString('hex'),'0'],env:{PATH:'/usr/bin:/bin'},timeoutMs:30000,stdoutBytes:8192,stderrBytes:8192};
  let terminal;completed=runtime.run('preparation',command,t.signal,()=>{},[control.child],undefined,undefined,(source,options)=>launchDarwinJobScope(source,{...options,peer}));void completed.then(result=>{terminal={kind:result.kind,exitCode:result.exitCode,stderr:result.stderr.toString()};},error=>{terminal={error:String(error)};});
  const message=await packet(endpoint.receive,()=>terminal);if(message.reply)rights.push(message.reply);assert.equal(message.id,0x4f4d4170);assert.equal(message.sender.uid,process.getuid());assert.equal(message.bytes.length,64);assert.ok(message.reply);
- assert.equal((await origin(message,hashes)).kind,'matched');assert.equal((await origin(message,['0'.repeat(40)])).kind,'unavailable');
- assert.deepEqual(message.bytes.subarray(0,32),identity);
+ const selectedOrigin=await origin(message,hashes);
+ t.diagnostic(JSON.stringify({phase:'fence-producer-origin',selectedOrigin,unconstrainedOrigin:await origin(message),expectedCdHashes:hashes,sender:message.sender,terminal:terminal??null}));
  const producer=pinDarwinProcess(message.sender.pid);rights.push(producer);assert.deepEqual(producer.token,message.sender.token);assert.equal(producer.state(),'live');
+ t.diagnostic(JSON.stringify({phase:'fence-producer-live',producerState:producer.state()}));
+ assert.equal(selectedOrigin.kind,'matched',JSON.stringify(selectedOrigin));assert.equal((await origin(message,['0'.repeat(40)])).kind,'unavailable');
+ assert.deepEqual(message.bytes.subarray(0,32),identity);
  const fd=openMachFilePort(message.reply);handles.add(fd);message.reply.close();
  const native=load(null),inspect=load("/usr/lib/libproc.dylib").func('int proc_pidfdinfo(int pid, int fd, int flavor, void *result, int size)'),socket=native.func('int socket(int domain, int type, int protocol)'),bind=native.func('int bind(int fd, const void *address, unsigned int length)'),option=native.func('int setsockopt(int fd, int level, int option, const void *value, unsigned int length)'),connect=native.func('int connect(int fd, const void *address, unsigned int length)'),shutdown=native.func('int shutdown(int fd, int how)'),disconnect=native.func('int disconnectx(int fd, unsigned int association, unsigned int connection)'),dup=native.func('int dup(int fd)');
  const size=message.bytes.readUInt32LE(52),socketOffset=message.bytes.readUInt32LE(56),generationOffset=message.bytes.readUInt32LE(60);assert.ok(size>0&&size<=4096&&socketOffset+8<=size&&generationOffset+8<=size);

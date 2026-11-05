@@ -1,4 +1,4 @@
-import { unlinkAt } from "@oma/file-descriptors";
+import { unlinkAt, reopenDirectory } from "@oma/file-descriptors";
 import type { ImmutableObservation } from "@oma/contracts/files";
 /** MAIL-004..006 / FS-002: immutable bytes, never a derived overwrite API.
  * Keep the checked source descriptor. A kernel FD hardlink is optional;
@@ -82,9 +82,9 @@ function readImmutableEntry(parent: number, name: string, expectedHash: string, 
   return withCleanup(() => checkedBytes(fd, expectedHash, expectedBytes).bytes, () => closeSync(fd));
 }
 /** Absence is evidence only on ENOENT, never on an inaccessible observer. */
-export function observeImmutableFile(path: string, expectedHash: string, expectedBytes: number): ImmutableObservation {
+export function observeImmutableFile(path: string, expectedHash: string, expectedBytes: number, directoryFd?: number): ImmutableObservation {
   try {
-    const parent = openDirectory(dirname(path));
+    const parent = directoryFd === undefined ? openDirectory(dirname(path)) : reopenDirectory(directoryFd);
     const bytes = withCleanup(() => readImmutableEntry(parent, basename(path), expectedHash, expectedBytes), () => closeSync(parent));
     return { kind: "present", bytes };
   } catch (error) {
@@ -106,8 +106,8 @@ function failedObservation(error: unknown): ImmutableObservation {
 
 /** Consumers parse these checked bytes, never reopen the checked pathname.
  * For accepted immutable evidence, proven absence is corruption. */
-export function readImmutableBytes(path: string, expectedHash: string, expectedBytes: number): Buffer {
-  const observed = observeImmutableFile(path, expectedHash, expectedBytes);
+export function readImmutableBytes(path: string, expectedHash: string, expectedBytes: number, directoryFd?: number): Buffer {
+  const observed = observeImmutableFile(path, expectedHash, expectedBytes, directoryFd);
   switch (observed.kind) {
     case "present": return observed.bytes;
     case "absent": throw new StoreError("STORE_CORRUPT", "immutable file is missing");
