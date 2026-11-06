@@ -162,7 +162,9 @@ export class ReconcileModule {
       const failure = new StoreError(policy.code, error instanceof StoreError ? error.message : "recovery observation is corrupt");
       this.effects.observeStoreFailure(failure); throw failure;
     }
-    console.error(JSON.stringify({ event: "reconcile.operation", code: policy.code }));
+    // An internal failure keeps its observed reason in the Broker's own diagnostics.
+    console.error(JSON.stringify({ event: "reconcile.operation", code: policy.code,
+      ...(policy.code === "INTERNAL_ERROR" ? { detail: error instanceof Error ? error.stack ?? error.message : String(error) } : {}) }));
   }
   /** Deliberately not async: all concurrent callers receive the identical Promise. */
   sweep(): Promise<RecoveryCounts> {

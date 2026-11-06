@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6f5ec4ef98f9af45815ef0cd3f9975a7688f30790a42cb67ae707a30b99fd86d` (15949 files).
+verification input digest `f3850e298658e04c81d011288e433ff7b4c5684f953c4c67c25048d81924857d` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4681,3 +4681,8 @@ SOURCE113 `028a6f10b38`, Native42152557290. Mac26 Society 12/12·Personal PASS �
 ### SOURCE114 실제 Mac 결과와 SOURCE115
 
 SOURCE114 `d1b45be9ce0`, Native42153882186. 새 Society의 실제 Broker가 runtime generation·developer tools·Store·Resident/Mach transport 조립까지 통과한 뒤 `repos/project.git` openDirectory ENOENT로 멈췄다. 시험이 Host와 달리 `--project-dir` 없이 Broker를 시작해 project 준비가 실행되지 않은 것이다. SOURCE115는 Host의 실제 argv와 같이 `--project-dir`을 넘긴다. 준비되지 않은 project 저장소는 bare ENOENT 대신 원인을 말하는 BROKER_UNAVAILABLE로 거절한다.
+
+### SOURCE115 실제 Mac 결과 — 새 Society Broker `broker ready`
+
+SOURCE115 `9288ccd4697`, Native42155468597. **실제 macOS에서 새 `oma` Society의 실제 Broker가 `broker ready`에 도달했다**(runtime generation·developer tools·project 준비·Store·Resident·Mach endpoint 포함). Society 12/12·Personal PASS다.
+ready 직후 SIGTERM에서 초기 reconcile 중이던 작업 1개가 CANCELLED_BEFORE_COMMIT, 2개가 INTERNAL_ERROR로 기록됐고 drain이 `CANCELLED_BEFORE_COMMIT: execution was cancelled before release`로 끝나지 않아 exit1이었다. 정상적인 release 전 취소가 drain 실패로 전파되는 경로와 INTERNAL_ERROR의 원인을 찾기 위해, SOURCE116은 INTERNAL_ERROR reconcile 기록과 drain 실패에 원래 stack을 남긴다.
