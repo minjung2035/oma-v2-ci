@@ -51,6 +51,9 @@ export interface PrincipalHostChannel {
    * well as its number: a pid alone is reused, and the delivery endpoint is
    * answered on identity, not on a number that may have been handed on. */
   readonly host: ProcessIdentity;
+  /** Current physical channel generation, when the platform supplies one.
+   * Rechecked at authority reads, independently of asynchronous loss notice. */
+  readonly alive?: () => boolean;
   /** Tells the host both endpoints are listening. */
   readonly ready: () => void;
   /** Gives the host the credential for the session it registered. */
@@ -117,10 +120,12 @@ interface RegisteredSession {
 /** Whether this peer is the host itself. The pid is compared against the
  * identity the channel pinned, so a process that merely inherited the number
  * after the host died is not mistaken for it. */
-function isHost(peer: BoundPeer, host: ProcessIdentity): boolean {
+function isHost(peer: BoundPeer, channel: PrincipalHostChannel): boolean {
+  const host = channel.host;
+  if (channel.alive?.() === false) return false;
   if (peer.pid !== host.pid || !peer.alive()) return false;
   const observed = processIdentity(peer.pid);
-  return observed !== null && observed.startTime === host.startTime;
+  return observed !== null && observed.startTime === host.startTime && channel.alive?.() !== false;
 }
 
 /** Serves one connection whose first frames decide what it is. Shared by both
@@ -205,6 +210,7 @@ export class PrincipalEndpoint {
     // Before anything that can fail, so a refused registration does not leave
     // the previous Principal attached either.
     this.retire();
+    if (this.channel.alive?.() === false) throw new StoreError("AUTH_FAILED", "the original supervising Host is no longer live");
     if (!isPrincipalSessionHandle(sessionHandle))
       throw new StoreError("INVALID_REQUEST", "the registered principal session handle is malformed");
     if (parentOf(pid) !== this.channel.host.pid)
@@ -242,6 +248,7 @@ export class PrincipalEndpoint {
    * for and retires nothing (INV02). The one owner of "has the Principal's
    * engine ended", for every path that asks. */
   private engineRuns(session: RegisteredSession): boolean {
+    if (this.channel.alive?.() === false) return false;
     const engine = processEnded(session.engine);
     if (engine === "ended") setImmediate(() => { if (this.session === session) this.retire(); });
     return engine === "running";
@@ -284,7 +291,7 @@ export class PrincipalEndpoint {
         // P0V-60: the authority handed on keeps asking the same question --
         // this registration, this engine's descendant -- at every later read.
         const live = (): boolean => this.open && this.session === session && session.generation === attachedTo &&
-          peer.alive() && descendsFrom(peer.pid, session.engine);
+          this.channel.alive?.() !== false && peer.alive() && descendsFrom(peer.pid, session.engine);
         const auth = this.ports.principalContext(peer, live);
         if (auth === null) throw new StoreError("AUTH_FAILED", "no live principal to act for");
         return auth;
@@ -346,7 +353,7 @@ export class PrincipalEndpoint {
     // have been started by the registered engine.
     if (!descendsFrom(peer.pid, session.engine) || !peer.alive())
       throw new StoreError("AUTH_FAILED", "the connecting process was not started by the principal engine");
-    const auth = this.ports.principalContext(peer, () => this.session === session && peer.alive());
+    const auth = this.ports.principalContext(peer, () => this.session === session && this.channel.alive?.() !== false && peer.alive());
     if (!auth) throw new StoreError("AUTH_FAILED", "no live principal to attach to");
     return { generation: session.generation, answer: okAnswer(id, { actor: "principal", incarnation: auth.incarnation }) };
   }
@@ -374,7 +381,7 @@ export class PrincipalHostEndpoint {
 
   private async dispatch(raw: Record<string, unknown>, peer: BoundPeer): Promise<object> {
     const id = typeof raw.id === "string" ? raw.id : "x";
-    if (!isHost(peer, this.channel.host))
+    if (!isHost(peer, this.channel))
       throw new StoreError("AUTH_FAILED", "only the host that started this broker may deliver to the principal");
     // P0V-32: the host is known; its frame is read as every internal one is.
     const problem = internalEnvelopeProblem(raw);
@@ -392,7 +399,7 @@ export class PrincipalHostEndpoint {
       if (!this.ports.control) throw new StoreError("UNSUPPORTED_PROFILE", "Human collaboration controls are not bound");
       // Host identity is pinned to the supervision peer, not to a model credential
       // or an engine registration. Keep the original live capability getter.
-      const source = this.ports.principalContext(peer, () => this.open && peer.alive());
+      const source = this.ports.principalContext(peer, () => this.open && this.channel.alive?.() !== false && peer.alive());
       if (!source) throw new StoreError("AUTH_FAILED", "no current Principal authority for this supervising host");
       const auth: AuthContext = { actor: source.actor, role: source.role, incarnation: source.incarnation, peer: source.peer, channel: "host",
         get capabilities() { return source.capabilities; } };
@@ -403,7 +410,7 @@ export class PrincipalHostEndpoint {
     // Legacy delivery and every completion require a registered engine. The
     // selected supervising host may prepare the original batch/records before
     // startup; this neither presents it nor creates completion evidence.
-    const live = (): boolean => this.open && peer.alive() && (this.ports.registeredEngine() !== null ||
+    const live = (): boolean => this.open && this.channel.alive?.() !== false && peer.alive() && (this.ports.registeredEngine() !== null ||
       (method === "batch.prepare" && this.ports.prepareBeforeRegistration?.() === true));
     if (!live()) throw new StoreError("AUTH_FAILED", "no principal session is registered with this broker");
     const auth = this.ports.principalContext(peer, live);

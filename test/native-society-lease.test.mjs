@@ -240,3 +240,18 @@ test('010. A paid detached descendant still excludes a new Host after its execut
 });
 
 test('011. An explicit standalone execution owner retains its Society without an inherited environment marker',{timeout:45000},t=>paidSocietyScope(t,true,true));
+test('012. A Host dials its own Broker child over Mach by private child identity and refuses a non-child or returned identity',{timeout:45000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-owned-broker-rpc-')));t.after(()=>rmSync(base,{recursive:true}));
+ const host=fork(fileURLToPath(new URL('./fixtures/darwin-owned-broker-rpc.mjs',import.meta.url)),[join(base,'principal-host.sock'),'host'],{stdio:['ignore','ignore','pipe','ipc'],env:closedEnv()});
+ let stderr='';host.stderr.on('data',bytes=>{stderr+=bytes;});
+ const closed=new Promise((yes,no)=>{host.once('error',no);host.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
+ t.after(async()=>{if(host.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');await closed;});
+ const [result]=await Promise.race([once(host,'message'),closed.then(status=>{throw new Error('owned Broker RPC ended before a result: '+JSON.stringify(status)+' '+stderr);})]);
+ assert.equal(result.kind,'result',result.message??stderr);
+ assert.equal(result.notChild,true,'a socket peer that is not this Host child is not acquired');
+ assert.deepEqual(result.answer,{request:'ping',peer:result.host,broker:result.broker},'the Broker served exactly the kernel-identified Host');
+ assert.equal(result.afterReturn,'AUTH_FAILED','a returned child identity cannot open another connection');
+ assert.deepEqual(result.brokerExit,{code:0,signal:null});
+ host.disconnect();assert.deepEqual(await closed,{code:0,signal:null},stderr);
+});

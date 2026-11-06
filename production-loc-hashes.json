@@ -60,7 +60,7 @@
     },
     {
       "path": "apps/oma/src/application/society-runtime.ts",
-      "sha256": "8326c1f45bb529e074c8f786e4a6bdd69f157968e1eae8ac883a3bd9f2d1a58f"
+      "sha256": "105e5765c7e550f7d84de300c6378fdc9246f61734af1293042402ab71007a53"
     },
     {
       "path": "apps/oma/src/application/society-transition.ts",
@@ -240,11 +240,11 @@
     },
     {
       "path": "apps/oma/src/runtime/broker-channel.ts",
-      "sha256": "96386bad689f5a32892b1c3490cacf91595e171043391eda8e08dd44961d6f28"
+      "sha256": "1b119d168b26942b8a2018120197fdc9019be95d1bcfc6cb6213ba9a3e85c424"
     },
     {
       "path": "apps/oma/src/runtime/broker-supervisor.ts",
-      "sha256": "4694a09a868818a98dcc926b2f2ffcefeea5888c7efdb7c35af1d98e02eebc49"
+      "sha256": "49c55d0993472cd509d2d4fb1c103b2666095dbacefe6fd305edef47a12c5984"
     },
     {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
@@ -296,7 +296,7 @@
     },
     {
       "path": "apps/oma/src/runtime/human-controls.ts",
-      "sha256": "27223b1e7338cd28671a97fa6e23a65117a78e0a6d8b8369d4c5bcfd7e5edd56"
+      "sha256": "75145aad67bbefb26544bbd5b7788f304d016427c0979010690d2610fd37cab2"
     },
     {
       "path": "apps/oma/src/runtime/inference-relay.ts",
@@ -392,7 +392,7 @@
     },
     {
       "path": "apps/oma/src/runtime/principal-delivery.ts",
-      "sha256": "a97b792606a560a1dadcb9ffec3af3c7b28a10d3cc0222416e93ce3e94703261"
+      "sha256": "458a4c74fda38e6534a8a33290fb6f9543cbd2dffc0693ca1caf9bf1a39cd0dc"
     },
     {
       "path": "apps/oma/src/runtime/project-binding.ts",
@@ -448,7 +448,7 @@
     },
     {
       "path": "apps/oma/src/runtime/supervision-channel.ts",
-      "sha256": "ef6b0c1440954cd4174e37c542c94173c0eceab5993b1d08acc764429468851f"
+      "sha256": "4772c272a51144368c1b6a59a0fa52cc84fc04fc3b5b2a753cc7f60cb44f32eb"
     },
     {
       "path": "apps/oma/src/runtime/user-files.ts",
@@ -536,7 +536,7 @@
     },
     {
       "path": "packages/broker/src/principal-endpoint.ts",
-      "sha256": "5d4f2fe0877ff7e3dfcf653bda163285860afa3cac8dc85175930cb03dfb03d4"
+      "sha256": "35d730bf27fb46342c8eb408eff2bc37df2285116a72618aa7d98741db9e31ca"
     },
     {
       "path": "packages/broker/src/process-ancestry.ts",
@@ -1584,7 +1584,7 @@
     },
     {
       "path": "packages/native/src/private-parent.ts",
-      "sha256": "8bd6845d64e76c23ad4315b12bf3e6189304cfe24fb480a5521d9ca664dba83d"
+      "sha256": "d9a69b80eb58c02b59282cd45e39e0d9494bd08fc440fe5a273ebfd1e713ed48"
     },
     {
       "path": "packages/native/src/process-event.ts",
@@ -1760,7 +1760,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "dc4f51e0398df659cdd702ba8979a9d668c4d99f86f6f3739962c16e8d8c2138"
+      "sha256": "eb2323616428d5fee9a9c14a54d7156cd03bd6d767f707b5845b0a4b148a9079"
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",

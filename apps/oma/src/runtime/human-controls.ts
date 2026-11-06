@@ -7,6 +7,7 @@ import type { HostControlParams, HostControlResult } from "@oma/contracts/intern
 import { INTERNAL_METHODS } from "@oma/protocol/methods";
 import { StoreError, publicDetails } from "@oma/domain/errors";
 import { createBrokerChannel } from "./broker-channel.js";
+import type { BrokerChannel } from "@oma/client/channel";
 
 export const HUMAN_CONTROL_HELP = [
   "Human Control Panel commands (local host console: Ctrl+X then :; never sent to the Principal):",
@@ -44,9 +45,10 @@ export function humanControlCommand(text: string): HumanCommand | null {
 }
 
 export async function callHumanControl(runRoot: string, limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">,
-  input: HostControlParams, authorize: () => void, onObserved?: (result: HostControlResult) => undefined): Promise<HostControlResult> {
+  input: HostControlParams, authorize: () => void, onObserved?: (result: HostControlResult) => undefined,
+  channelForHost?: () => BrokerChannel | undefined): Promise<HostControlResult> {
   authorize();
-  const channel = createBrokerChannel(limits);
+  const channel = channelForHost?.() ?? createBrokerChannel(limits);
   try {
     await channel.connect(join(runRoot, "principal-host.sock"));
     authorize();

@@ -49,6 +49,13 @@ export class SocietyRuntime {
   }
   constructor(private readonly bootstrap: SocietyBootstrap, private readonly prepared: PreparedSociety, private readonly view: SocietyConversationView) { this.tenure = bootstrap.tenure; }
   private get config() { return this.prepared.configuration.settings.config; }
+  /** Darwin dials only the current Broker child this Host acquired; Linux keeps the default peer-credential channel. */
+  private readonly hostChannel = () => {
+    const broker = this.broker;
+    if (broker?.createChannel) return broker.createChannel(this.config.limits);
+    if (process.platform === "darwin") throw new StoreError("BROKER_UNAVAILABLE", "this Host has no acquired Broker channel source");
+    return undefined;
+  };
   async start(): Promise<void> {
     this.broker = this.tenure === null ? null : await superviseBroker({
       node: process.execPath, libdir: this.config.installation.libdir,
@@ -180,7 +187,7 @@ export class SocietyRuntime {
       this.controlHandoff === null && owner.brokerAvailable && this.broker === broker && this.currentSession === live && live.running &&
       this.currentHandle === handle && owner.brokerGeneration === generation;
     if (!current()) return;
-    try { await principalHostBroker(this.bootstrap.runRoot, this.config.limits).prepare(); }
+    try { await principalHostBroker(this.bootstrap.runRoot, this.config.limits, this.hostChannel).prepare(); }
     catch (error) {
       if (this.currentSession === live && this.tenure === owner) this.view.notice(`Principal records could not be refreshed; no new credential was granted: ${exceptionText(error)}`);
       return;
@@ -204,7 +211,7 @@ export class SocietyRuntime {
         get busy() { return live.busy; },
         onEvent: (listener: (event: PiEvent) => void) => live.onEvent(listener),
         deliver: (batchId: string) => live.deliver(batchId),
-      }, principalHostBroker(this.bootstrap.runRoot, this.config.limits), {
+      }, principalHostBroker(this.bootstrap.runRoot, this.config.limits, this.hostChannel), {
         stateRoot: this.bootstrap.stateRoot, frameBytes: this.config.limits.frameBytes,
         acceptMs: this.config.limits.receiptWaitSeconds * 1000, retryAfterMs: 60000,
       });
@@ -332,7 +339,7 @@ export class SocietyRuntime {
         authorize();
         output(`[Human control] Original command (preserve after interruption): ${text.trim()}`);
         let observed: Awaited<ReturnType<typeof callHumanControl>> | undefined;
-        void callHumanControl(this.bootstrap.runRoot, this.config.limits, command.input, authorize, result => { observed = result; return undefined; }).then(result => {
+        void callHumanControl(this.bootstrap.runRoot, this.config.limits, command.input, authorize, result => { observed = result; return undefined; }, this.hostChannel).then(result => {
           for (const line of humanControlLines(result)) output(line);
           this.view.refresh(); this.view.draw();
         }).catch(error => {

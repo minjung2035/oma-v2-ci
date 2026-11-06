@@ -2,6 +2,7 @@ import * as restartPolicy from "@oma/process/restart-policy";
 import * as sessionHandoffMeaning from "@oma/protocol/session-handoff";
 import * as hostLossMeaning from "@oma/process/host-loss";
 import * as deploymentMeaning from "@oma/domain/deployment";
+import { StoreError } from "@oma/domain/errors";
 // DR27/P0-4: production supervision over fake children, private channels and time.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,6 +25,11 @@ async function world() {
     'node:path': { join: (...parts) => parts.join('/') },
     '@oma/client/connection': { endpointListening: async () => false },
     "@oma/native/process-lock": { SOCIETY_OWNED_EXIT: 73 },
+    "@oma/domain/errors": { StoreError },
+    // Darwin-only identity acquisition; reaching it on this platform is a failure.
+    "@oma/native/private-parent": { pinDarwinPrivateChild() { throw new Error('Darwin child pin used off Darwin'); } },
+    "@oma/native/linux": { socketDescriptor() { throw new Error('Darwin channel descriptor read off Darwin'); } },
+    './broker-channel.js': { createBrokerChannel: (limits, peer) => ({ limits, peer }) },
     './assets.js': { launchLocationArgv: () => [] },
     '@oma/protocol/host-channel': {
       HOST_CHANNEL_ENV: 'CHANNEL', HOST_CHANNEL_FD: 3,
@@ -135,4 +141,17 @@ test("008. Broker owner: death returns a registration and old readiness cannot a
   assert.equal(ready, 1, 'a stopped owner notified readiness');
   assert.equal(await completed(w.handle.register('stopped', 202)), null);
   assert.equal(w.timers.size, 0); w.exit(1); await completed(stopping);
+});
+test("009. Broker owner: a Host channel comes only from the current ready generation", async () => {
+  const w = await world(), limits = { frameBytes: 1 };
+  assert.throws(() => w.handle.createChannel(limits), error => error.code === 'BROKER_UNAVAILABLE');
+  w.readers[0].accept({ kind: 'ready' });
+  assert.deepEqual(w.handle.createChannel(limits), { limits, peer: undefined });
+  w.exit();
+  assert.throws(() => w.handle.createChannel(limits), error => error.code === 'BROKER_UNAVAILABLE');
+  w.tick(); w.readers[1].accept({ kind: 'ready' });
+  assert.deepEqual(w.handle.createChannel(limits), { limits, peer: undefined });
+  const stopping = w.handle.stop();
+  assert.throws(() => w.handle.createChannel(limits), error => error.code === 'BROKER_UNAVAILABLE');
+  w.exit(1); await completed(stopping);
 });

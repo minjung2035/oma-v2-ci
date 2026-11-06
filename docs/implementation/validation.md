@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `815f9abccc916e3bc468bc56ae71bfea6b3c74e02d259f49956fd88d95620024` (15948 files).
+verification input digest `2d474e453ef7fe1f44e28811d9d22c4d50a01153f7dfdd89acfd1db17fbef4fd` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4629,3 +4629,15 @@ SOURCE107 고정 production 입력에서 build·선택93/93 PASS, fresh packed27
 ledger는 CHANGED_WITHOUT_ORACLE32·NOT_REVIEWED14372·REMOVED220/production14404다. 검토 생성으로 과거 authored review를 재승인하지 않는다.
 SOURCE108의 production bytes는 SOURCE107과 같다. fixture/doc/ledger binding 변경을 새 전체 runtime proof로 재해석하지 않는다.
 다음 제품 연결 지점은 Host의 자기 Broker RPC expected-peer 경로다. 현재 inherited-only Mach dialer에는 직접 시작한 자식을 expected peer로 취득하는 Host 경로가 없다. 기본 guard/세 gate는 계속 유지한다.
+
+### SOURCE109 Host의 자기 Broker 자식 Mach RPC expected-peer 연결
+
+Darwin Host는 public lookup으로 rendezvous만 찾고, 응답 sender는 자신이 띄운 미회수 Broker 자식의 private supervision socketpair audit token과 정확히 같아야 한다.
+`pinDarwinPrivateChild`는 socket peer의 uid·token·kernel ppid=Host를 확인하고 process watch를 유지한다. `superviseBroker`는 Darwin ready 시 이 pin이 없거나 죽으면 generation을 disown하며 재시작하지 않는다.
+`createChannel`은 현재 ready generation에만 채널을 주고 그 연결은 generation의 watch를 빌린다. 종료·교체 뒤 이전 identity로 새 연결을 열 수 없다.
+Principal delivery·Human control은 이 채널을 사용하며 Darwin에서 취득한 source가 없으면 BROKER_UNAVAILABLE로 거절한다. Linux 경로는 기존 peer credential 채널이다.
+Broker의 PrincipalEndpoint/HostEndpoint는 supervision channel의 현재 `alive()`를 각 authority read에서 다시 확인한다.
+
+Linux local build·typecheck·선택257 tests 239 PASS/0 FAIL/18 Darwin NOT_RUN, 전체 architecture/transaction/durable/document/spec0 findings다.
+실제 Darwin qualification은 `native-society-lease`012다. 실제 Host fork가 Broker 자식을 만들고 production dialer로 Mach 왕복, 비자식 pin 거절, 반환 identity의 AUTH_FAILED, 자식 정상 종료를 확인한다.
+012와 dynamic check-in 서비스의 Host lookup은 실제 Mac 실행 전 **NOT_RUN**이다. 전체 Broker CLI의 Principal/Human control 실제 왕복은 별도 인수 범위다. 기본 guard/세 gate는 유지한다.

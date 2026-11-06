@@ -10,7 +10,7 @@ import { StoreError } from "@oma/domain/errors";
 import { deadline } from "@oma/process/deadline";
 import type { PacketStream } from "@oma/process/packet-stream";
 import {
-  createMachEndpoint, inheritedMachPeerEndpoint, isMachAuditSender, listenMachService,
+  createMachEndpoint, inheritedMachPeerEndpoint, isMachAuditSender, listenMachService, lookupMachService,
   type MachMessage, type MachReceiveRight, type MachSendRight, type MachAuditSender,
 } from "@oma/native/mach-message";
 import { cleanupAll, withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
@@ -20,6 +20,7 @@ import { machPoll } from "./mach-poll.js";
 import { machRendezvousName } from "./mach-address.js";
 import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
 import { peerFromMachReceiver, type DarwinJobPeer } from "./mach-peer-source.js";
+import { borrowDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
 
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104;
 const unavailable = (message: string): StoreError => new StoreError("BROKER_UNAVAILABLE", message);
@@ -33,12 +34,24 @@ type Packet = Extract<MachMessage, { kind: "data" }>;
  * handshake is pending. No bearer/PID from a body becomes peer evidence.
  */
 export function dialMachChannel(path: string, handshakeSeconds: number): { readonly socket: Duplex; readonly ready: Promise<void> } {
+  machRendezvousName(path); duration(handshakeSeconds);
+  return dialExpectedMachChannel(path, handshakeSeconds, pinInheritedDarwinPeer(), () => inheritedMachPeerEndpoint());
+}
+/** Host composition supplies its own privately acquired, unreaped child.
+ * Public lookup only routes the nonce; every reply still needs that exact
+ * live kernel sender, including its transferred private connection endpoint. */
+export function dialOwnedChildMachChannel(path: string, handshakeSeconds: number, child: PrivateParentPin): { readonly socket: Duplex; readonly ready: Promise<void> } {
+  const name = machRendezvousName(path); duration(handshakeSeconds);
+  return dialExpectedMachChannel(path, handshakeSeconds, borrowDarwinPrivateChild(child), () => lookupMachService(name));
+}
+function dialExpectedMachChannel(path: string, handshakeSeconds: number,
+  source: { readonly token: readonly number[]; alive(): boolean; close(): void },
+  acquire: () => MachSendRight): { readonly socket: Duplex; readonly ready: Promise<void> } {
   const name = machRendezvousName(path), ms = duration(handshakeSeconds);
   const nonce = Buffer.concat([randomBytes(16), createHash("sha256").update(name).digest()]);
   const expires = performance.now() + ms;
-  const source = pinInheritedDarwinPeer();
   let service: MachSendRight;
-  try { service = inheritedMachPeerEndpoint(); }
+  try { service = acquire(); }
   catch (error) { return withCleanup(() => { throw error; }, () => source.close()); }
   const expected = (sender: MachAuditSender): boolean => isMachAuditSender(sender) && source.alive() &&
     sender.token.every((word, index) => word === source.token[index]);

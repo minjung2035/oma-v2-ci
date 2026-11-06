@@ -40,6 +40,11 @@ import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type Child
 import { SOCIETY_OWNED_EXIT } from "@oma/native/process-lock";
 import { launchLocationArgv } from "./assets.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "@oma/protocol/host-channel";
+import { pinDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
+import { socketDescriptor } from "@oma/native/linux";
+import { StoreError } from "@oma/domain/errors";
+import { createBrokerChannel } from "./broker-channel.js";
+import type { BrokerChannel, ChannelLimits } from "@oma/client/channel";
 
 export type BrokerState =
   | { readonly kind: "already-running" }
@@ -47,6 +52,8 @@ export type BrokerState =
   | { readonly kind: "unavailable"; readonly reason: string };
 
 export interface BrokerHandle {
+  /** Current generation only; no endpoint or PID supplied by a client. */
+  createChannel?(limits: ChannelLimits): BrokerChannel;
   readonly state: BrokerState;
   /** Called each time a broker this handle started reports its endpoints are
    * listening: at first start and after every restart. Never called for a
@@ -113,6 +120,7 @@ interface Generation {
   readonly child: ChildProcess;
   readonly channel: Socket;
   ready: boolean;
+  peer: PrivateParentPin | null;
   /** The registration awaiting the broker's answer, if any, and the session it
    * is waiting for. The answer is correlated against that handle: an answer to
    * a registration this process is no longer waiting for -- a late one from a
@@ -204,11 +212,24 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       if (child.pid !== undefined) child.kill("SIGKILL");
       return "the broker process did not start";
     }
-    const generation: Generation = { child, channel: channel as Socket, ready: false, pending: null };
+    const generation: Generation = { child, channel: channel as Socket, ready: false, peer: null, pending: null };
     const reader = new HostChannelReader(message => {
       if (current !== generation) return;
       switch (message.kind) {
         case "ready":
+          if (process.platform === "darwin") {
+            try {
+              if (child.exitCode !== null || child.signalCode !== null) throw new StoreError("BROKER_UNAVAILABLE", "Broker ended before its private identity was acquired");
+              if (generation.peer === null) {
+                const fd = socketDescriptor(generation.channel);
+                generation.peer = fd === null ? null : pinDarwinPrivateChild(fd, child.pid!);
+              }
+              if (generation.peer === null || !generation.peer.alive()) throw new StoreError("AUTH_FAILED", "Broker has no live original private child identity");
+            } catch (error) {
+              say(`broker identity failed: ${error instanceof Error ? error.message : String(error)}`);
+              child.kill("SIGTERM"); disown("the Broker's private child identity could not be established"); return;
+            }
+          }
           generation.ready = true;
           for (const listener of readyListeners) listener();
           return;
@@ -236,6 +257,11 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       for (const line of String(chunk).split("\n")) if (line.trim().length > 0) say(line.trim());
     });
     child.once("exit", (code, signal) => {
+      try { generation.peer?.close(); } catch (error) {
+        say(`broker identity return failed: ${error instanceof Error ? error.message : String(error)}`);
+        disown("the Broker identity watch could not be returned");
+      }
+      generation.peer = null;
       generation.pending?.settle(null);
       generation.pending = null;
       // Said for every generation this handle started, including the one being
@@ -244,7 +270,7 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       // whenever a replacement turns out to be possible.
       if (generation.ready) { generation.ready = false; for (const listener of lostListeners) listener(); }
       say(`broker ended (${signal ?? `code ${code ?? "unknown"}`})`);
-      if (current !== generation || stopping) return;
+      if (current !== generation || stopping || disowned !== null) return;
       current = null;
       // The child lost the race for the society lock. Another process owns the
       // society; a restart would only lose it again, and in the meantime this
@@ -286,6 +312,13 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
   current = first;
 
   return {
+    createChannel(limits) {
+      const generation = current;
+      if (generation === null || !generation.ready || stopping || disowned !== null ||
+          process.platform === "darwin" && (generation.peer === null || !generation.peer.alive()))
+        throw new StoreError("BROKER_UNAVAILABLE", "this Host has no current live Broker generation");
+      return createBrokerChannel(limits, generation.peer ?? undefined);
+    },
     // A pid, not a claim of ownership: the child has started, and whether it
     // owns the society is answered later, by onReady or onDisowned.
     state: { kind: "started", pid: first.child.pid! },
@@ -332,15 +365,18 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
       restarting = null;
       const generation = current;
       current = null;
+      let identityFailure: unknown;
+      try { generation?.peer?.close(); } catch (error) { identityFailure = error; }
+      if (generation) generation.peer = null;
       if (generation !== null) {
         const pending = generation.pending;
         generation.pending = null;
         pending?.settle(null);
       }
       if (generation === null || generation.child.exitCode !== null || generation.child.signalCode !== null)
-        return closing = Promise.resolve();
+        return closing = identityFailure === undefined ? Promise.resolve() : Promise.reject(identityFailure);
       // P0-4/P0-5: every caller shares actual exit, not the signal request.
-      closing = new Promise<void>(resolve => { generation.child.once("exit", () => resolve()); });
+      closing = new Promise<void>(resolve => { generation.child.once("exit", () => resolve()); }).then(() => { if (identityFailure !== undefined) throw identityFailure; });
       generation.child.kill("SIGTERM");
       return closing;
     },

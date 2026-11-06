@@ -22,6 +22,7 @@
  */
 import type { BoundaryEvidence, PreparedBatch, ProtocolLimits } from "@oma/contracts";
 import { createBrokerChannel } from "./broker-channel.js";
+import type { BrokerChannel } from "@oma/client/channel";
 import { StoreError } from "@oma/domain/errors";
 import { deliveryDecision, observeDeliveryReceipt, publishDeliveryReceipt } from "@oma/storage/delivery-receipt";
 import type { CheckedReceipt } from "@oma/contracts/runtime";
@@ -70,10 +71,11 @@ const FAILED_BATCHES = 64;
 
 /** The host's client for the Principal host endpoint. One short connection
  * per call, the same way the model-facing CLI talks to the broker. */
-export function principalHostBroker(runRoot: string, limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">): DeliveryBroker {
+export function principalHostBroker(runRoot: string, limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">,
+  channelForHost?: () => BrokerChannel | undefined): DeliveryBroker {
   const path = `${runRoot.endsWith("/") ? runRoot : `${runRoot}/`}principal-host.sock`;
   const call = async <T>(method: "batch.prepare" | "batch.complete", params: Record<string, unknown>): Promise<T> => {
-    const channel = createBrokerChannel(limits);
+    const channel = channelForHost?.() ?? createBrokerChannel(limits);
     try {
       await channel.connect(path);
       const reply = await channel.call(method, params);

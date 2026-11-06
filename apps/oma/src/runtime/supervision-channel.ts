@@ -93,6 +93,7 @@ export function openSupervisionChannel(options: SupervisionOptions): PrincipalHo
   };
   return Object.freeze({
     host,
+    alive: () => !gone && (parent == null || parent.alive()),
     ready: () => send(encodeHostMessage({ kind: "ready" })),
     grant: (credential: string, sessionHandle: string) =>
       send(encodeHostMessage({ kind: "credential", credential, sessionHandle })),
