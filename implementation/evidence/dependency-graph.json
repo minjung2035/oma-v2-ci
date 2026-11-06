@@ -3010,7 +3010,7 @@
   "node:https": 1,
   "node:module": 6,
   "node:net": 25,
-  "node:os": 15,
+  "node:os": 16,
   "node:path": 175,
   "node:perf_hooks": 5,
   "node:readline": 1,

@@ -143,11 +143,15 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
   env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
  const terminal=JSON.parse(session.stdout||'{}');
  // Notices only: control sequences, hyperlinks and spinner frames carry no evidence.
- const screen=[...new Set(Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'')
+ // A TUI moves the cursor instead of writing newlines; each movement starts a line.
+ const screen=[...new Set(Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n')
   .split(/\r?\n/).map(line=>line.replace(/[│╭╮╰╯─]+/g,' ').trim()).filter(line=>line.length>0&&!/Working|^[░▓\s]*$/.test(line)))].join('\n').slice(-6000);
  const roots=existsSync(data)?readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>({name,store:existsSync(join(data,name,'runtime.sqlite'))})):[];
+ // The Principal's own history also records the notices OMA injected into its turn.
+ const history=roots.flatMap(({name})=>{const sessions=join(data,name,'principal','private','sessions');
+  try{return readdirSync(sessions,{recursive:true}).filter(file=>String(file).endsWith('.jsonl')).map(file=>readFileSync(join(sessions,String(file)),'utf8').slice(-4000));}catch{return [];}}).join('\n');
  assert.equal(session.status,0,session.stderr+screen);assert.equal(terminal.ready,true,screen);
- assert.ok(provider.seen.length>=2,`the Principal made ${provider.seen.length} model request(s); societies ${JSON.stringify(roots)}:\n`+screen);
+ assert.ok(provider.seen.length>=2,`the Principal made ${provider.seen.length} model request(s); societies ${JSON.stringify(roots)}:\n`+screen+'\nhistory:\n'+history);
  const result=toolResults(provider.seen[1].body).at(-1)?.text??'';
  // The routing owner answered: the engine reached and authenticated to this Host's Broker.
  assert.match(result,/ADDRESS_NOT_FOUND/,result+'\n'+screen);

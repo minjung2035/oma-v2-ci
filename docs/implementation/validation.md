@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `ae10d727b4e96027662542a058dd63d5ddb5df479af14ebfb3026df3b1d1e3e0` (15950 files).
+verification input digest `2cc124abee502ae183f4dd76c70db59ea1cf9e5fe962f8cb69b041bf8d82a44c` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4758,3 +4758,8 @@ SOURCE127 `dae5941b7fd`, Native42184803022. **Mac26 제품 경로 003 PASS**: �
 - Restic round-trip 진단: 고정 Restic은 Darwin에서 symlink 자체의 mtime만 복원하지 않았다(파일·디렉터리·mode·소유자·내용·link target은 동일). snapshot은 그 시각을 정확히 가지고 있다(archive 검증의 PAX 대조). verifier를 약화하지 않고 Darwin restore 직후 snapshot의 `ls --json`에서 symlink 시각을 읽어 containment 아래 `utimensat(AT_SYMLINK_NOFOLLOW)`로 ns 정밀도로 적용하며, 이어지는 checkpoint digest가 결과를 검증한다. 진단 시험은 이 Restic 동작을 고정한다.
 - 제품 경로 005: Principal은 prompt 뒤 작업을 시작했으나 provider가 받은 요청이 0이었다. 화면이 spinner frame으로 채워져 원인이 보이지 않아, 시험이 spinner·control sequence를 걸러 알림만 남기고 Society Store 상태를 함께 보존한다.
 - Worker gate는 매 push마다 긴 gate job과 함께 취소되어 결과가 없었다. common-runtime job 안에 worker-bootstrap·worker-tools fixture를 바로 실행하는 짧은 step을 추가했다.
+
+### SOURCE128 실제 결과와 SOURCE129
+
+SOURCE128 `388db217449`, Native42189778787. Mac26 Society 12/12, 제품 경로 4/5, **Darwin storage 16/19**(symlink 시각 복원 수리 확인). 새 Worker probe step이 처음 결과를 냈다: 실제 Seatbelt Worker Pi가 여전히 OMA extension load에서 `directory-relative operation failed: EPERM`이었다. tool-files private state가 `/`부터 각 상위 디렉터리를 열며 내려가는데, deny-default Seatbelt는 Worker가 `/Users` 같은 상위 디렉터리를 읽기로 여는 것을 허용하지 않는다. Seatbelt를 넓혀 상위 디렉터리(다른 actor 이름 포함) 목록을 노출하지 않고, 신뢰된 launcher가 준 HOME과 정규화된 system temp root를 시작점으로 삼는다. 그 아래 각 요소는 기존대로 link를 따르지 않고 연다.
+제품 경로 005는 Broker Store가 열린 상태에서 Principal의 model 요청이 0이었다. TUI 출력이 newline 없이 커서 이동으로 그려져 알림이 걸러졌으므로 커서 이동을 줄바꿈으로 바꾸고, Principal session history 끝부분(OMA가 주입한 알림 포함)도 보존한다.

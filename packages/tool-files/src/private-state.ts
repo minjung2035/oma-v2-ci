@@ -1,7 +1,8 @@
 /** SDK-free private tool state. Every component and cleanup walk is no-follow.
  * Permission repair applies only to the opened owned leaf or to a directory
  * that same walk has opened for removal, never to its ancestors. */
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { chmodPathHandle, directoryNames, mkdirAt, openAt, openRoot, unlinkAt, renameExclusiveAt } from "./descriptor-files.js";
@@ -9,11 +10,24 @@ import { WorkspaceRefusal } from "./errors.js";
 
 const DIRECTORY = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NONBLOCK;
 function code(error: unknown): string | undefined { return (error as NodeJS.ErrnoException | undefined)?.code; }
+/** Roots the trusted launcher hands this process: its HOME and canonical
+ * system temp root. A sandbox may refuse reading their ancestors, so a walk
+ * starts at the deepest anchor; below it every component is still opened
+ * without following links. */
+function anchorFor(path: string): string {
+  const anchors: string[] = [];
+  try { anchors.push(realpathSync(tmpdir())); } catch { /* no usable temp root */ }
+  const home = process.env.HOME;
+  if (home !== undefined && isAbsolute(home) && resolve(home) === home) anchors.push(home);
+  return anchors.filter(root => root !== "/" && (path === root || path.startsWith(`${root}/`)))
+    .sort((left, right) => right.length - left.length)[0] ?? "/";
+}
 function withDirectory<T>(path: string, create: boolean, use: (fd: number) => T): T {
   if (!isAbsolute(path) || resolve(path) !== path) throw new WorkspaceRefusal("private state requires a normalized absolute path");
-  let fd = openRoot("/");
+  const anchor = anchorFor(path);
+  let fd = openRoot(anchor);
   try {
-    for (const name of path.split("/").filter(Boolean)) {
+    for (const name of path.slice(anchor === "/" ? 0 : anchor.length).split("/").filter(Boolean)) {
       let created = false, next: number;
       // Open first: a sandbox refuses mkdir on an existing ancestor it may not
       // write (EPERM before EEXIST), so only a missing component is created.

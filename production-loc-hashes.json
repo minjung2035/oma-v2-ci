@@ -2292,7 +2292,7 @@
     },
     {
       "path": "packages/tool-files/src/private-state.ts",
-      "sha256": "47b657ac448e4b7fef9039ce73d3deaa12c92ef177fe45688452660d3ee4df54"
+      "sha256": "49bf9c9c0e014a428d2cf33b90d2321ec1942b4451ad63f2e6e0ab096c0bcdc9"
     },
     {
       "path": "packages/tool-files/src/results.ts",
