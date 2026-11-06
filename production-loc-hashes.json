@@ -500,11 +500,11 @@
     },
     {
       "path": "packages/broker/src/connection.ts",
-      "sha256": "1bc45685dce78e0dadee2428d9c1b902caeaf2acdd065e2daa99557cb9971ee2"
+      "sha256": "1e7d666b207820028765acb8290a92cc7477b5f50cb9d0dd57dde2d65b082e0b"
     },
     {
       "path": "packages/broker/src/index.ts",
-      "sha256": "e44a7c065cc10c938c709f455aee60cb41d8ce374d2b74435f1f2c658d02ecfe"
+      "sha256": "ede66776aab40ab92802b9ed16c8d13944648a1336c905b191768c16d5184c74"
     },
     {
       "path": "packages/broker/src/internal-dispatcher.ts",

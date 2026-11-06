@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c66d24239c21128f354342ac1b032b689185d2b4891101c2c38395c622458bd6` (15950 files).
+verification input digest `4ea004ca59394e65b70c5cfedc3ade62a07faf1b0d1c07122ee55430e59ab3a6` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4793,3 +4793,10 @@ NATIVE-002·spec §4.3·§5·§6의 요구를 실제 Mac 근거와 대조한 작
 ### 로컬 Linux 전체 회귀 — SOURCE132 입력
 
 이 개발 host의 전체 local suite는 170 실패로 SOURCE110 기준선과 같은 수·원인 분류(namespace launcher ENOENT125·bwrap8·cloc5와 그 broker 경로 파생)다. SOURCE110 이후의 macOS 수리(temp root 정규화·private state anchor·preparation 정산·Restic Darwin 경로·engine 시작 진단·Broker 탐지·Host attestation 등)로 늘어난 Linux 실패는 없다. 새로 보인 `verification-policy`020은 이름을 바꾼 `darwin-evidence`006의 lane 요구 문자열 갱신 누락이었고 수리했다. Ubuntu CI job은 matrix의 마지막이라 매 push에 취소되었으므로 먼저 실행하도록 바꿨다.
+
+### SOURCE131·132 실제 결과와 SOURCE133 진단
+
+SOURCE132 `4393fca55c8`, Native42206468594. **Ubuntu job SUCCESS**(SOURCE119 이후 macOS 수리 전체의 실제 Linux 회귀 없음). 세 Mac 모두 **Worker probe(bootstrap·tools) PASS**: 실제 Seatbelt Worker 안에서 git·npm·collaboration record read·자기 script·`cc` compile/link가 동작하고 private read·shared write는 거절됐다(SDKROOT 수리 확인). **제품 경로 007(Human CLI)·008(Host가 SIGKILL된 Broker child를 재시작하고 Ctrl-D로 모두 종료) 세 Mac PASS**. 제품 경로는 Mac26·Mac15 6/8, Intel 5/8이다.
+- 006: scripted Principal의 `oma_goal`(raw body를 stream하는 `context.publish`)이 Broker에서 `INTERNAL_ERROR`(acceptance unknown)로 끝났다. 같은 Host·Broker에서 일반 frame 호출인 `oma_send`(005)는 성공하므로 Mach 경로의 raw stream upload가 가장 유력한 후보다. 호출자에게는 INTERNAL_ERROR만 주되 Broker stderr에 원래 stack을 남기고, 시험은 Host 화면(Broker 알림 포함)을 보존한다.
+- 005: 본문 PASS 뒤 정리에서 ENOTEMPTY가 반복된다. 정리 실패 시 `lsof +D`로 writer와 남은 파일을 보고한다.
+- Intel 002(Personal 시작)는 이번에 처음 실패했고 원인은 다음 결과로 확인한다.

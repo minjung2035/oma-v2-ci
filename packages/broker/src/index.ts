@@ -434,7 +434,12 @@ export class Broker {
   }
   static errorAnswer(id: string, error: { code: string; message: string; retry: "never" | "same-key" | "after-repair" }): object { return errorAnswer(id, error); }
   static okAnswer(id: string, result: unknown): object { return okAnswer(id, result); }
-  private failureAnswer(id: string, error: unknown): object { this.health.observe(error); return Broker.errorAnswer(id, publicFailure(error)); }
+  private failureAnswer(id: string, error: unknown): object {
+    this.health.observe(error);
+    const failure = publicFailure(error);
+    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", error instanceof Error ? error.stack ?? error.message : String(error));
+    return Broker.errorAnswer(id, failure);
+  }
   private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void {
     this.publicDispatcher.preflight(auth, envelope);
   }

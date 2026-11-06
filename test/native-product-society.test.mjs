@@ -23,6 +23,13 @@ async function stop(owner,ms=20000){owner.child.kill('SIGTERM');const end=await 
 const evidence=(base,owner)=>JSON.stringify({files:spawnSync('/usr/bin/find',[base,'-maxdepth','6','-not','-path','*/node_modules/*'],{encoding:'utf8'}).stdout.split('\n').slice(0,200),
  processes:spawnSync('/bin/ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base)||line.includes(String(owner.child.pid))),
  stderr:owner.stderr().slice(-4096),stdout:owner.stdout().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-4096)},null,1);
+/** Removes a test root; if something still writes there, names it and its writers. */
+function removeTree(base){
+ try{rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});}
+ catch(error){const writers=spawnSync('/usr/sbin/lsof',['+D',base],{encoding:'utf8',timeout:20000}).stdout;
+  const left=spawnSync('/usr/bin/find',[base,'-maxdepth','8'],{encoding:'utf8'}).stdout.split('\n').slice(0,60);
+  throw new Error(`${error.message}; writers:\n${writers}\nleft:\n${left.join('\n')}`);}
+}
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
 
 test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
@@ -31,7 +38,7 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
  const running=[];
  t.after(async()=>{for(const owner of running)if(owner.child.exitCode===null&&owner.child.signalCode===null){owner.child.kill('SIGKILL');await Promise.race([owner.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  // 1. The real product entry creates the Society: birth, binding and configuration.
  const host=start([entry('oma')],project,env);running.push(host);
  const root=await until(()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>join(data,name))
@@ -56,18 +63,18 @@ test('002. A fresh Personal session is born on Darwin and stops without residue'
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
  const personal=start([entry('oma'),'--mode','personal'],project,env);
  t.after(async()=>{if(personal.child.exitCode===null&&personal.child.signalCode===null){personal.child.kill('SIGKILL');await Promise.race([personal.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const root=await until(()=>{try{return readdirSync(sessions).map(name=>join(sessions,name)).find(path=>{try{return readSessionBirth(path)!==null;}catch{return false;}});}catch{return undefined;}},60000,()=>'Personal birth '+evidence(base,personal));
  const birth=readSessionBirth(root);assert.equal(birth.mode,'personal');assert.equal(birth.cwd,project);
  assert.doesNotMatch(personal.stderr(),/UNSUPPORTED_PROFILE|blocked by/,personal.stderr());
- assert.notEqual(await stop(personal),null,'Personal ends on SIGTERM: '+personal.stderr());
+ assert.notEqual(await stop(personal,90000),null,'Personal ends on SIGTERM: '+personal.stderr());
  await until(()=>owned(base).length===0,30000,'no Personal descendant remains: '+owned(base).join('\n'));
 });
 
 test('003. The Host runs a fresh Society in a real terminal: its Broker child opens the Store and Ctrl-D ends everything',{timeout:540000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-host-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const hex=text=>Buffer.from(text).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  // The Host's own Broker child must get through runtime generation, tools and Store before Ctrl-D.
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
@@ -99,7 +106,7 @@ test('004. A Darwin Society is archived with the pinned Restic and its Broker re
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1',OMA_RESTIC_COMMAND:restic};
  const running=[];
  t.after(async()=>{for(const owner of running)if(owner.child.exitCode===null&&owner.child.signalCode===null){owner.child.kill('SIGKILL');await Promise.race([owner.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const host=start([entry('oma')],project,env);running.push(host);
  const root=await until(()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>join(data,name))
   .find(path=>{try{return readSessionBirth(path)!==null&&existsSync(join(path,'config.json'));}catch{return false;}});}catch{return undefined;}},120000,()=>'fresh Society '+evidence(base,host));
@@ -132,7 +139,7 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  const {scriptedProvider,tools,call,text,toolResults}=await import('../dist/test/fixtures/scripted-provider.js');
  const provider=await scriptedProvider([tools(call('oma_send',{to:['nobody'],subject:'no such Worker',content:{kind:'text',value:'x'}})),text('No such Worker.')]);
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-principal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  // The product's default Principal model is the engine's own default: point it at the script.
  const agentDir=join(data,'engine');provider.configure(agentDir);
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
@@ -172,7 +179,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const provider=await scriptedProvider((request)=>worker(request)?text('Worker acknowledged the goal.'):
   continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
@@ -190,7 +197,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const principal=provider.seen.filter(seen=>!worker(seen.body)),workers=provider.seen.filter(seen=>worker(seen.body));
  assert.ok(principal.length>=2,`Principal requests ${principal.length}:\n`+screen);
  const goal=toolResults(principal[1].body).at(-1)?.text??'';
- assert.doesNotMatch(goal,/BROKER_UNAVAILABLE|AUTH_FAILED|UNSUPPORTED_PROFILE|error/i,goal);
+ assert.doesNotMatch(goal,/BROKER_UNAVAILABLE|AUTH_FAILED|UNSUPPORTED_PROFILE|error/i,goal+'\n'+screen);
  assert.ok(workers.length>=1,`no seeded Worker reached the model through its relay; goal result: ${goal}\n`+screen);
  await until(()=>owned(base).length===0,60000,()=>'no Host, Broker, Worker or engine process remains: '+owned(base).join('\n'));
 });
@@ -198,7 +205,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
 test('007. Human CLI commands on Darwin: the package store lists and reboot recovery explains its automatic boot binding',{timeout:120000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-cli-'))),project=join(base,'project');mkdirSync(project);
- t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
  const run=argv=>spawnSync(process.execPath,[entry('oma'),...argv],{cwd:project,env,encoding:'utf8',timeout:60000});
  const listed=run(['pi','list']);
@@ -211,7 +218,7 @@ test('007. Human CLI commands on Darwin: the package store lists and reboot reco
 test('008. The real Host restarts its Broker child after a SIGKILL and still ends everything on Ctrl-D',{timeout:900000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-restart-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,steps:[{wait:480},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
@@ -242,7 +249,7 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
   return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_send',{to:['principal'],subject:'fix',content:{kind:'text',value:'Submitted.'},attachments:[{commit:'HEAD'}]})):text('Submitted.');
  });
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-submit-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');

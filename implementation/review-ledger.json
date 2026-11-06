@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 38,
-  "NOT_REVIEWED": 14365,
+  "CHANGED_WITHOUT_ORACLE": 37,
+  "NOT_REVIEWED": 14366,
   "REMOVED": 220
  },
  "lanes": {
@@ -997,17 +997,16 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/broker/src/index.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "e44a7c065cc10c938c709f455aee60cb41d8ce374d2b74435f1f2c658d02ecfe"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/broker/src/internal-dispatcher.ts",

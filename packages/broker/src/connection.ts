@@ -124,6 +124,8 @@ export class RpcConnection {
     const code = error !== null && typeof error === "object" && "code" in error ? error.code : null;
     const mapped = code === "ENOSPC" || code === "EDQUOT" ? new StoreError("STORAGE_FULL", "raw transport storage is full") : error;
     const failure = mapped instanceof FrameError ? { code: mapped.code, message: mapped.message, retry: "never" as const } : publicFailure(mapped);
+    // The caller only learns INTERNAL_ERROR; the Broker's own diagnostics keep why.
+    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", mapped instanceof Error ? mapped.stack ?? mapped.message : String(mapped));
     return encodeFrame({ v: 1, id, ok: false, error: failure });
   }
   private fatal(error: unknown, id = this.id()): void {
