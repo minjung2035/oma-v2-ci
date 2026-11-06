@@ -156,7 +156,7 @@ void runner.run().then(
   () => { if (!stopping) process.exitCode = 0; },
   error => {
     if (stopping) return;
-    console.error(`runner ${agent} failed: ${errorCodeOf(error)}`);
+    console.error(`runner ${agent} failed: ${errorCodeOf(error)}: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 2;
   },
 ).finally(() => { process.off("SIGTERM", stop); process.off("SIGINT", stop); });

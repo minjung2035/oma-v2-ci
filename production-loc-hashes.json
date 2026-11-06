@@ -208,7 +208,7 @@
     },
     {
       "path": "apps/oma/src/entry/runner.ts",
-      "sha256": "1a4b9b5e3fc8244d747d4665481e3f207316204c6ad918b74de087a78ed78104"
+      "sha256": "80e816b4e2d102856a87b04859a8c475345ffeec1c1799d610eb0f5306af6868"
     },
     {
       "path": "apps/oma/src/platform/package-files.ts",
@@ -232,7 +232,7 @@
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "6d4411d501213e4f2442bbeeee096e7c9d137ce07e5197057ba44408af845fea"
+      "sha256": "2fb794a58fb8ff4b079c4ec355c03e99ed1ac0cd9e1351dea7a6d1e792061933"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",

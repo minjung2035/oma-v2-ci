@@ -84,6 +84,14 @@ export interface RunnerPaths {
   /** Required for engine execution; receipt-only recovery needs no engine. */
   readonly confinement?: RunnerConfinement;
 }
+/** A Unix socket name, NUL included, fits the platform's sun_path: 108 bytes
+ * on Linux, 104 on Darwin. The refusal names the path and its length. */
+function assertSocketPath(path: string, what: string): void {
+  const limit = process.platform === "darwin" ? 103 : 107, length = Buffer.byteLength(path);
+  if (length > limit)
+    throw new StoreError("UNSUPPORTED_PROFILE", `${what} socket path is ${length} bytes, past the ${limit}-byte sun_path of this platform: ${path}`);
+}
+
 export class RunnerModule {
   private readonly channel: BrokerChannel;
   private lease: ValidatedRunLease | null = null;
@@ -177,8 +185,7 @@ export class RunnerModule {
     // Beside the lease socket: the same per-incarnation directory, so a stale
     // run's relay cannot be reached by the next incarnation.
     const socketHostPath = join(dirname(this.lease.socketHostPath), "inference.sock");
-    if (Buffer.byteLength(socketHostPath) > 107)
-      throw new StoreError("UNSUPPORTED_PROFILE", "relay socket path exceeds Linux sun_path");
+    assertSocketPath(socketHostPath, "relay");
     const auth = await resolveEngineAuth(piAgentDir, this.profile.model.provider, this.profile.model.model);
     const placeholder = placeholderFor(auth.apiKey);
     const relay = await InferenceRelay.open(socketHostPath,
@@ -193,8 +200,7 @@ export class RunnerModule {
   private async openConnectProxy(connectDial: ConnectDial): Promise<ConnectProxy | null> {
     if (!this.lease) return null;
     const socketHostPath = join(dirname(this.lease.socketHostPath), "egress.sock");
-    if (Buffer.byteLength(socketHostPath) > 107)
-      throw new StoreError("UNSUPPORTED_PROFILE", "egress proxy socket path exceeds Linux sun_path");
+    assertSocketPath(socketHostPath, "egress proxy");
     return ConnectProxy.open({
       socketPath: socketHostPath, actor: this.agent, dial: connectDial,
       audit: (entry: EgressAudit) => {

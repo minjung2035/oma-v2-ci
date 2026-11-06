@@ -43,6 +43,9 @@ function residentLogs(base){
  const files=spawnSync('/usr/bin/find',[base,'-path','*/logs/resident/*','-type','f'],{encoding:'utf8'}).stdout.split('\n').filter(Boolean);
  return files.map(file=>{let bytes='';try{bytes=readFileSync(file,'utf8');}catch(error){bytes=String(error);}return `--- ${file}\n${bytes.slice(-3000)}`;}).join('\n').slice(-12000)||'no Resident log files';
 }
+/** A Worker's relay and egress sockets live under the run root and must fit
+ * Darwin's 104-byte sun_path; a test run root sits as short as a user's /tmp. */
+function shortRunRoot(t){const root=realpathSync(mkdtempSync('/tmp/oma-run-'));t.after(()=>removeTree(root));return root;}
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
 
 test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
@@ -199,7 +202,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:420},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
@@ -269,7 +272,7 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
@@ -302,7 +305,7 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
