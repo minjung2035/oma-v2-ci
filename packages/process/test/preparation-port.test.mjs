@@ -41,3 +41,12 @@ test('003. A pre-release cancellation the execution owner already settled does n
   await preparationShutdownBarrier();assert.equal(executor.blocked,false);assert.equal(executor.quiescence,'quiescent');
  }finally{release();}
 });
+test('004. An interrupted run the execution owner settled leaves its state unknown without fencing shutdown',async()=>{
+ const aborted={...result,kind:'aborted',exitCode:null,signal:'SIGKILL'};
+ const release=configurePreparationExecution({run(){return Promise.resolve(aborted);}});
+ try {
+  const executor=new PreparationExecutor();assert.equal(await executor.run(command()),aborted);
+  await preparationShutdownBarrier();assert.equal(executor.blocked,true,'the prepared state still needs a fresh observation');
+  assert.equal(executor.reverifyStale(()=> 'quiescent'),'quiescent');assert.equal(executor.blocked,false);
+ }finally{release();}
+});

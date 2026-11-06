@@ -74,7 +74,13 @@ export class PreparationExecutor {
       if (selected !== undefined || process.platform === "darwin") {
         const run = Promise.resolve().then(() => selected === undefined ? runDarwinPreparation(command, signal, files, capture, placementControls) : selected.run(command, signal, files, capture, placementControls));
         const closure = run.then(observation => {
-          if (observation.kind !== "exited") { this.uncertain = true; unprovenPreparations.add(this); }
+          if (observation.kind === "exited") return;
+          // The prepared state is unproven until its owner re-observes it.
+          // A configured owner returns an observation only after it proved
+          // the whole scope dead, so only the built-in path also leaves
+          // descendant quiescence unproven for shutdown.
+          this.uncertain = true;
+          if (selected === undefined) unprovenPreparations.add(this);
         }, error => {
           if (error instanceof ExecutionNotStarted) return;
           // The execution owner reports a pre-release cancellation only after it
