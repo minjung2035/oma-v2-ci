@@ -3,7 +3,7 @@
  * SDK admission or runner composition; no supplied current plan promotes it. */
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -163,14 +163,22 @@ for (const [label, raw] of [["version-2", JSON.stringify({ version: 2 })], ["mal
     } finally { await executions.close(); store.close(); }
   });
 }
-for (const selected of [false, true]) test(`006. Fresh Society CLI: ${selected ? "explicit" : "omitted"} selection stays closed; no implicit new birth`, { timeout: 15_000 }, t => {
-  const base = mkdtempSync(join(tmpdir(), "oma-fresh-closed-")); t.after(() => rmSync(base, { recursive: true, force: true }));
-  const project = join(base, "project"); mkdirSync(project);
-  const before = files(base);
-  const result = spawnSync(process.execPath, [join(import.meta.dirname, "../../apps/oma/dist/entry/oma.js"), ...(selected ? ["--surface", "collaboration-v1"] : [])],
-    { cwd: project, env: { ...process.env, HOME: join(base, "home"), XDG_DATA_HOME: join(base, "data"), XDG_RUNTIME_DIR: join(base, "run"), NODE_DISABLE_COMPILE_CACHE: "1" }, encoding: "utf8", timeout: 10_000 });
-  assert.equal(result.error, undefined, result.stderr); assert.equal(result.status, 4, result.stderr);
-  assert.match(result.stderr, /fresh admission is not qualified/); assert.deepEqual(files(base), before);
+for (const selected of [false, true]) test(`006. Fresh Society CLI: ${selected ? "explicit" : "omitted"} selection is born on collaboration-v1`, { timeout: 30_000 }, async t => {
+  const base = mkdtempSync(join(tmpdir(), "oma-fresh-")); t.after(() => { chmodSync(base, 0o700); execFileSync("chmod", ["-R", "u+w", base]); rmSync(base, { recursive: true, force: true }); });
+  const project = join(base, "project"), data = join(base, "data", "oma"); mkdirSync(project);
+  const child = spawn(process.execPath, [join(import.meta.dirname, "../../apps/oma/dist/entry/oma.js"), ...(selected ? ["--surface", "collaboration-v1"] : [])],
+    { cwd: project, env: { ...process.env, HOME: join(base, "home"), XDG_DATA_HOME: join(base, "data"), XDG_RUNTIME_DIR: join(base, "run"), NODE_DISABLE_COMPILE_CACHE: "1" }, stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = ""; child.stderr.on("data", bytes => { stderr += bytes; });
+  const exited = new Promise<void>(resolve => child.once("exit", () => resolve()));
+  const societies = () => { try { return readdirSync(data).filter(name => !name.startsWith(".")); } catch { return []; } };
+  const born = () => societies().map(name => join(data, name)).find(root => { try { return readSessionBirth(root) !== null; } catch { return false; } });
+  const limit = performance.now() + 20_000; let root: string | undefined;
+  while ((root = born()) === undefined && child.exitCode === null && performance.now() < limit) await new Promise(resolve => setTimeout(resolve, 50));
+  child.kill("SIGTERM"); await exited;
+  assert.ok(root !== undefined, stderr);
+  assert.doesNotMatch(stderr, /fresh admission|birth is (missing|unsupported)/);
+  const birth = readSessionBirth(root)!;
+  assert.equal(birth.mode, "society"); assert.equal(birth.surface, "collaboration-v1"); assert.equal(birth.id, societies()[0]);
 });
 test("007. Birth diagnostics do not remove Personal or reinterpret its existing bytes", t => {
   const base = mkdtempSync(join(tmpdir(), "oma-personal-preserved-")); t.after(() => rmSync(base, { recursive: true, force: true }));

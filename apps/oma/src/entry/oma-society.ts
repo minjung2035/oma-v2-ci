@@ -26,7 +26,7 @@ import { SocietyInteraction } from "../application/society-interaction.js";
 import { SocietyTransition } from "../application/society-transition.js";
 
 function usage(): never {
-  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project] [--surface collaboration-v1]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma recover-execution --society <name> [--config <path>] (--prepare | --apply)\n       oma login\ncollaboration-v1 fresh admission remains closed pending required qualification and product decisions.\n" +
+  process.stderr.write("usage: oma [--society <name>] [--config <path>] [--bind-project] [--surface collaboration-v1]\n       oma --mode personal [--no-project-extensions]\n       oma [--mode society|personal] --resume <history>\n       oma archive --society <name> [--config <path>]\n       oma recover-execution --society <name> [--config <path>] (--prepare | --apply)\n       oma login\n" +
     `${PACKAGE_USAGE.replace(/^usage: /, "       ")}\n`);
   process.exit(0);
 }

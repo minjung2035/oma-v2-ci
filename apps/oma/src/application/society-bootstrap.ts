@@ -67,14 +67,13 @@ export async function bootstrapSociety(options: {
   const { stateRoot, runRoot, configPath } = location;
   try { assertProjectStateBoundary(canonicalProjectPath, stateRoot); }
   catch (error) { fail(`Cannot use the society state directory: ${exceptionText(error)}`, codeFor(error)); }
+  // A fresh Society is born on the current collaboration surface. An existing
+  // one keeps its original birth; an old/versionless one is never promoted.
   const originalBirth = readSessionBirth(stateRoot);
-  // No implicit promotion, including --surface on an existing old/versionless
-  // Society. Fresh admission is separately closed; retiring its old default is
-  // not permission to provision a new collaboration-v1 Society.
-  if (originalBirth === null && !stateRootHasSociety(stateRoot))
-    fail("collaboration-v1 fresh admission is not qualified; no Society birth or new execution was created", exitFor("SPIKE_UNRESOLVED"));
-  requireCollaborationSociety(originalBirth, society);
-  const selectedSurface = originalBirth.surface;
+  const birth = originalBirth === null && !stateRootHasSociety(stateRoot)
+    ? newSessionBirth(stateRoot, "society", canonicalProjectPath, "collaboration-v1") : originalBirth;
+  requireCollaborationSociety(birth, society);
+  const selectedSurface = birth.surface;
   // TUI-004/REC-007: before a byte of this society's state is written and
   // before any broker is started, this process either owns the society or it
   // does not. Ownership is this tenure and nothing else -- not a spawned pid,

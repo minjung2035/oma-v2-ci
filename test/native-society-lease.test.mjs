@@ -242,16 +242,24 @@ test('010. A paid detached descendant still excludes a new Host after its execut
 test('011. An explicit standalone execution owner retains its Society without an inherited environment marker',{timeout:45000},t=>paidSocietyScope(t,true,true));
 test('012. A Host dials its own Broker child over Mach by private child identity and refuses a non-child or returned identity',{timeout:45000},async t=>{
  if(!darwin(t))return;
- const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-owned-broker-rpc-')));t.after(()=>rmSync(base,{recursive:true}));
- const host=fork(fileURLToPath(new URL('./fixtures/darwin-owned-broker-rpc.mjs',import.meta.url)),[join(base,'principal-host.sock'),'host'],{stdio:['ignore','ignore','pipe','ipc'],env:closedEnv()});
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-owned-broker-rpc-'))),stages=join(base,'stages.log');
+ const host=fork(fileURLToPath(new URL('./fixtures/darwin-owned-broker-rpc.mjs',import.meta.url)),[join(base,'principal-host.sock'),'host',stages],{stdio:['ignore','ignore','pipe','ipc'],env:closedEnv()});
  let stderr='';host.stderr.on('data',bytes=>{stderr+=bytes;});
+ const trail=()=>{try{return readFileSync(stages,'utf8');}catch{return '';}};
  const closed=new Promise((yes,no)=>{host.once('error',no);host.once('close',(code,signal)=>yes({code,signal}));});void closed.catch(()=>{});
- t.after(async()=>{if(host.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');await closed;});
- const [result]=await Promise.race([once(host,'message'),closed.then(status=>{throw new Error('owned Broker RPC ended before a result: '+JSON.stringify(status)+' '+stderr);})]);
- assert.equal(result.kind,'result',result.message??stderr);
+ t.after(async()=>{
+  // Bounded: an owner that cannot be ended is reported, never awaited forever.
+  for(const line of trail().split('\n')){const pid=Number(/broker-pid (\d+)/.exec(line)?.[1]);if(pid>1)try{process.kill(pid,'SIGKILL');}catch{}}
+  if(host.exitCode===null&&host.signalCode===null)host.kill('SIGKILL');
+  await Promise.race([closed,delay(5000)]);t.diagnostic('owned Broker RPC stages: '+trail().trim().replaceAll('\n',' | '));
+  rmSync(base,{recursive:true,force:true});
+ });
+ const deadline=delay(30000).then(()=>{throw new Error('owned Broker RPC gave no result; stages: '+trail()+' stderr: '+stderr);});
+ const [result]=await Promise.race([once(host,'message'),deadline,closed.then(status=>{throw new Error('owned Broker RPC ended before a result: '+JSON.stringify(status)+' '+trail()+' '+stderr);})]);
+ assert.equal(result.kind,'result',(result.message??'')+' stages: '+trail()+' '+stderr);
  assert.equal(result.notChild,true,'a socket peer that is not this Host child is not acquired');
  assert.deepEqual(result.answer,{request:'ping',peer:result.host,broker:result.broker},'the Broker served exactly the kernel-identified Host');
  assert.equal(result.afterReturn,'AUTH_FAILED','a returned child identity cannot open another connection');
  assert.deepEqual(result.brokerExit,{code:0,signal:null});
- host.disconnect();assert.deepEqual(await closed,{code:0,signal:null},stderr);
+ host.disconnect();assert.deepEqual(await Promise.race([closed,delay(10000).then(()=>'host did not exit')]),{code:0,signal:null},stderr);
 });

@@ -19,7 +19,8 @@
 관측과 현재 실행 권한을 확인하지 못하면 새 실행·incarnation·batch 재전달·workspace 재사용·회수로
 진행하지 않는다. 과거 receipt 정산은 원래 owner와 증명된 quiescence를 사용하며 현재 grant로 그
 사실을 재해석하지 않는다. EOF, direct child close, group kill 전송, heartbeat, 빈 ps 목록을 전체 후손 종료로 읽지 않는다.
-필요 primitive가 없으면 효과 전에 UNSUPPORTED_PROFILE로 거절하며 이전 VM으로 우회하지 않는다.
+필요 primitive가 없으면 그 primitive의 owner가 해당 효과 직전에 UNSUPPORTED_PROFILE로 거절하며 이전 VM으로 우회하지 않는다.
+진입점에서 OS 전체나 관계없는 경로를 미리 닫는 일괄 차단은 이 의무의 이행이 아니다([DR74](design-revisions.md#dr74--진입점-일괄-차단을-제거하고-미증명-capability는-해당-owner의-효과-직전에서-거절한다)).
 
 ## 모듈과 파일
 

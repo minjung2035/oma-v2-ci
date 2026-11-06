@@ -56,10 +56,6 @@
       "types": "./dist/mach-address.d.ts",
       "default": "./dist/mach-address.js"
     },
-    "./execution-launch": {
-      "types": "./dist/execution-launch.d.ts",
-      "default": "./dist/execution-launch.js"
-    },
     "./launchd-job": {
       "types": "./dist/launchd-job.d.ts",
       "default": "./dist/launchd-job.js"

@@ -1,6 +1,6 @@
 # 현재 검증 상태 — 2026-11-06 KST
 
-제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**, 기본 macOS 실행은 **BLOCKED**다.
+제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**이다. DR74로 macOS 진입 일괄 차단과 fresh Society 거절을 제거했다. macOS 제품 경로의 실제 실행 결과는 아래 SOURCE110 이후 기록을 따른다.
 SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD close·실행 owner 사망 결합은 ARM·Intel 각10/10 PASS다. SOURCE107 explicit fence까지 ARM11/11 PASS다. Intel11개 본문은 PASS지만002 cleanup의 중복 stream write로 suite가 실패했고 SOURCE108은 이 hook만 수리한다. 이전 실패 원시는 보존한다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
 실제 scope/후손의 FD 유지, kernel whole-scope empty·drain·빈 journal 뒤 재취득도 통과했다. Host tenure를 유지한 실행 owner crash/recovery의 기존 journal frame 보존도 확인했다. SOURCE97 ARM의 공통 회귀465/465와 구분한다.
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `de118963f378d832ac66daa0d67116f832e1b85ce187060316095c8d9fbccfc8` (15949 files).
+verification input digest `c38bd3a8dc7cc6af6eac6a0875339ce30cb317e86713fca77869c32dac009966` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4640,4 +4640,17 @@ Broker의 PrincipalEndpoint/HostEndpoint는 supervision channel의 현재 `alive
 
 Linux local build·typecheck·선택257 tests 239 PASS/0 FAIL/18 Darwin NOT_RUN, 전체 architecture/transaction/durable/document/spec0 findings다.
 실제 Darwin qualification은 `native-society-lease`012다. 실제 Host fork가 Broker 자식을 만들고 production dialer로 Mach 왕복, 비자식 pin 거절, 반환 identity의 AUTH_FAILED, 자식 정상 종료를 확인한다.
-012와 dynamic check-in 서비스의 Host lookup은 실제 Mac 실행 전 **NOT_RUN**이다. 전체 Broker CLI의 Principal/Human control 실제 왕복은 별도 인수 범위다. 기본 guard/세 gate는 유지한다.
+012와 dynamic check-in 서비스의 Host lookup은 실제 Mac 실행 전 **NOT_RUN**이다. 전체 Broker CLI의 Principal/Human control 실제 왕복은 별도 인수 범위다.
+
+### SOURCE108 실제 결과와 SOURCE110 일괄 차단 제거 — DR74
+
+SOURCE108 `62d6956decd`, Native42092062911. Society ARM·Intel 각11/11 PASS로 Intel hook 수리를 확인했다.
+공통 runtime은 Mac26·Mac15 각465 중462 PASS·3 FAIL이다. 3개는 모두 `native-darwin-fence`001이며, SOURCE105부터 paid scope가 fence creator에 등록하므로 creator 없는 임의 socketpair가 lookup1102로 거절됐다(fail-closed가 맞는 동작). SOURCE109 이후 이 시험은 실제 Society lease를 사용한다.
+gate는 각120 중114 OBSERVED·6 SETUP_FAILED다. 6개 worker-bootstrap/tools는 모두 제품 일괄 차단이 실제 Pi client를 거절한 결과였다.
+
+SOURCE110은 DR74에 따라 `assertNativeRuntime`의 macOS 분기, throw-only `launchBlockedDarwin`, 전 OS의 fresh Society `SPIKE_UNRESOLVED` 거절을 제거한다. Darwin 기본 launch는 실제 `launchDarwinJobScope`다.
+Linux에서 실제 `oma`를 새 project에서 실행하면 collaboration-v1 birth를 게시하고 TUI까지 진행하며, SIGTERM 뒤 남는 process가 없다. `collaboration-society-admission`006이 이를 고정한다.
+macOS 제품 경로(Host·Broker·Runner·Worker Pi)의 실제 실행은 SOURCE110 Mac CI 전 **NOT_RUN**이다.
+이 개발 host의 전체 local suite는 bwrap·namespace launcher·cloc 부재로 170개가 실패했다(launcher ENOENT125·bwrap8·cloc2와 그 broker 경로 파생). 제거한 파일을 참조하던 review ledger와 검증 입력 binding은 재생성 뒤 PASS다. Linux 판정은 prerequisite가 설치된 Ubuntu CI가 소유한다.
+SOURCE109의 `native-society-lease`012는 양 Mac26에서 001–011 PASS 뒤 결과 없이 job 제한25분에 취소됐다. 원시 log는 권한상 열람 불가다. SOURCE110은 단계 기록 파일·모든 대기의 상한·step timeout을 추가하여 같은 정지를 진단 가능하게 한다. 원인은 아직 미확인이다.
+Darwin 제품 경로 시험 `native-product-society`(새 `oma` Society→Broker `broker ready`→무잔존 종료, Personal 시작)를 Mac CI에 추가했다.

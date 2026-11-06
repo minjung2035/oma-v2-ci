@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "acfa264bc27ac5bcb8c659ceef02fc756ad74552df091851e37acc273c156672",
+  "manifest": "5f13dac6655cb643e5265eee35034a6b985ba42cf2bf5f902458b7ad38ebd6ed",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -44,7 +44,7 @@
     },
     {
       "path": "apps/oma/src/application/society-bootstrap.ts",
-      "sha256": "02049435d838424b978bc4964fff4d905ae3c4e8fa119da10e0bcbc5f3129b1c"
+      "sha256": "8283604ddb8b3cdc2f44dbc79ea41e767f5d456edcfea394702e2882568657aa"
     },
     {
       "path": "apps/oma/src/application/society-conversation.ts",
@@ -148,7 +148,7 @@
     },
     {
       "path": "apps/oma/src/engine/resident-effects.ts",
-      "sha256": "8f5de35e398feff2b93b0db563f939f20e7f53f638d10e41e5690318e353b6e1"
+      "sha256": "b9c72c6687f26603dd5ace9032989ed6a6017e232e24e85f6cae61351f8ecd22"
     },
     {
       "path": "apps/oma/src/engine/settings-files.ts",
@@ -176,11 +176,11 @@
     },
     {
       "path": "apps/oma/src/entry/oma-society.ts",
-      "sha256": "06355e574eafedb8467ff3712bb69fbda6916cfb0a2b60f4bd2bff7e7510d64d"
+      "sha256": "4ec334c8835397a34f3334d4b3bdd7aded269b28398ea524addb5176aa811593"
     },
     {
       "path": "apps/oma/src/entry/oma.ts",
-      "sha256": "6f98991268fcd6d1d0c861759ca08b28ab59b342948929f169b42e3ee84bcd56"
+      "sha256": "27f98abf87c8fbd357649e69b884f9cdefab83a65f1ff42a24e46512099362ac"
     },
     {
       "path": "apps/oma/src/entry/personal-host.ts",
@@ -276,7 +276,7 @@
     },
     {
       "path": "apps/oma/src/runtime/execution-runtime.ts",
-      "sha256": "18e5c5052011c2c62059046a3f9f3599e9ebe7a070351a5efa2b1a40b78bfb2d"
+      "sha256": "b73feb3a7db79f41182543dd7b3c67e49e63fb09689be357a37cd35b881c2389"
     },
     {
       "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -360,7 +360,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
-      "sha256": "d9f3474891b203beaa49ebfde4aeabb8dc780cc1fdda17bed83d62d01c637b9a"
+      "sha256": "727973c14283faca49f04b0e00ab677bf54df8c3104af55748add2f55ca08c16"
     },
     {
       "path": "apps/oma/src/runtime/packages/index.ts",
@@ -1692,7 +1692,7 @@
     },
     {
       "path": "packages/platform-mac/package.json",
-      "sha256": "3b0c45783bd4b69af05638e37aec7fb3013279d7af35e0345deff8d20ae76aa1"
+      "sha256": "1b4a45f4082f27d60b24666ed90d2a0b145f1b38797949556c9143e5418795d4"
     },
     {
       "path": "packages/platform-mac/src/audit-peer.ts",
@@ -1701,10 +1701,6 @@
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
       "sha256": "e7d815cfb8e9bba05cd70eb13f9146bf9afa250e4f2bb8b9f05b296c3891cebd"
-    },
-    {
-      "path": "packages/platform-mac/src/execution-launch.ts",
-      "sha256": "dc1cb513960df30edb5d0fc4f0cf97644619b73f40bb8f64c7921f58346a548e"
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",

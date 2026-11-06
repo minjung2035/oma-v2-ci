@@ -29,7 +29,7 @@ journal에 metadata를 append할 수 있으므로 launch owner가 SDK/history op
 Society birth와 tool plan은 별도의 관계다. 명시된 current plan만으로 old/missing birth를 새 opt-in으로 승격하지 않는다.
 원래 birth owner의 execution admission을 CLI bootstrap·standalone broker·Worker 조립에서 공유하며, tenure/lock 생성,
 Store open·restore·execution recovery·provision·SDK/history 쓰기 전에 거절한다. malformed/unreadable birth를 absent로
-바꾸지 않는다. 구형 birth의 진단/history 관측과 Personal은 유지하며, fresh admission은 default retirement와 무관하게 닫는다.
+바꾸지 않는다. 구형 birth의 진단/history 관측과 Personal은 유지한다. 새 Society는 collaboration-v1으로 태어나며 구형 birth를 승격하지 않는다(DR74).
 
 [DR35](../design-revisions.md#dr35--the-private-conversation-starts-alongside-society-preparation)의 private 대화 준비와 Principal 권한 부여는 계속 분리한다. current birth·lease·설정·private 경로 admission 뒤 private engine은 broker 준비와 함께 열 수 있다. 허용된 record container를 만드는 것은 projection 갱신·빈 ledger 관측·Society activation 준비 완료가 아니다. 정본 records 갱신과 같은 engine/current broker generation의 registration을 마친 뒤에만 credential/delivery를 연다. 이 분리는 old plan/runtime fallback을 허용하지 않는다.
 

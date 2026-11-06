@@ -9,8 +9,8 @@ import { spawnSync } from "node:child_process";
 import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { canonicalJson, sha256Hex } from "@oma/domain/canonical-json";
-import { ExecutionCoordinator } from "@oma/process/owned-execution";
-import { launchBlockedDarwin } from "@oma/platform-mac/execution-launch";
+import { ExecutionCoordinator, ExecutionNotStarted } from "@oma/process/owned-execution";
+import { StoreError } from "@oma/domain/errors";
 
 function fixture(t) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-journal-files-")));
@@ -101,13 +101,12 @@ test("006. A valid hash cannot admit a v3 coalition in a v2 frame or an unknown 
   }
 });
 
-test("007. Actual unsupported guard cannot poison a journal slot with a never-created scope", async t => {
+test("007. A launch refused before any scope exists cannot poison a journal slot", async t => {
   const f = fixture(t), journal = ExecutionJournal.open(f.root, DARWIN_EXECUTION_JOURNAL_VERSION);
   const owner = new ExecutionCoordinator(journal, () => ({ kind: "unavailable" }));
   try {
     for (let attempt = 0; attempt < 2; ++attempt) {
-      await assert.rejects(owner.run({ slot: "candidate", launch: () => launchBlockedDarwin({ executable: process.execPath,
-        argv: [], env: {}, timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 }), authorize() { throw new Error("guard reached authority"); } }),
+      await assert.rejects(owner.run({ slot: "candidate", launch: async () => { throw new ExecutionNotStarted(new StoreError("UNSUPPORTED_PROFILE", "capability is absent")); }, authorize() { throw new Error("guard reached authority"); } }),
       { code: "UNSUPPORTED_PROFILE" });
       assert.deepEqual(ExecutionJournal.inspect(f.root), []);
     }

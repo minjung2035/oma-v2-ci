@@ -2744,3 +2744,11 @@ SDK 1.0.1의 idle custom-message 시작은 `before_agent_start`와 최초 prompt
 Coding-agent·AI·TUI 및 그 SDK cohort를 1.2.0으로 고정하고 원래 lock owner로 재해결한다. 기존 private UI 접점은 Engine inventory에 그대로 남겨 version/member/semantic oracle과 설치 검사를 다시 수행한다. 버전 검사를 넓혀 미확인 버전을 허용하거나 기존 UI 기능을 삭제하지 않는다. 이 변경 때문에 private 의존이 제거됐다고 주장하지 않는다.
 
 Persisted `oma-pi-rpc-v1@1.0.1`은 설치 SDK 버전 표시가 아니라 기존 delivery evidence의 protocol revision이다. boundary 의미·형식을 변경하지 않은 이 dependency 갱신으로 그 bytes·과거 receipt를 다시 쓰지 않는다. retired Society의 launch-before-history 거절도 유지한다. finding은 [MCS-AUD-06](priority-0-audit.md#mcs-aud-06--custom-message-run을-ordinary-prompt와-같은-초기화로-가정), 현재 실행과 한계는 [validation](implementation/validation.md)이 소유한다.
+
+## DR74 — 진입점 일괄 차단을 제거하고 미증명 capability는 해당 owner의 효과 직전에서 거절한다
+
+2026-11-06 사용자는 보장 기준(PRIORITY-0·NATIVE-002·G-PROCESS/G-FILES/G-AUTH)은 그대로 두되, 이유를 설명할 수 없는 일괄 차단을 모두 찾아 제거하도록 지시했다.
+
+제거한 차단은 세 가지다. `assertNativeRuntime`이 macOS의 Host·Broker·Runner·preparation·Worker·Pi client 진입 전부를 `UNSUPPORTED_PROFILE`로 막던 분기, 항상 거절만 하던 `launchBlockedDarwin` 기본 launch, 그리고 모든 OS에서 새 Society 생성을 `SPIKE_UNRESOLVED`로 막던 collaboration-v1 fresh admission 거절이다. 마지막 항목은 DR18(v1에 열린 spike 없음)과도 충돌했다.
+
+NATIVE-002의 거절 의무는 유지한다. 단, 거절은 필요한 primitive를 실제로 소유한 owner가 그 효과 직전에서 구체적인 이유로 한다. 관계없는 경로나 진입 전체를 미리 닫지 않는다(§4.3). 새 Society는 현재 collaboration-v1 surface로 태어난다. 기존 Society는 원래 birth를 유지하며 구형·무버전 birth를 승격하지 않는다(DR72). 이 결정은 실제 macOS 실행 결과를 PASS로 바꾸지 않는다. 각 gate의 실제 판정은 validation이 소유한다.

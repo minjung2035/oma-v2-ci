@@ -11,14 +11,12 @@ import { macResidentPathView } from "@oma/platform-mac/path-view";
 import { residentSeatbelt } from "@oma/platform-mac/resident-sandbox";
 import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
 import { spawnWithPrivateInputs } from "@oma/process/async";
-import { assertNativeRuntime } from "../runtime/native-support.js";
 import { StoreError } from "@oma/domain/errors";
 
 // The same concrete spawn owner/exemption as before: no host-state directory
 // capability enters the Worker; the outer execution owner retains full scope.
 function spawn(plan: PiSpawnPlan) {
   if (process.platform === "darwin") {
-    assertNativeRuntime();
     if (plan.privateInputs === undefined) throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker has no private profile owner");
     return spawnWithPrivateInputs(plan.command, plan.args, plan.cwd, plan.env, plan.privateInputs);
   }

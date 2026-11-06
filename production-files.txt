@@ -423,7 +423,6 @@ packages/platform-linux/src/workload-budget.ts
 packages/platform-mac/package.json
 packages/platform-mac/src/audit-peer.ts
 packages/platform-mac/src/developer-tools.ts
-packages/platform-mac/src/execution-launch.ts
 packages/platform-mac/src/git-sandbox.ts
 packages/platform-mac/src/job-control.ts
 packages/platform-mac/src/job-launch.ts

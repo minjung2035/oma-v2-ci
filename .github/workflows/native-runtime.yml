@@ -54,8 +54,15 @@ jobs:
       - name: Qualify product Society ownership before the broad runtime suite
         id: society_runtime
         if: runner.os == 'macOS'
+        timeout-minutes: 6
         run: |
-          if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/native-society-lease.test.mjs > .scratch/native-runtime/society-lease-tests.log 2>&1; then cat .scratch/native-runtime/society-lease-tests.log; exit 1; fi
+          if ! node --test --test-timeout=120000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-society-lease.test.mjs > .scratch/native-runtime/society-lease-tests.log 2>&1; then cat .scratch/native-runtime/society-lease-tests.log; exit 1; fi
+      - name: Run the actual product Society and Broker on Darwin
+        id: product_society
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          if ! node --test --test-timeout=300000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
       - name: Preserve Society creator crash reports
         if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         run: |
@@ -95,6 +102,7 @@ jobs:
           path: |
             .scratch/native-runtime/build.log
             .scratch/native-runtime/society-lease-tests.log
+            .scratch/native-runtime/product-society-tests.log
             .scratch/native-runtime/crash-reports
             .scratch/native-runtime/source-head.txt
             .scratch/native-runtime/environment.json

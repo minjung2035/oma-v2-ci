@@ -11,7 +11,7 @@ import { ExecutionJournal } from "@oma/storage/execution-journal";
 import { observeNamespaceProcess, pinNamespaceInit, type NamespaceInitIdentity } from "@oma/native/pid-namespace";
 import { launchBlockedNamespace } from "@oma/platform-linux/namespace-execution";
 import type { ExecutionWitness } from "@oma/process/execution-witness";
-import { launchBlockedDarwin } from "@oma/platform-mac/execution-launch";
+import { launchDarwinJobScope } from "@oma/platform-mac/job-scope";
 import { observeDarwinJobScope, acquireDarwinJobScope } from "@oma/platform-mac/job-recovery";
 import { EXECUTION_JOURNAL_VERSION, DARWIN_EXECUTION_JOURNAL_VERSION } from "@oma/protocol/persisted-formats";
 import { withAsyncCleanup, withCleanup } from "@oma/native/cleanup";
@@ -29,7 +29,7 @@ interface Backend {
 function backend(): Backend {
   if (process.platform === "darwin") return {
     journalVersion: DARWIN_EXECUTION_JOURNAL_VERSION,
-    launch: launchBlockedDarwin,
+    launch: launchDarwinJobScope,
     observe: observeDarwinJobScope,
     acquire: acquireDarwinJobScope,
   };

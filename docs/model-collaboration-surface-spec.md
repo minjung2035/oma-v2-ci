@@ -201,4 +201,4 @@ Codex의 outcome-oriented 지침, 관련 정보별 section, tool purpose와 fiel
 - 이행 대상은 사전에 원래 release/원래 owner로 accepted work를 drain하거나, 최종 release가 명시적으로 비호환을 보고하고 **새 실행을 거절**하는 경로로 처리한다. 이를 위해 최종 binary가 구형 runtime/decoder를 다시 불러오거나 자동 변환하지 않는다. pending/unknown을 terminal·absent로 간주하지 않고, unresolved invocation은 보존하며 전환을 거절한다.
 - 구형 Society birth/plan/profile·버전 없는 payload의 불가용성을 새 표면의 암묵적 opt-in으로 해석하지 않는다. 비호환 거절은 원본 변경/새 operation·새 key·Git ref/mail effect를 만들지 않아야 한다. 별도 read-only 원시 자료 보존은 새 효과 실행 지원이 아니다.
 - Rollback은 fresh admission을 닫고 검증된 원래 owner로 drain하거나 operator 진단 상태로 남기는 절차다. 최종 코드에 legacy registry/decoder를 남기거나 backup 복원으로 외부 효과를 취소하는 절차가 아니다.
-- 제거·거절·drain/복구·Human 개별 control/profile 이행의 실제 검증을 끝내기 전에는 이 계약을 충족했다고 보고하지 않는다. 신규 fresh admission·기본 노출·실서비스 cutover는 이 구현 지시로 승인되지 않았다.
+- 제거·거절·drain/복구·Human 개별 control/profile 이행의 실제 검증을 끝내기 전에는 이 계약을 충족했다고 보고하지 않는다. 신규 Society는 DR74에 따라 collaboration-v1으로 태어난다. 기본 노출·실서비스 cutover는 이 구현 지시로 승인되지 않았다.

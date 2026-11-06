@@ -5326,8 +5326,8 @@
   {
     "requirement": "NATIVE-002",
     "source": "docs/macos-platform.md",
-    "digest": "c66e30fde71b8dd1ca109054048456684b7e5acd29819de03e08b02064580df6",
-    "normativeText": "**MUST [NATIVE-002]** G-PROCESS·G-FILES·G-AUTH는 별도 선행 조건이다. 해당 경계의 held scope\n관측과 현재 실행 권한을 확인하지 못하면 새 실행·incarnation·batch 재전달·workspace 재사용·회수로\n진행하지 않는다. 과거 receipt 정산은 원래 owner와 증명된 quiescence를 사용하며 현재 grant로 그\n사실을 재해석하지 않는다. EOF, direct child close, group kill 전송, heartbeat, 빈 ps 목록을 전체 후손 종료로 읽지 않는다.\n필요 primitive가 없으면 효과 전에 UNSUPPORTED_PROFILE로 거절하며 이전 VM으로 우회하지 않는다.",
+    "digest": "5e15c3738eb40f2ee21627035709d6f2100d97f0c3006b8d22ae2d9661217cca",
+    "normativeText": "**MUST [NATIVE-002]** G-PROCESS·G-FILES·G-AUTH는 별도 선행 조건이다. 해당 경계의 held scope\n관측과 현재 실행 권한을 확인하지 못하면 새 실행·incarnation·batch 재전달·workspace 재사용·회수로\n진행하지 않는다. 과거 receipt 정산은 원래 owner와 증명된 quiescence를 사용하며 현재 grant로 그\n사실을 재해석하지 않는다. EOF, direct child close, group kill 전송, heartbeat, 빈 ps 목록을 전체 후손 종료로 읽지 않는다.\n필요 primitive가 없으면 그 primitive의 owner가 해당 효과 직전에 UNSUPPORTED_PROFILE로 거절하며 이전 VM으로 우회하지 않는다.\n진입점에서 OS 전체나 관계없는 경로를 미리 닫는 일괄 차단은 이 의무의 이행이 아니다([DR74](design-revisions.md#dr74--진입점-일괄-차단을-제거하고-미증명-capability는-해당-owner의-효과-직전에서-거절한다)).",
     "applicability": "unclassified",
     "rationale": "Requires production-path review; no inference from test names.",
     "owner": "apps/oma/src/runtime/native-support.ts#assertNativeRuntime",
