@@ -164,3 +164,33 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  assert.equal(terminal.code,0,screen);
  await until(()=>owned(base).length===0,30000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });
+
+test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes and reaches the model through its relay',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
+ const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
+ const provider=await scriptedProvider((request)=>worker(request)?text('Worker acknowledged the goal.'):
+  continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ const agentDir=join(data,'engine');provider.configure(agentDir);
+ writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:420},{write:hex('\x04'),wait:30}]};
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+ let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
+ const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
+ const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
+ const terminal=JSON.parse(stdout||'{}');
+ const screen=[...new Set(Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n')
+  .split(/\r?\n/).map(line=>line.replace(/[│╭╮╰╯─]+/g,' ').trim()).filter(line=>line.length>0&&!/Working|^[░▓⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\s]*$/.test(line)))].join('\n').slice(-6000);
+ assert.equal(status,0,stderr+screen);assert.equal(terminal.ready,true,screen);
+ const principal=provider.seen.filter(seen=>!worker(seen.body)),workers=provider.seen.filter(seen=>worker(seen.body));
+ assert.ok(principal.length>=2,`Principal requests ${principal.length}:\n`+screen);
+ const goal=toolResults(principal[1].body).at(-1)?.text??'';
+ assert.doesNotMatch(goal,/BROKER_UNAVAILABLE|AUTH_FAILED|UNSUPPORTED_PROFILE|error/i,goal);
+ assert.ok(workers.length>=1,`no seeded Worker reached the model through its relay; goal result: ${goal}\n`+screen);
+ await until(()=>owned(base).length===0,60000,()=>'no Host, Broker, Worker or engine process remains: '+owned(base).join('\n'));
+});
