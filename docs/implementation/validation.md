@@ -4779,3 +4779,13 @@ SOURCE129 `a35afb8678a`, Native42194559884. **실제 Seatbelt Worker가 Mac26에
 SOURCE130 `f61b8a223e1`, Native42198450759. **Mac26 제품 경로 001–004 PASS**(release 전 종료를 취소로 정산하는 수리로 SIGTERM drain 정상). **제품 경로 005의 시험 본문도 PASS**: 실제 Host 아래 scripted Principal의 `oma_send`가 attested Mach 경로로 Broker에 인증·호출되어 Broker 자신의 `ADDRESS_NOT_FOUND` 응답을 받았다. 실패는 t.after 정리의 `rmSync` ENOTEMPTY(삭제 직전까지 쓰는 파일)였고 재시도를 둔다.
 `worker-bootstrap`은 Mac26·Intel PASS를 재현했다. `worker-tools`는 실제 Seatbelt Worker 안에서 git init/commit/log, npm, collaboration record read, 자기 script 실행까지 통과하고 `cc` 링크에서 `ld: library 'System' not found`로 실패했다. sandbox 안의 xcrun이 SDK를 찾지 못해 clang이 sysroot를 넘기지 못한 것이다. 선택된 developer root에서 결정되는 macOS SDK(이미 읽기 허용된 contents 아래)를 Worker 환경의 `SDKROOT`로 명시한다. Seatbelt policy는 넓히지 않는다.
 제품 경로 006(로컬 커밋)을 함께 보낸다: scripted Principal이 `oma_goal`로 GOAL을 게시하면 seed Worker가 Seatbelt scope에서 깨어 relay를 거쳐 model에 도달해야 한다.
+
+### 세 gate의 판정 근거표 — SOURCE130 기준(판정 아님)
+
+NATIVE-002·spec §4.3·§5·§6의 요구를 실제 Mac 근거와 대조한 작업표다. 공식 PASS 판정은 아직 내리지 않는다.
+
+| gate | 요구 | 확보한 실제 근거 | 남은 반례·근거 |
+|---|---|---|---|
+| G-PROCESS | fork/setsid/close-all-fds·leader/runner/broker/host SIGKILL·PID 재사용·restart에서 전체 후손 종료와 populated/empty/unknown producer | LaunchOnlyOnce+CID scope의 detached 후손·fence FD close·실행 owner 사망·Host SIGKILL 뒤 Society 배제 유지와 전체 scope 사망 뒤 재취득(012까지 세 Mac PASS). 다른 boot의 scope는 positive empty. 정상 Broker drain의 release 전 취소 정산 | Mac15 populated termination 1건 재확인, 실제 Worker/Pi scope의 kill-restart, 제품 경로에서 Broker SIGKILL 뒤 재시작 |
+| G-FILES | directory-relative·no-follow·같은 inode repair·no-replace publish·parent flush·exact executable | Mac 공통 suite 466/466의 파일 경쟁·publication·repair, config generation 봉인 순서 수리, temp root 정규화, Seatbelt Worker private state anchor, image 검증 job scope의 Restic/Node exact image 결박 | StateRoot capture·private work/source fetch의 제품 경로 인수, x64 Restic(무서명) 대안 |
+| G-AUTH | 실제 sender·살아 있는 process·현재 run 소속·기대 Broker·현재 권한 | Host↔자기 Broker child의 private child pin Mach RPC(012), Principal engine의 Host-attested Broker identity로 실제 Broker 호출·ADDRESS_NOT_FOUND(005 본문), Worker inherited peer endpoint의 실제 Worker 시작 | Worker 금지 효과 반례(worker-tools), restart·sleep 뒤 capability, release 서명 Keychain/SIP |
