@@ -3,6 +3,11 @@ import assert from "node:assert/strict";
 import { VERSION, InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { adaptInteractiveMode, assertInteractiveCompatibility,
   PI_INTERACTIVE_PRIVATE_MEMBERS as members } from "../dist/pi-compat/interactive-mode.js";
+/** The public settings surface the adapter records the bundled version through. */
+const recorded = [];
+function changelog(last) {
+  return { getLastChangelogVersion: () => last, setLastChangelogVersion: version => { recorded.push(version); last = version; } };
+}
 function mode() {
   const calls = [], value = Object.fromEntries(members.map(name => [name, (...args) => calls.push([name, ...args])]));
   Object.assign(value, { hideThinkingBlock: true,
@@ -28,7 +33,7 @@ test("002. SDK adapter preserves deterministic thinking, Society identity and aw
   assert.equal(calls.filter(call => call[0] === "thinking").length, 1);
   let finish;
   control.configureSociety({ dispose: () => new Promise(resolve => { finish = resolve; }),
-    session: { sessionManager: { getSessionName: () => "work" }, sessionFile: "/sessions/a.jsonl" } }, "/project", terminal);
+    session: { sessionManager: { getSessionName: () => "work" }, sessionFile: "/sessions/a.jsonl", settingsManager: changelog() } }, "/project", terminal);
   value.updateTerminalTitle();
   assert.equal(calls.at(-1)[1], "oma - work - project");
   assert.equal(value.crashReportInstructions(), "Start oma and reopen this session with /resume.");
@@ -44,11 +49,19 @@ test("002. SDK adapter preserves deterministic thinking, Society identity and aw
 test("003. SDK adapter retains Personal history and original failure before cleanup failure", async () => {
   const { value, calls, terminal } = mode(), primary = new Error("effect"), cleanup = new Error("cleanup");
   const control = adaptInteractiveMode(value);
-  control.configurePersonal({ async dispose() { throw cleanup; }, session: {} }, () => calls.push(["history"]), terminal);
+  control.configurePersonal({ async dispose() { throw cleanup; }, session: { settingsManager: changelog() } }, () => calls.push(["history"]), terminal);
   value.showSessionSelector(); value.updateTerminalTitle();
   assert.deepEqual(calls.slice(-2), [["history"], ["title", "oma — Personal"]]);
   assert.equal(value.crashReportInstructions(), "Start oma --mode personal and reopen this session with /resume.");
   await control.fail("failure", primary);
   assert.deepEqual(calls.at(-1)[2].errors, [primary, cleanup]);
   await control.shutdown(); assert.equal(calls.at(-1)[0], "shutdown");
+});
+test("004. SDK adapter suppresses the automatic changelog by recording the bundled version publicly, once", () => {
+  recorded.length = 0;
+  const { value, terminal } = mode(), settings = changelog(undefined);
+  adaptInteractiveMode(value).configurePersonal({ async dispose() {}, session: { settingsManager: settings } }, () => {}, terminal);
+  assert.deepEqual(recorded, [VERSION]);
+  adaptInteractiveMode(value).configurePersonal({ async dispose() {}, session: { settingsManager: settings } }, () => {}, terminal);
+  assert.deepEqual(recorded, [VERSION], "an already recorded version is not rewritten");
 });
