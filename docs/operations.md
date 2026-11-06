@@ -61,7 +61,7 @@ cd /absolute/path/to/your/project
 oma
 ```
 
-Mac native는 새 state root에서 시작한다. 기존 VM state·disk·archive·history는 자동 변환하거나 삭제하지 않는다. Darwin에서 Worker·candidate·quarantine은 Seatbelt profile과 launchd one-shot job scope(resource coalition)에서 실행되며, 필요한 OS 관측이나 capability를 얻지 못하면 그 효과만 해당 owner가 `UNSUPPORTED_PROFILE` 등으로 거절한다. 실행 자체를 진입점에서 일괄 차단하지 않는다. 실제 Mac에서 확인된 범위와 남은 미검증 항목은 [validation](implementation/validation.md)이 소유한다.
+Mac native는 새 state root에서 시작한다. 기존 VM state·disk·archive·history는 자동 변환하거나 삭제하지 않는다. Darwin에서 Worker·candidate·quarantine은 Seatbelt profile과 launchd one-shot job scope(resource coalition)에서 실행되며, 필요한 OS 관측이나 capability를 얻지 못하면 그 효과만 해당 owner가 `UNSUPPORTED_PROFILE` 등으로 거절한다. 실행 자체를 진입점에서 일괄 차단하지 않는다. 실제 Mac에서 확인된 범위와 남은 미검증 항목은 [validation](implementation/validation.md)이 소유한다. macOS 실행 scope는 kernel boot에 결박되어 재부팅 뒤 Society를 열 때 자동으로 정산되므로 Linux의 `oma recover-execution` 절차가 필요 없다. 고정 Restic의 x64(Intel) binary는 서명이 없어 macOS x64에서는 작업공간 archive만 거절되고 hot 작업공간은 유지된다.
 
 ## 역할별 운영 설정
 

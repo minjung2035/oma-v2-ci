@@ -14,6 +14,8 @@ import { ensureOwnedUserDirectory } from "../runtime/user-files.js";
 
 export function recoverSocietyExecutions(society: string, config: string | undefined, phase: "prepare" | "apply",
     env: NodeJS.ProcessEnv, log: (line: string) => void): void {
+  if (process.platform === "darwin")
+    throw new StoreError("UNSUPPORTED_PROFILE", "macOS execution scopes are bound to their kernel boot and recovered automatically when the Society opens; no manual reboot recovery is needed");
   if (process.platform !== "linux") throw new StoreError("UNSUPPORTED_PROFILE", "execution reboot recovery requires Linux");
   const { stateRoot, runRoot, configPath } = hostLaunchLocation(society, env, config);
   assertStateRoot(stateRoot);

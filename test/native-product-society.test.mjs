@@ -194,3 +194,16 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  assert.ok(workers.length>=1,`no seeded Worker reached the model through its relay; goal result: ${goal}\n`+screen);
  await until(()=>owned(base).length===0,60000,()=>'no Host, Broker, Worker or engine process remains: '+owned(base).join('\n'));
 });
+
+test('007. Human CLI commands on Darwin: the package store lists and reboot recovery explains its automatic boot binding',{timeout:120000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-cli-'))),project=join(base,'project');mkdirSync(project);
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
+ const run=argv=>spawnSync(process.execPath,[entry('oma'),...argv],{cwd:project,env,encoding:'utf8',timeout:60000});
+ const listed=run(['pi','list']);
+ assert.equal(listed.status,0,listed.stderr);assert.doesNotMatch(listed.stderr,/UNSUPPORTED_PROFILE|blocked by/,listed.stderr);
+ const recovery=run(['recover-execution','--society','demo','--prepare']);
+ assert.notEqual(recovery.status,0);assert.match(recovery.stderr,/recovered automatically when the Society opens/,recovery.stderr);
+ assert.equal(existsSync(join(base,'data','oma','demo')),false,'the refusal creates no Society state');
+});
