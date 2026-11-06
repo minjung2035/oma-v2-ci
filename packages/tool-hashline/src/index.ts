@@ -59,7 +59,7 @@
  *   mutation boundary; upstream's own per-path mutation queue still applies
  *   inside that boundary.
  */
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { open, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -253,7 +253,7 @@ function stateDirFor(options: HashlineToolOptions, ctx: ExtensionContext): strin
   if (options.stateDir !== undefined) return options.stateDir;
   const sessionDir = (ctx.sessionManager as { getSessionDir?: () => string | undefined })?.getSessionDir?.();
   if (typeof sessionDir === "string" && sessionDir.length > 0) return join(sessionDir, "hashline");
-  return join(tmpdir(), `oma-hashline-${process.pid}`);
+  return join(realpathSync(tmpdir()), `oma-hashline-${process.pid}`);
 }
 
 /** Redirect upstream's state root into OMA-owned space. This must run
@@ -265,7 +265,7 @@ function stateDirFor(options: HashlineToolOptions, ctx: ExtensionContext): strin
  * directory before entering the anchor session. */
 function redirectHashlineState(options: HashlineToolOptions, ctx?: ExtensionContext): void {
   const dir = ctx === undefined
-    ? (options.stateDir ?? join(tmpdir(), `oma-hashline-${process.pid}`))
+    ? (options.stateDir ?? join(realpathSync(tmpdir()), `oma-hashline-${process.pid}`))
     : stateDirFor(options, ctx);
   // mkdirWithin, not a bare mkdirSync: each level is created inside a held
   // parent descriptor — the state tree changes only through held parents.

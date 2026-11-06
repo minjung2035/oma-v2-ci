@@ -6,7 +6,7 @@ import { utf8Decoder } from "./descriptor-files.js";
  * native operations. Policy, inode checks and snapshot ownership stay here;
  * only descriptor mechanics cross the private native adapter (NATIVE-025).
  */
-import { closeSync, constants, fstatSync, ftruncateSync, readSync, writeSync } from "node:fs";
+import { closeSync, constants, fstatSync, ftruncateSync, readSync, writeSync, realpathSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
@@ -309,7 +309,7 @@ async function searchSnapshot<T>(root: string, path: string,
   progress?: () => void, named?: (snapshotName: string) => void, selection?: SearchSnapshotSelection): Promise<T> {
   const parts = componentsWithin(root, path);
   if (parts.includes(".git")) throw new WorkspaceRefusal("repository internals are not a search input");
-  const temp = openDirectoryWithin(tmpdir(), [], false);
+  const temp = openDirectoryWithin(realpathSync(tmpdir()), [], false);
   let baseName = "";
   try {
     // Declare-then-create, the ordering the parent sweep needs: the name is
@@ -323,7 +323,7 @@ async function searchSnapshot<T>(root: string, path: string,
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
     }
   } catch (error) { closeSync(temp); throw error; }
-  const snapshot = join(tmpdir(), baseName, "workspace");
+  const snapshot = join(realpathSync(tmpdir()), baseName, "workspace");
   let destination: number | undefined, metadata: number | undefined;
   const started=Date.now(), metrics={paths:0,selectedFiles:0,readBytes:0,copiedBytes:0,elapsedMs:0};
   const record=(path:string,stamp:string):void=>{

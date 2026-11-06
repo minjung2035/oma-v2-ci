@@ -3,7 +3,7 @@ import { decodeUtf8 } from "@oma/domain/utf8";
  * on a dedicated pipe directly into the actor's runtime result file. Control
  * frames are bounded; neither process accumulates the full result or a line. */
 import { spawn } from "node:child_process";
-import { mkdirSync, rmSync, writeSync } from "node:fs";
+import { mkdirSync, rmSync, writeSync, realpathSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import { delimiter, dirname, join, relative } from "node:path";
@@ -57,7 +57,7 @@ export async function searchChildBody(input: ContainedSearchInput,
     // A write that cannot complete fails the snapshot before anything is
     // created, never silently undeclared.
     const named = (name: string): void => {
-      ownedSnapshot = join(tmpdir(),name);
+      ownedSnapshot = join(realpathSync(tmpdir()),name);
       if (signal.aborted) abortOwnedChild();
       const frame = Buffer.from(`${JSON.stringify({ p: "d", s: name })}\n`, "utf8");
       for (let at = 0; at < frame.length;) {
@@ -252,7 +252,7 @@ export function searchWorkspace<N extends "grep" | "find">(name: N, root: string
       JSON.stringify({ name, root, params, heartbeat: Math.max(50, Math.floor(stallMs / 6)) })], {
       cwd: root, detached: true, stdio: ["pipe", "pipe", "ignore", "pipe"],
       env: { PATH: `${join(getAgentDir(), "bin")}${delimiter}${process.env.PATH ?? "/usr/bin:/bin"}`,
-        HOME: "/nonexistent", XDG_CONFIG_HOME: "/nonexistent", TMPDIR: tmpdir() },
+        HOME: "/nonexistent", XDG_CONFIG_HOME: "/nonexistent", TMPDIR: realpathSync(tmpdir()) },
     });
     let metrics: Record<string,unknown> | undefined;
     let snapshot: string | null = null, failure: string | undefined, answer: { result?: { complete: boolean; limitReached: boolean; reason?: string }; error?: string } | undefined;
@@ -288,7 +288,7 @@ export function searchWorkspace<N extends "grep" | "find">(name: N, root: string
     child.on("error", error => { failure ??= error.message; });
     child.on("close", () => {
       clearTimeout(timer); clearTimeout(progress); clearTimeout(killer); controls.close(); signal?.removeEventListener("abort", abort);
-      if (snapshot !== null) try { rmSync(join(tmpdir(), snapshot), { recursive: true, force: true }); } catch {}
+      if (snapshot !== null) try { rmSync(join(realpathSync(tmpdir()), snapshot), { recursive: true, force: true }); } catch {}
       let saved: ReturnType<ReturnType<typeof createResult>["finish"]> | undefined;
       if (writer && !writeFailure) try { saved = writer.finish(); } catch (error) { writeFailure = String(error); }
       writer?.close();

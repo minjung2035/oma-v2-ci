@@ -7,7 +7,7 @@
  * hooks retain upstream connection and cleanup ownership. */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { randomBytes } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { buildChildEnv, egressProxyValue } from "@oma/tool-runtime/child-env";
@@ -191,7 +191,7 @@ function normalizeSettings(raw: unknown, interactive: boolean, stateDir: string)
  * `imports` and `claudePlugins` are rejected -- no host/package/plugin
  * config path exists under OMA. */
 export function normalizeOmaMcpConfig(raw: unknown, options?: { interactive?: boolean; stateDir?: string }): McpConfig {
-  const stateDir = options?.stateDir ?? join(tmpdir(), "oma-mcp-state");
+  const stateDir = options?.stateDir ?? join(realpathSync(tmpdir()), "oma-mcp-state");
   if (raw === null || typeof raw !== "object" || Array.isArray(raw))
     throw configError("config must be an object");
   const file = raw as Record<string, unknown>;
@@ -339,7 +339,7 @@ export async function registerMcpTools(pi: ExtensionAPI, options?: McpToolsOptio
   const durable = agentRoot !== undefined && isAbsolute(agentRoot);
   const stateDir = durable
     ? join(agentRoot as string, "mcp-adapter")
-    : join(tmpdir(), `oma-mcp-${process.pid}-${randomBytes(4).toString("hex")}`);
+    : join(realpathSync(tmpdir()), `oma-mcp-${process.pid}-${randomBytes(4).toString("hex")}`);
   ensurePrivateStateDirectory(stateDir);
   ensurePrivateStateDirectory(join(stateDir, "oauth"));
   const scratchDir = join(stateDir, `scratch-engine-${process.pid}-${randomBytes(8).toString("hex")}`);

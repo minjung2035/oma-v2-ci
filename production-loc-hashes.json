@@ -324,7 +324,7 @@
     },
     {
       "path": "apps/oma/src/runtime/input-effects/submit.ts",
-      "sha256": "3154cc20d18f6d5ac2c5494b8e9873b6c38ed3da7d2dd211b69ac63c71f9db1d"
+      "sha256": "fa4d8eb433de3c663cda71f4d25abf86b56bb611d82c307dfd28514eea20565f"
     },
     {
       "path": "apps/oma/src/runtime/invocation-codec.ts",
@@ -1232,7 +1232,7 @@
     },
     {
       "path": "packages/git/src/canonical-command.ts",
-      "sha256": "561836ff7ce9e989a430f5fad5ead41db7007065cec54e2d48fa7af04e7d6c85"
+      "sha256": "dad31bae688ac76c5e1872319230f96c5750ed49d73473b8f8394496c7b6b62f"
     },
     {
       "path": "packages/git/src/canonical-directory.ts",
@@ -2288,7 +2288,7 @@
     },
     {
       "path": "packages/tool-files/src/index.ts",
-      "sha256": "0eb7a997eb25d51204bdffe89ae36fb23117011084c358ae41467b7a2786a036"
+      "sha256": "1b04e5aac15bd5dd845ad952971677a055dcbd7ec833fdec5c2eea1ad41bed7d"
     },
     {
       "path": "packages/tool-files/src/private-state.ts",
@@ -2304,7 +2304,7 @@
     },
     {
       "path": "packages/tool-hashline/src/index.ts",
-      "sha256": "32b7f2b7ec9eba9ad9051d0db459a00800059166979aa2786a435e396f9dae11"
+      "sha256": "87ec5458a43f6cb9fb8372fef66d218449d4268f502423ae58b5be47a49f0087"
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE",
@@ -4432,7 +4432,7 @@
     },
     {
       "path": "packages/tool-mcp/src/index.ts",
-      "sha256": "f690b089617c9923723a8ccda42649ef70bd13262ad82bdf9f75698d3a5645a3"
+      "sha256": "95bc54d0b701e9a49c7eb19459327afc0cb61c522c132dabbafb1191297208f1"
     },
     {
       "path": "packages/tool-mcp/src/mcp-sdk-env.ts",
@@ -14996,7 +14996,7 @@
     },
     {
       "path": "packages/tool-runtime/src/contained-search.ts",
-      "sha256": "c882b4a85eff826b3d99bbb8c386381186b172ace3b0f171b7488f24d95292c4"
+      "sha256": "dda76118bef211a502922b9ca04d9460934e2b7f7f381c8c39e02474244c9703"
     },
     {
       "path": "packages/tool-runtime/src/contained-tools.ts",

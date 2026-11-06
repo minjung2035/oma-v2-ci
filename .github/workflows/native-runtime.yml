@@ -208,7 +208,7 @@ jobs:
         run: |
           mkdir -p .scratch/native-runtime
           if ! npm run setup:storage > .scratch/native-runtime/darwin-setup-storage.log 2>&1; then cat .scratch/native-runtime/darwin-setup-storage.log; exit 1; fi
-          if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/session-storage.test.mjs test/session-storage-verification.test.mjs > .scratch/native-runtime/darwin-storage-tests.log 2>&1; then cat .scratch/native-runtime/darwin-storage-tests.log; exit 1; fi
+          if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/native-darwin-restic-roundtrip.test.mjs test/session-storage.test.mjs test/session-storage-verification.test.mjs > .scratch/native-runtime/darwin-storage-tests.log 2>&1; then cat .scratch/native-runtime/darwin-storage-tests.log; exit 1; fi
       - name: Preserve Darwin storage observations
         if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f

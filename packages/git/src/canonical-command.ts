@@ -1,5 +1,5 @@
 // GIT-004/008: bounded canonical command adapter. Effect exit status is never CAS proof.
-import { closeSync, constants, mkdtempSync, openSync, readSync, rmSync } from "node:fs";
+import { closeSync, constants, mkdtempSync, openSync, readSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GIT_ENV } from "@oma/process/policies";
@@ -69,7 +69,7 @@ export function createCanonicalObserver(executable = GIT_BIN, execution?: Canoni
     const commit = args.includes("--batch-check=%(objecttype)");
     if (args.includes("ls-tree")) {
       let dir: string;
-      try { dir = mkdtempSync(join(tmpdir(), "oma-ls-tree-")); }
+      try { dir = mkdtempSync(join(realpathSync(tmpdir()), "oma-ls-tree-")); }
       catch (error) {
         return { status: null, signal: null, stdout: null, stderr: null,
           error: error instanceof Error ? error : new Error(String(error)) };
@@ -142,7 +142,7 @@ export function canonicalRevertCommit(repository: string, input: {
   // The conflict listing scales with the tree, not with a document bound:
   // merge-tree's stdout is spooled whole and only the head the classification
   // needs -- the tree line and up to 64 conflict paths -- is read back.
-  const dir = mkdtempSync(join(tmpdir(), "oma-merge-tree-"));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), "oma-merge-tree-"));
   try {
     const plumbing = (argv: readonly string[], env: Readonly<NodeJS.ProcessEnv> = GIT_ENV): string => {
       const result = execute({ executable: GIT_BIN, argv: [...CANONICAL_SAFE_ARGS, "--git-dir", repository, ...argv],
@@ -231,7 +231,7 @@ function headLines(path: string, maxLines: number): string[] {
 /** Batch traversal output is spooled, so the process count is independent of
  * submission history and an arbitrary in-memory output cap is not correctness. */
 function batchLines(repository: string, args: readonly string[], input: string | undefined, consume: (line: string) => void, execution?: CanonicalExecution): void {
-  const scratch=mkdtempSync(join(tmpdir(),"oma-git-batch-")), spool=join(scratch,"stdout");
+  const scratch=mkdtempSync(join(realpathSync(tmpdir()),"oma-git-batch-")), spool=join(scratch,"stdout");
   try {
     const result=execute({executable:GIT_BIN,argv:[...CANONICAL_SAFE_ARGS,"--git-dir",repository,...args],env:GIT_ENV,
       timeoutMs:CANONICAL_PROCESS_LIMITS.timeout,stdoutBytes:0,stderrBytes:8192,stdoutSpool:spool,...(input === undefined ? {} : {input})}, execution);

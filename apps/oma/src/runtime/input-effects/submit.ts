@@ -1,4 +1,4 @@
-import { constants, closeSync, fstatSync, mkdtempSync, openSync, rmSync } from "node:fs";
+import { constants, closeSync, fstatSync, mkdtempSync, openSync, rmSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { PublicMethods } from "@oma/contracts";
@@ -35,7 +35,7 @@ function submitPrerequisites(cwd: string, candidate: string, known: readonly str
 /** The random 0700 directory owns the Git output; no key-derived shared path.
  * Throw rather than process.exit inside this scope so every settled error cleans up. */
 function submitBundle(cwd: string, exportRef: string, prerequisites: readonly string[]): Buffer {
-  const directory = mkdtempSync(join(tmpdir(), "oma-submit-"));
+  const directory = mkdtempSync(join(realpathSync(tmpdir()), "oma-submit-"));
   try {
     const path = join(directory, "candidate.bundle");
     const result = runGitText(
