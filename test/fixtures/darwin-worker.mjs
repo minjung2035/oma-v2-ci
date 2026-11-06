@@ -74,7 +74,7 @@ assert.equal(run('git',['log','-1','--format=%an']).stdout.trim(),'alice');
 const absent=spawnSync('oma',['status'],{env:process.env,encoding:'utf8',timeout:10000});assert.equal(absent.error?.code,'ENOENT');
 assert.equal(process.env.OMA_CLI,undefined);
 const {registerOmaTools}=await import(libdir+'/packages/extension/dist/mail-tools.js');
-const registered=new Map();registerOmaTools({registerTool:tool=>registered.set(tool.name,tool)},process.cwd());
+const registered=new Map();registerOmaTools({registerTool:tool=>registered.set(tool.name,tool),on(){}},process.cwd());
 assert.equal(registered.has('oma_mail_read'),false);assert.equal(registered.has('oma_send'),true);
 const {registerHashlineTools}=await import(libdir+'/packages/tool-hashline/dist/index.js');
 const {createContainedWriter}=await import(libdir+'/packages/tool-runtime/dist/contained-tools.js');

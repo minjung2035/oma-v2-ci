@@ -1496,7 +1496,7 @@
     },
     {
       "path": "packages/native/src/darwin-job-control.ts",
-      "sha256": "b3adeadebd305ad1428287a61ec4e84035f066754b1f2d792b1716f339ef9532"
+      "sha256": "738dbbd6e2b42a67440f4c323501e00453ffff44eea76e980fe5d9cfd8c19497"
     },
     {
       "path": "packages/native/src/darwin-job-launch.ts",

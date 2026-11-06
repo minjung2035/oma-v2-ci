@@ -286,7 +286,13 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
           }, close: () => pin.close() });
       },
       get prepared() {
-        prepared ??= (rootDone || returned ? Promise.reject(unknown("job helper already ended")) : prepare()).catch(error => { failed(error); throw error; });
+        prepared ??= (rootDone || returned ? Promise.reject(unknown("job helper already ended")) : prepare()).catch(error => {
+          // The owner terminated a target it never released: its stopped image
+          // ran no workload, so setup ending is that cancellation. Whole-scope
+          // death is still observed by the owner before the slot is retired.
+          const failure = ownerStopped && !released ? new StoreError("CANCELLED_BEFORE_COMMIT", "job was terminated before release", { cause: error }) : error;
+          failed(failure); throw failure;
+        });
         void prepared.catch(() => {}); return prepared;
       },
       population: () => observeDarwinCoalitionPopulation(identity),

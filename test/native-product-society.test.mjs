@@ -139,8 +139,13 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('send it to nobody'),wait:1},{write:hex('\r'),wait:240},{write:hex('\x04'),wait:20}]};
- const session=spawnSync('python3',[harness,JSON.stringify(spec)],{cwd:project,encoding:'utf8',timeout:560000,maxBuffer:16*1024*1024,
+ // Asynchronous: the scripted provider answers from this same process's event loop.
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
   env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+ let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
+ const timer=setTimeout(()=>child.kill('SIGKILL'),560000);
+ const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
+ const session={status,stdout,stderr};
  const terminal=JSON.parse(session.stdout||'{}');
  // Notices only: control sequences, hyperlinks and spinner frames carry no evidence.
  // A TUI moves the cursor instead of writing newlines; each movement starts a line.

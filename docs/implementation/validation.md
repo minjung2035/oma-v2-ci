@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4860c5d9869404c1902640e6d674fb7d8674dc698f42f1113e7881eecd8e5abe` (15950 files).
+verification input digest `24638eeffd8e6e06d49e897c06d62b99f146c266eb69a9e31f110fcbf6f57f4d` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4763,3 +4763,10 @@ SOURCE127 `dae5941b7fd`, Native42184803022. **Mac26 제품 경로 003 PASS**: �
 
 SOURCE128 `388db217449`, Native42189778787. Mac26 Society 12/12, 제품 경로 4/5, **Darwin storage 16/19**(symlink 시각 복원 수리 확인). 새 Worker probe step이 처음 결과를 냈다: 실제 Seatbelt Worker Pi가 여전히 OMA extension load에서 `directory-relative operation failed: EPERM`이었다. tool-files private state가 `/`부터 각 상위 디렉터리를 열며 내려가는데, deny-default Seatbelt는 Worker가 `/Users` 같은 상위 디렉터리를 읽기로 여는 것을 허용하지 않는다. Seatbelt를 넓혀 상위 디렉터리(다른 actor 이름 포함) 목록을 노출하지 않고, 신뢰된 launcher가 준 HOME과 정규화된 system temp root를 시작점으로 삼는다. 그 아래 각 요소는 기존대로 link를 따르지 않고 연다.
 제품 경로 005는 Broker Store가 열린 상태에서 Principal의 model 요청이 0이었다. TUI 출력이 newline 없이 커서 이동으로 그려져 알림이 걸러졌으므로 커서 이동을 줄바꿈으로 바꾸고, Principal session history 끝부분(OMA가 주입한 알림 포함)도 보존한다.
+
+### SOURCE129 실제 결과와 SOURCE130
+
+SOURCE129 `a35afb8678a`, Native42194559884. **실제 Seatbelt Worker가 Mac26에서 처음 시작했다**: `worker-bootstrap`이 실제 Worker Pi의 RPC stdin·정확한 session 재개·물리 경로·production preload·선택된 developer tools·직접 child 종료를 확인했다(private state anchor 수리 확인). Society 12/12, storage 16/19.
+- `worker-tools`: fixture의 가짜 `pi` 객체에 현재 extension이 쓰는 `on`이 없어(`pi.on is not a function`) 실패했다. Linux 시험과 같은 최소 API로 맞춘다.
+- 제품 경로 001·004: Broker ready 직후 SIGTERM이 초기 reconcile job의 setup(정지 image 검증·setup 전송) 중에 도착해 drain이 `RUN_TERMINATION_UNKNOWN`으로 끝났다. owner가 release 전 target을 종료하면 정지된 image는 workload를 실행하지 않았으므로 그 setup 종료를 CANCELLED_BEFORE_COMMIT으로 보고하고 원래 오류를 cause로 남긴다. 전체 scope 사망은 owner의 settle이 여전히 별도로 관측한다.
+- 제품 경로 005: 정리된 알림과 history가 원인을 보였다. Principal의 모든 model 요청이 `Request timed out`이었다. 시험이 PTY harness를 `spawnSync`로 실행해 같은 process의 scripted provider event loop를 막았기 때문이다(시험 결함). 비동기 spawn으로 바꾼다. history에서 Principal이 fake/scripted 모델로 요청을 시작했고 OMA가 record health 알림을 주입한 것도 확인했다.
