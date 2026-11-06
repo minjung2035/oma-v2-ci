@@ -18,6 +18,7 @@ import {
 } from "@oma/protocol/host-channel";
 import { CHANNEL_FD as SPAWN_CHANNEL_FD, SOCIETY_FENCE_FD as HOST_PLACES } from "@oma/process/async";
 import { PrincipalChannel } from "@oma/extension/principal-channel";
+import { decodeBrokerIdentity, encodeBrokerIdentity } from "@oma/protocol/client-codecs";
 import { readBoundedWithin } from "@oma/tool-files";
 import { once } from "node:events";
 
@@ -266,4 +267,24 @@ test("010. The owned process output cap counts bytes, not decoded characters", a
   });
   assert.ok(Buffer.byteLength(result.stdout) <= cap,
     `the process output kept ${Buffer.byteLength(result.stdout)} bytes past a ${cap}-byte cap`);
+});
+
+test("011. A Host-attested Broker identity binds only the credential that immediately follows it", () => {
+  const token = [1, 501, 20, 501, 20, 4242, 100001, 35637], broker = { pid: 4242, token };
+  const credential = `credential ${"a".repeat(64)} ${"b".repeat(32)}\n`;
+  assert.deepEqual(decodeBrokerIdentity(encodeBrokerIdentity(broker).trimEnd()), broker);
+  assert.throws(() => encodeBrokerIdentity({ pid: 4242, token: [1, 2, 3, 4, 5, 6, 7, 8] }), "the token must name the attested pid");
+  assert.equal(decodeBrokerIdentity(`broker 4242 ${"0".repeat(63)}`), null);
+  const bound = PrincipalChannel.detached();
+  bound.push(encodeBrokerIdentity(broker) + credential);
+  assert.deepEqual(bound.current(), { credential: "a".repeat(64), sessionHandle: "b".repeat(32), broker });
+  // A later grant without a new attestation carries none forward.
+  bound.push(`credential ${"c".repeat(64)} ${"d".repeat(32)}\n`);
+  assert.deepEqual(bound.current(), { credential: "c".repeat(64), sessionHandle: "d".repeat(32) });
+  const alone = PrincipalChannel.detached();
+  alone.push(encodeBrokerIdentity(broker));
+  assert.equal(alone.current(), null, "an attestation alone grants nothing");
+  const twice = PrincipalChannel.detached();
+  twice.push(encodeBrokerIdentity(broker) + encodeBrokerIdentity(broker) + credential);
+  assert.equal(twice.current(), null, "a second attestation before its credential breaks the channel");
 });

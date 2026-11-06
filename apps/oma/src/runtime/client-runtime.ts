@@ -27,7 +27,7 @@ export const CLIENT_RUNTIME: RuntimePort = {
   spoolOutput,
   cache: (home, budget) => new RequestCache(home, readCacheFile, budget).prepare(),
   cacheFailure: error => error instanceof CacheError ? error : null,
-  channel: createBrokerChannel,
+  channel: (limits, broker) => createBrokerChannel(limits, broker === undefined ? undefined : { attested: broker }),
   snapshot: snapshotJson,
   paramsEqual: requestParamsEqual,
   intentConflict: (method, explicitParams, frozen) => requestIntentConflict({ expectedMethod: method, explicitParams }, frozen),

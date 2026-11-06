@@ -22,7 +22,7 @@ export class Transport {
     if (remaining <= 0) throw new ClientError("broker did not answer before the client deadline", 3, request, undefined, false, "BROKER_UNAVAILABLE");
     const bytes = frameBytes();
     const grant = this.grant();
-    const channel = policy.channel({ frameBytes: bytes, idleStreamSeconds: policy.observationSeconds, receiptWaitSeconds: policy.observationSeconds });
+    const channel = policy.channel({ frameBytes: bytes, idleStreamSeconds: policy.observationSeconds, receiptWaitSeconds: policy.observationSeconds }, grant?.broker);
     const stopped = () => channel.close(new ClientError("broker observation stopped; outcome unknown", 3, request, undefined, false, "BROKER_UNAVAILABLE"));
     const signal = currentContext().signal;
     const timer = setTimeout(stopped, remaining);

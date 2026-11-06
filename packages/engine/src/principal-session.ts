@@ -5,6 +5,7 @@ import type { FencedEngine } from "@oma/contracts/runtime";
 import type { PiRpcStreams } from "./pi-rpc.js";
 import type { Socket } from "node:net";
 import { HOST_CHANNEL_FD, encodeHostMessage } from "@oma/protocol/host-channel";
+import { encodeBrokerIdentity, type BrokerIdentity } from "@oma/protocol/client-codecs";
 import { deliveryNotStartedOf } from "@oma/protocol/delivery-boundary";
 import { assertModelScope } from "@oma/domain/paths";
 import { PiRpcClient, alarm, assertPiRpcLimits, commandWasNotWritten, type PiEvent, type PiRpcLimits } from "./pi-rpc.js";
@@ -311,9 +312,11 @@ export class PrincipalSession {
 
   /** Hands the engine its credential on the private socket. A new one simply
    * replaces the previous one; the old broker that minted it is gone. */
-  grant(credential: string, sessionHandle: string): void {
+  /** On Darwin the Host also names its own Broker child, so the engine's
+   * client accepts replies only from that kernel identity. */
+  grant(credential: string, sessionHandle: string, broker?: BrokerIdentity): void {
     if (this.closed || this.channel.destroyed) return;
-    this.channel.write(encodeHostMessage({ kind: "credential", credential, sessionHandle }));
+    this.channel.write((broker === undefined ? "" : encodeBrokerIdentity(broker)) + encodeHostMessage({ kind: "credential", credential, sessionHandle }));
   }
 
   /** Every event the engine emits, for the delivery owner. */

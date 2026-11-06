@@ -1,5 +1,5 @@
 import type { Json, MutationMethod, Receipt, PublicMethod, PublicMethods, Failure, ProtocolLimits } from "@oma/contracts";
-import type { PrincipalGrant } from "@oma/protocol/client-codecs";
+import type { BrokerIdentity, PrincipalGrant } from "@oma/protocol/client-codecs";
 
 export type Reply = { readonly ok: true; readonly result: unknown } | { readonly ok: false; readonly error: Failure };
 export type Decoded<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
@@ -38,7 +38,8 @@ export interface RuntimePort {
   spoolOutput(home: string, bytes: Uint8Array): string;
   cache(home: string, budget: number): CachePort;
   cacheFailure(error: unknown): { code: string; message: string } | null;
-  channel(limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">): ChannelPort;
+  /** `broker`: the Principal's Host-attested Broker identity (Darwin), when granted. */
+  channel(limits: Pick<ProtocolLimits, "frameBytes" | "idleStreamSeconds" | "receiptWaitSeconds">, broker?: BrokerIdentity): ChannelPort;
   snapshot(value: unknown): Json;
   paramsEqual(method: MutationMethod, left: unknown, right: unknown): boolean;
   intentConflict(method: MutationMethod, explicit: () => Record<string, unknown>, frozen: CachedRequest): string | null;

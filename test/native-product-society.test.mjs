@@ -84,6 +84,7 @@ test('003. The Host runs a fresh Society in a real terminal: its Broker child op
  const terminal=JSON.parse(out||'{}'),screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-3000);
  assert.deepEqual(status,{code:0,signal:null},err+screen);
  assert.equal(terminal.ready,true,screen);
+ assert.doesNotMatch(screen,/no credential was granted|could not be attested|rejected the Principal session/,screen);
  assert.notEqual(store,null,'the Host-supervised Broker opened the Society Store: '+screen);
  assert.equal(readSessionBirth(store).surface,'collaboration-v1');
  assert.equal(terminal.exited,true,screen);assert.equal(terminal.code,0,screen);

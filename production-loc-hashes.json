@@ -60,7 +60,7 @@
     },
     {
       "path": "apps/oma/src/application/society-runtime.ts",
-      "sha256": "105e5765c7e550f7d84de300c6378fdc9246f61734af1293042402ab71007a53"
+      "sha256": "8059212a2a5b41e1bc4202dffff33c53a473c03a9c2c0cda177f0eace4b6e52d"
     },
     {
       "path": "apps/oma/src/application/society-transition.ts",
@@ -240,11 +240,11 @@
     },
     {
       "path": "apps/oma/src/runtime/broker-channel.ts",
-      "sha256": "08ff7ee4141669f35542da55135ca493b2275c1a9d5cf4c949f257d40f87b520"
+      "sha256": "f7c70bf45fdbb656e9d6b5844346de37f73d9029f9fb960fa7e61fb554003c65"
     },
     {
       "path": "apps/oma/src/runtime/broker-supervisor.ts",
-      "sha256": "819832bf4c2e5a6e7d668e5eaf37c29249b931848445f2eec54f602c7ce53f4a"
+      "sha256": "712a9e9980527bab78c4b5c44adbc3a182f573982295d1d067919bd7e5bc4e02"
     },
     {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
@@ -256,7 +256,7 @@
     },
     {
       "path": "apps/oma/src/runtime/client-runtime.ts",
-      "sha256": "8f0a223ad13fb49f54e3a96fa079d2d7f911e4646202c08e609a0a26b0f80bc6"
+      "sha256": "3905a14068c6c5d0571685eb8c81a6927e40401694aeb78ee142202b6f19deb0"
     },
     {
       "path": "apps/oma/src/runtime/collaboration-sources.ts",
@@ -592,7 +592,7 @@
     },
     {
       "path": "packages/client/src/runtime.ts",
-      "sha256": "494ad0f5545f39223edd6cee861d3b080ecff5ecffe3e6a5f3fdaeb2b76c7c95"
+      "sha256": "e431822524df20a20d9c3d9040dc9cbba1a34094038ea78a836374bb9d80457d"
     },
     {
       "path": "packages/client/src/settings.ts",
@@ -600,7 +600,7 @@
     },
     {
       "path": "packages/client/src/transport.ts",
-      "sha256": "503a113dafd82b00349f7cfdb42e868d905228dfb8970648941090c58958a07f"
+      "sha256": "05f76a52bb58bd16b18a68e2ac6cc3c5c1bd6f9f046fa341f8e7cd7cd51100f3"
     },
     {
       "path": "packages/config/package.json",
@@ -1156,7 +1156,7 @@
     },
     {
       "path": "packages/engine/src/principal-session.ts",
-      "sha256": "ce4c39a97fe9ec1d9eb359631bf501b0108c936d28ef7ba5e1df0d07ea6c8889"
+      "sha256": "711d82ef1fc079dc6edbd5d09d4714f4e94b5b91d03c7ddcc980f5d0be83a637"
     },
     {
       "path": "packages/engine/src/session-directories.ts",
@@ -1208,7 +1208,7 @@
     },
     {
       "path": "packages/extension/src/principal-channel.ts",
-      "sha256": "c1df9aa019294b43982fca6bd63b0f03e636efdd2bcd4dfc3d093fec001e6531"
+      "sha256": "b1ea314be130e3af1781f70a870e7446747992ba2ec317edc660144d85e5ed23"
     },
     {
       "path": "packages/extension/src/prompt-boundary.ts",
@@ -1756,7 +1756,7 @@
     },
     {
       "path": "packages/platform-mac/src/mach-transport.ts",
-      "sha256": "b035270590c87f39773249349b31f772171c8284feb5698585a804fd7d226def"
+      "sha256": "b5e56df7fcc4386e4a55b7e031fd070f9821092bcdb8a3695a9c87dfcb109b57"
     },
     {
       "path": "packages/platform-mac/src/macho-image.ts",
@@ -1904,7 +1904,7 @@
     },
     {
       "path": "packages/protocol/src/client-codecs.ts",
-      "sha256": "4c9fb7590f89f29684698efdaf4d0a1b5aa72d7905a07989b898afd06f613eb6"
+      "sha256": "688d06624806db5cbdbbe48a8f368a7cbfbff52ca7791ec5a5433e4bd2c36e0b"
     },
     {
       "path": "packages/protocol/src/delivery-boundary.ts",

@@ -21,6 +21,8 @@ import { machRendezvousName } from "./mach-address.js";
 import { pinInheritedDarwinPeer } from "@oma/native/audit-session";
 import { peerFromMachReceiver, type DarwinJobPeer } from "./mach-peer-source.js";
 import { borrowDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
+import { watchDarwinProcess } from "@oma/native/process-event";
+import type { BrokerIdentity } from "@oma/protocol/client-codecs";
 
 const OPEN = 0x4f4d4101, OPENED = 0x4f4d4104;
 const unavailable = (message: string): StoreError => new StoreError("BROKER_UNAVAILABLE", message);
@@ -43,6 +45,20 @@ export function dialMachChannel(path: string, handshakeSeconds: number): { reado
 export function dialOwnedChildMachChannel(path: string, handshakeSeconds: number, child: PrivateParentPin): { readonly socket: Duplex; readonly ready: Promise<void> } {
   const name = machRendezvousName(path); duration(handshakeSeconds);
   return dialExpectedMachChannel(path, handshakeSeconds, borrowDarwinPrivateChild(child), () => lookupMachService(name));
+}
+/** The Principal engine's Broker, as its Host attested it over the trusted
+ * parent channel. A kernel process watch registered here withdraws the source
+ * when that exact process exits or execs; every reply still needs this full
+ * token. Public lookup only routes the nonce. */
+export function dialAttestedMachChannel(path: string, handshakeSeconds: number, broker: BrokerIdentity): { readonly socket: Duplex; readonly ready: Promise<void> } {
+  const name = machRendezvousName(path); duration(handshakeSeconds);
+  if (!Number.isSafeInteger(broker.pid) || broker.pid < 2 || broker.token.length !== 8 || broker.token[5] !== broker.pid)
+    throw new StoreError("AUTH_FAILED", "attested Broker identity is malformed");
+  const watch = watchDarwinProcess(broker.pid), token = Object.freeze([...broker.token]);
+  let closed = false;
+  const source = Object.freeze({ token, alive: () => !closed && watch.state() === "live",
+    close() { if (closed) return; closed = true; watch.close(); } });
+  return dialExpectedMachChannel(path, handshakeSeconds, source, () => lookupMachService(name));
 }
 /** Whether a live owner currently holds this endpoint's rendezvous. Absence
  * is BOOTSTRAP_UNKNOWN_SERVICE or a dead name; anything else is unknown and

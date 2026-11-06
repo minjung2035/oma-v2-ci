@@ -13,7 +13,7 @@
  */
 import { fstatSync } from "node:fs";
 import { Socket } from "node:net";
-import { decodeCredential, type PrincipalGrant } from "@oma/protocol/client-codecs";
+import { decodeBrokerIdentity, decodeCredential, type BrokerIdentity, type PrincipalGrant } from "@oma/protocol/client-codecs";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HOST_CHANNEL_LINE_BYTES } from "@oma/protocol/host-channel";
 
 /** Where this process keeps its one channel, across module instances. */
@@ -22,6 +22,7 @@ const PROCESS_CHANNEL = Symbol.for("oma.principal-channel");
 /** Holds the latest credential the host granted, or nothing. */
 export class PrincipalChannel {
   private grant: PrincipalGrant | null = null;
+  private broker: BrokerIdentity | null = null;
   private pending = "";
   private broken = false;
   private opened = false;
@@ -91,18 +92,22 @@ export class PrincipalChannel {
       if (end < 0) break;
       const line = this.pending.slice(0, end);
       this.pending = this.pending.slice(end + 1);
+      // The Host names its Broker immediately before the credential it binds.
+      const broker = line.length <= HOST_CHANNEL_LINE_BYTES && this.broker === null ? decodeBrokerIdentity(line) : null;
+      if (broker !== null) { this.broker = broker; continue; }
       const match = line.length <= HOST_CHANNEL_LINE_BYTES ? decodeCredential(line) : null;
       // Anything else on this channel means it is not the channel it should
       // be; no credential from it is trusted afterwards.
       if (match === null) { this.broken = true; this.clear(); return; }
-      this.grant = Object.freeze(match);
+      this.grant = Object.freeze(this.broker === null ? match : { ...match, broker: this.broker });
+      this.broker = null;
       for (const changed of this.waiting) changed();
     }
     if (this.pending.length > HOST_CHANNEL_LINE_BYTES) { this.broken = true; this.clear(); }
   }
 
   private clear(): void {
-    this.grant = null; this.pending = ""; this.ended = true;
+    this.grant = null; this.broker = null; this.pending = ""; this.ended = true;
     for (const changed of this.waiting) changed();
   }
 }

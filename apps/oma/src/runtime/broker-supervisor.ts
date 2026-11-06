@@ -39,7 +39,8 @@ import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type Child
 import { SOCIETY_OWNED_EXIT } from "@oma/native/process-lock";
 import { launchLocationArgv } from "./assets.js";
 import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage } from "@oma/protocol/host-channel";
-import { pinDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
+import { borrowDarwinPrivateChild, pinDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
+import type { BrokerIdentity } from "@oma/protocol/client-codecs";
 import { socketDescriptor } from "@oma/native/linux";
 import { StoreError } from "@oma/domain/errors";
 import { brokerEndpointListening, createBrokerChannel } from "./broker-channel.js";
@@ -53,6 +54,9 @@ export type BrokerState =
 export interface BrokerHandle {
   /** Current generation only; no endpoint or PID supplied by a client. */
   createChannel?(limits: ChannelLimits): BrokerChannel;
+  /** Darwin: the current live Broker child's kernel identity, for the engine
+   * this Host grants. Undefined off Darwin. */
+  identity?(): BrokerIdentity | undefined;
   readonly state: BrokerState;
   /** Called each time a broker this handle started reports its endpoints are
    * listening: at first start and after every restart. Never called for a
@@ -317,6 +321,14 @@ export async function superviseBroker(options: SuperviseOptions): Promise<Broker
           process.platform === "darwin" && (generation.peer === null || !generation.peer.alive()))
         throw new StoreError("BROKER_UNAVAILABLE", "this Host has no current live Broker generation");
       return createBrokerChannel(limits, generation.peer ?? undefined);
+    },
+    identity() {
+      if (process.platform !== "darwin") return undefined;
+      const generation = current;
+      if (generation === null || !generation.ready || stopping || disowned !== null || generation.peer === null || !generation.peer.alive())
+        throw new StoreError("BROKER_UNAVAILABLE", "this Host has no current live Broker generation");
+      const borrowed = borrowDarwinPrivateChild(generation.peer);
+      return Object.freeze({ pid: generation.peer.identity.pid, token: Object.freeze([...borrowed.token]) });
     },
     // A pid, not a claim of ownership: the child has started, and whether it
     // owns the society is answered later, by onReady or onDisowned.

@@ -40,7 +40,7 @@ password를 잃으면 복원할 수 없다. 다른 경로로 파일을 일부만
 
 Restic 0.19.1의 Linux/macOS x64·arm64 archive/binary checksum을 고정한다.
 setup 단계는 `/usr/bin/bzip2`를 사용하고, 실행 검증은 공통 TypeScript stream verifier가
-담당한다. Darwin의 설치·실제 보관/복원 지원은 아래 native gate가 해결될 때까지 미검증이다.
+담당한다. macOS에서도 같은 `npm run setup:storage`로 고정 binary를 설치한다. Darwin의 실제 보관/복원 결과는 [validation](implementation/validation.md)을 따른다.
 기존 파일과 checksum이 다르면 덮어쓰지 않는다. 도구가 없거나 저장 검증이 실패하면 원래
 작업공간을 유지하고 이유를 로그에 남긴다. cold 세션에서 도구가 없으면 위 setup 명령을 다시
 실행한다. 현재 verifier는 extended attributes/ACL·special file·nested mount가 있거나 읽을 수
@@ -48,12 +48,20 @@ setup 단계는 `/usr/bin/bzip2`를 사용하고, 실행 검증은 공통 TypeSc
 원본을 보존한다. 실패한 복원 stage도 진단/복구를 위해
 보존하며 같은 snapshot을 정상 복원한 후 자동 회수한다. 세부 계약은 [DR48](design-revisions.md)을 따른다.
 
-## macOS 코드와 배포 상태
+## macOS 실행
 
-**macOS 제품 실행은 아직 지원하지 않는다.** 공통 native 진입점은 있으나
-G-PROCESS·G-FILES·G-AUTH가 미해결이므로 Society·Personal·login·package 명령을 효과 전에
-거절한다. OMA.app·host service·VM image를 설치하는 경로는 폐기했다. 기존 데이터와
-history는 자동 변환하거나 삭제하지 않는다. 위 Linux 설치 안내를 Mac 지원 절차로 사용하지 않는다.
+macOS도 같은 `oma` 진입점과 TypeScript 실행부를 사용한다(DR74). VM·OMA.app·host service 경로는 폐기했다. 첫 지원 목표는 macOS 26 arm64이며 macOS 26 x64와 macOS 15는 호환성 관측이다. Node.js 26과 Xcode Command Line Tools(Git·개발 도구)가 필요하다. root daemon·별도 entitlement는 요구하지 않는다.
+
+```sh
+npm ci
+npm run build
+npm run setup:storage
+npm install -g .
+cd /absolute/path/to/your/project
+oma
+```
+
+Mac native는 새 state root에서 시작한다. 기존 VM state·disk·archive·history는 자동 변환하거나 삭제하지 않는다. Darwin에서 Worker·candidate·quarantine은 Seatbelt profile과 launchd one-shot job scope(resource coalition)에서 실행되며, 필요한 OS 관측이나 capability를 얻지 못하면 그 효과만 해당 owner가 `UNSUPPORTED_PROFILE` 등으로 거절한다. 실행 자체를 진입점에서 일괄 차단하지 않는다. 실제 Mac에서 확인된 범위와 남은 미검증 항목은 [validation](implementation/validation.md)이 소유한다.
 
 ## 역할별 운영 설정
 
@@ -67,9 +75,7 @@ history는 자동 변환하거나 삭제하지 않는다. 위 Linux 설치 안�
 사용한다. 폐기한 VM 선택자 `--host-only`·`--project`는 거절한다. 설치만으로 Personal
 확장을 켜지 않으므로 Personal의 Config > Extensions에서 명시적으로 선택한다.
 
-Mac도 공통 native 진입점을 사용하며 VM 실행 경로는 제거했다. 현재 G-PROCESS·G-FILES·G-AUTH가
-미해결이므로 Mac 제품 실행은 효과 전에 거절한다. 기존 VM 데이터·history·accepted plan을 자동
-변환하거나 삭제하지 않는다. 공통 primitive 시험 성공과 실제 Mac 제품 지원은 [validation](implementation/validation.md)에서 구분한다.
+Mac도 공통 native 진입점과 같은 Society/Personal 모드를 사용하며 VM 실행 경로는 제거했다. 기존 VM 데이터·history·accepted plan을 자동 변환하거나 삭제하지 않는다.
 
 최초 Personal 설정에서 프로젝트 확장을 가져오지 않으려면 `oma --mode personal --no-project-extensions`로 시작한다. 읽을 수 없는 bookmark·프로젝트 설정 때문에 첫 실행이 막혔을 때도 명시적으로 이 선택을 할 수 있다. 기존 Personal 확장 선택은 유지되며 이 flag로 지워지지 않는다. 저장된 history 재개에는 사용할 수 없다. 기본 경로는 관측 실패를 빈 확장 목록으로 바꾸지 않고 오류를 보고한다.
 
@@ -241,8 +247,7 @@ OMA의 Society·Personal 대화에서는 Pi의 자동 `What's New`/`Updated to` 
 - 현재 HostConfig 4에는 `installation.rootfs`가 없다. 이전 버전과 폐기된 rootfs/mount/backend 필드는 설정 오류로 거절하며 원본 파일을 변환하지 않는다. Linux rootfs 경로와 OS mount 목록은 어댑터가 선택하고 private state를 노출하는 system mount는 거절한다. bwrap/user namespace가 없거나 spawn이 실패해도 host 실행으로 대체하지 않는다([DR31](design-revisions.md)). `oma login`과 `oma pi`의 대화형 엔진은 Resident가 아니며 이 sandbox 계약을 적용하지 않는다.
 - Resident 환경은 host 환경을 상속하지 않는다(`--clearenv`). `LANG`/`LC_ALL=C.UTF-8`, `TZ=UTC`, `TERM=xterm-256color`, `TMPDIR=/tmp`, `SHELL=/bin/sh`, `USER`/`LOGNAME=agent`를 설정한다. `XDG_DATA_HOME=/home/agent/.local/share`, `XDG_RUNTIME_DIR=/home/agent/.run`은 confined home의 private 디렉터리다. PATH는 pinned OMA/Node, confined home의 `.local/bin`, `/usr/bin`, `/bin` 순서다.
 - 존재하는 DNS/NSS/hosts/timezone 파일과 CA 디렉터리만 RO bind한다. 없는 파일(깨진 symlink 포함)은 mount 계획에서 제외하며 `/etc` 전체를 노출하지 않는다. filesystem/pid/user 격리는 유지하고 네트워크는 공유한다.
-- 과거 guest 환경은 현재 실행 계약이 아니다. Darwin은 검증된 native backend가 연결되기 전
-  Linux 환경 값을 빌려 실행하지 않으며, 과거 VM 설정으로 fallback하지 않는다.
+- 과거 guest 환경은 현재 실행 계약이 아니다. Darwin Worker는 Seatbelt profile과 private runtime generation으로 실행하며 Linux 환경 값을 빌리거나 과거 VM 설정으로 fallback하지 않는다.
 
 ## Dashboard 관측
 
@@ -254,7 +259,7 @@ broker는 `status.get`과 같은 답을 state root의 `status.json`(`0600`)으�
 
 과거 Mac VM의 bundle import/export·guest 동기화는 폐기했다. 기존 VM의 import 기록이나
 accepted bundle을 새 native 초기화로 재해석하지 않는다. native 첫 시작은 위 공통 snapshot
-owner를 사용하며 Darwin 제품 실행은 선행 gate가 해결되기 전까지 차단한다.
+owner를 사용한다.
 
 ### 프로젝트 식별과 바인딩 (D05, WP16)
 

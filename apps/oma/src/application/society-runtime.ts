@@ -203,7 +203,22 @@ export class SocietyRuntime {
       this.view.draw();
       return;
     }
-    live.grant(credential, handle);
+    // Darwin: the engine's client accepts replies only from this Broker child.
+    let brokerIdentity: ReturnType<NonNullable<BrokerHandle["identity"]>>;
+    try { brokerIdentity = broker.identity?.(); }
+    catch (error) {
+      owner.principalUnregistered();
+      this.view.notice(`The Broker identity could not be attested; no credential was granted: ${exceptionText(error)}`);
+      this.view.draw();
+      return;
+    }
+    if (process.platform === "darwin" && brokerIdentity === undefined) {
+      owner.principalUnregistered();
+      this.view.notice("This Host has no attested Broker identity; no credential was granted.");
+      this.view.draw();
+      return;
+    }
+    live.grant(credential, handle, brokerIdentity);
     owner.principalRegistered();
     if (this.delivery === null)
       this.delivery = new PrincipalDelivery({
