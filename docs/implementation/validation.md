@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `2831ec7ced4a223e7864a9e1120baf8c545ecc1356b64644338f55d607606056` (15949 files).
+verification input digest `650b8305df8800660d9f2914c4b6099a11b5374f0d9c2563ed2ca9f23ffe9435` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4723,3 +4723,8 @@ SOURCE119 `0844dc1379f`, Native42164081851. **Mac26 Intel job 전체 SUCCESS**(S
 
 SOURCE120(취소 전 부분 결과): Mac26 공통 suite **466/466**(fence 재획득 경쟁 수리 확인), Mac26 Intel 466/466, 두 OS Society 12/12·제품 경로 2/2 PASS.
 Host는 Principal engine을 일반 owned child로 시작하므로 Darwin engine의 client에는 Worker와 같은 상속 Mach endpoint·peer source가 없어 Society 도구가 Broker에 연결할 수 없었다(남은 작업표의 Principal/Engine Host RPC 항목). §5의 trusted parent channel을 expected identity 원천으로 사용한다: Host는 credential 직전에 자기 Broker child의 kernel pid·전체 audit token(사설 child pin에서 취득)을 같은 private socketpair로 보낸다. engine은 바로 다음 credential에만 그 identity를 결박한다. client는 rendezvous를 lookup하되 등록한 kernel process watch가 live이고 응답 sender token이 정확히 같을 때만 받는다. Broker 쪽 Principal 인증(caller audit token·engine descent)은 그대로다. identity를 attest할 수 없으면 credential을 주지 않는다. `principal-channel`011이 protocol을 고정하고, 제품 경로 003이 실제 Host에서 attestation 실패·credential 거절이 없음을 확인한다. engine의 실제 Society 도구 왕복은 scripted provider를 쓰는 Darwin 제품 시나리오가 필요하며 아직 NOT_RUN이다.
+
+### SOURCE121 실제 결과와 SOURCE123
+
+SOURCE121 `4effdae768d`, Native42171221927(SOURCE122 push로 일부 취소). Society는 세 Mac 모두 12/12다. 새 Darwin storage step과 제품 step은 `npm run setup:storage`가 `Installed Restic could not run`으로 실패했다. 설치기와 제품 `ResticProcess`가 모두 검증한 FD를 `/dev/fd/3`로 exec하는데, Darwin은 descriptor 경로 exec를 거절한다(§6.1 기존 반례). **Darwin에서 Restic backup/restore는 현재 동작하지 않는 제품 결함이다.** pathname exec로 낮추지 않고, spec이 채택한 Darwin exact-executable primitive(main image digest를 생성 전 검증하는 job scope)로 옮기는 작업을 진행한다. 그동안 제품 step은 Restic 설치 실패에 막히지 않고 다른 제품 시험을 실행하며, 제품 경로 004가 이 실패를 보고한다.
+제품 경로 005: 실제 Host를 PTY에서 실행하고 engine 기본 모델을 scripted provider로 지정한다. Principal이 `oma_send`(없는 주소)를 호출하면 다음 요청의 tool result가 Broker의 `ADDRESS_NOT_FOUND`여야 한다. SOURCE122의 attested Broker identity로 engine이 실제 Mach 경로로 Broker에 인증·호출했다는 증거다.

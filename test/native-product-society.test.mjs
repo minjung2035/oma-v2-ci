@@ -1,7 +1,7 @@
 /** Actual product path on Darwin: a fresh `oma` Society, then its Broker to readiness. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,mkdirSync,mkdtempSync,readdirSync,realpathSync,rmSync} from 'node:fs';
+import {existsSync,mkdirSync,mkdtempSync,readFileSync,readdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawn,spawnSync} from 'node:child_process';
@@ -118,4 +118,29 @@ test('004. A Darwin Society is archived with the pinned Restic and its Broker re
  const restored=await boot('restoring Broker readiness');
  assert.match(restored,/Archived session workspace restored and verified/,restored);
  await until(()=>owned(base).length===0,30000,()=>'restoring Broker residue: '+owned(base).join('\n'));
+});
+
+test('005. A scripted Principal in the real Host reaches its Broker over Mach and gets the Broker answer to a Society call',{timeout:600000},async t=>{
+ if(!darwin(t))return;
+ const {scriptedProvider,tools,call,text,toolResults}=await import('../dist/test/fixtures/scripted-provider.js');
+ const provider=await scriptedProvider([tools(call('oma_send',{to:['nobody'],subject:'no such Worker',content:{kind:'text',value:'x'}})),text('No such Worker.')]);
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-principal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ // The product's default Principal model is the engine's own default: point it at the script.
+ const agentDir=join(data,'engine');provider.configure(agentDir);
+ writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:5},{write:hex('send it to nobody'),wait:1},{write:hex('\r'),wait:240},{write:hex('\x04'),wait:20}]};
+ const session=spawnSync('python3',[harness,JSON.stringify(spec)],{cwd:project,encoding:'utf8',timeout:560000,maxBuffer:16*1024*1024,
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+ const terminal=JSON.parse(session.stdout||'{}'),screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-4000);
+ assert.equal(session.status,0,session.stderr+screen);assert.equal(terminal.ready,true,screen);
+ assert.ok(provider.seen.length>=2,`the Principal made ${provider.seen.length} model request(s): `+screen);
+ const result=toolResults(provider.seen[1].body).at(-1)?.text??'';
+ // The routing owner answered: the engine reached and authenticated to this Host's Broker.
+ assert.match(result,/ADDRESS_NOT_FOUND/,result+'\n'+screen);
+ assert.doesNotMatch(result,/BROKER_UNAVAILABLE|AUTH_FAILED/,result);
+ assert.equal(terminal.code,0,screen);
+ await until(()=>owned(base).length===0,30000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });
