@@ -249,6 +249,17 @@ macOS 브랜치에서 기록한 Linux 인수검증과 후속 Mac 관측은 [병�
 | P6 | Society/Personal/TUI 전체 제품 경로 | 새 설치에서 VM/systemd 없이 두 OS의 named scenario 통과 |
 | P7 | 전체 회귀·복잡도·owner/spec/evidence 최종 대조 | 현재 source에 결박한 결과, 미완료/제한의 정확한 표시 |
 
+2026-11-06 현재 단계별 상태(근거는 [validation](implementation/validation.md)의 SOURCE108–124):
+
+| 단계 | 현재 상태 |
+|---|---|
+| P2 | Mac 공통 suite의 파일 경쟁·publication·repair 시험 PASS. Seatbelt Worker의 private state 생성 결함(EPERM)을 수리했고 실제 Worker 확인은 gate 결과 대기 |
+| P3 | Darwin execution journal·recovery·Society fence/scope 소유 12/12, Broker drain·정리 결함 수리 후 실제 Broker ready·정상 종료 PASS. populated scope 종료 1건은 원인 후보 수리 후 재확인 대기 |
+| P4 | Worker gate가 처음 실제 실행됨(extension load 실패 수리). candidate/quarantine root 시험은 공통 suite PASS. 정상 도구·금지 효과 반례의 실제 판정은 미완 |
+| P5 | Restic을 image 검증 Darwin job scope로 이전(실제 판정 대기). credential/Keychain helper 시험은 공통 suite PASS. 독립 설치는 `@oma/git` 시간 제한만 남음 |
+| P6 | 새 Society→Broker ready·정상 종료, Personal 시작, 실제 Host PTY 실행이 세 Mac에서 진행. Principal engine의 Broker 호출은 Host attestation으로 연결(실제 왕복 판정 대기) |
+| P7 | 미착수. 세 gate의 공식 판정과 최종 대조가 남음 |
+
 P1의 독립 후보는 필요한 순서로 검증하고, 이미 근거가 확보된 P2 작업은 진행할 수 있다. 다만 공통화·시험 개수가 늘어난 것을 핵심 gate 해결로 계산하지 않는다. 최종 인도는 모든 사용자 기능, affected caller/test/docs, clean cutover, 실제 실행 proof를 포함한다. work branch만 commit/push하며 merge·deploy하지 않는다.
 
 ## 14. 다음 모델 인계

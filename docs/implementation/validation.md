@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `74f1ace8fa948312cbeabd163c6d792703f6807d78180b414968e80464dabd4a` (15949 files).
+verification input digest `98c41ed0e5759d6d8585c8d54f7aa0bf307465e3463e9bf417d11f72e5ff2c92` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4733,3 +4733,7 @@ SOURCE121 `4effdae768d`, Native42171221927(SOURCE122 push로 일부 취소). Soc
 
 SOURCE122(`f842ebc4792`, 일부 취소)는 세 Mac Society 12/12다. 제품 step은 당시의 Restic 설치 실패로 중단됐다. Mac26 독립 설치는 `@oma/git` 1/27이 isolated smoke 30초 제한에서 ETIMEDOUT이었다. 일괄 차단 제거 뒤 context preparation과 실제 `git fsck`가 Darwin launchd job·Seatbelt로 실행되기 때문이며, Darwin에서만 제한을 180초로 늘린다.
 Darwin `ResticProcess`는 `/dev/fd` exec 대신 `launchDarwinJobScope`로 실행한다. 고정 Restic `binarySha256`을 main image 기대 digest로 넘기고 job helper가 생성 전 선택한 bytes의 CodeDirectory와 실제 mapped image를 대조한 뒤 release한다. cwd는 held directory, password는 stdin FD, slot 3–7은 Linux와 같다. 설치기의 설치 후 확인도 같은 경로로 `restic version`을 실행한다. Linux FD exec는 그대로다. 고정 Restic Darwin binary의 CodeDirectory 유무와 실제 backup/verify/restore는 다음 Mac 실행이 판정한다.
+
+### SOURCE125 — 고정 Restic Darwin binary의 서명 확인
+
+고정 Restic 0.19.1 Darwin archive를 내려받아 checksum을 확인하고 공통 Mach-O parser로 대조했다. arm64 binary는 ad-hoc CodeDirectory(`6f23d5d672ad8600f5867ae25464f992835d35db`)를 가지므로 image 검증 job scope로 결박할 수 있다. **x64 binary는 서명이 없어** exact image 결박이 불가능하다. pathname exec로 낮추지 않고 x64에서는 Restic 효과만 `selected image has no supported bounded Mach-O code signature`로 거절하고 원래 작업공간을 유지한다(NATIVE-002의 owner별 거절). Intel은 spec상 호환성 관측 대상이다. Darwin storage step은 ARM64 runner에서만 실행하고, 제품 경로 004는 x64에서 이 거절과 작업공간 보존을 확인한다. Restic 거절이 내부 `ExecutionNotStarted` 표지 대신 원래 원인으로 보이게 했다.

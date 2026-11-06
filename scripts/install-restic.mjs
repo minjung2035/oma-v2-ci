@@ -43,6 +43,7 @@ await withAsyncCleanup(async () => {
   fchmodSync(executable, 0o755); fsyncSync(executable);
   if (process.platform === "darwin") {
     // Darwin refuses descriptor exec; the job helper binds the mapped image to the pin.
+    // The pinned x64 release carries no code signature, so it cannot be bound and is refused.
     const { verifyInstalledDarwinRestic } = await import("@oma/process/restic");
     console.log((await verifyInstalledDarwinRestic(target, executable)).trim());
   } else {

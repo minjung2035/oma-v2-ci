@@ -112,6 +112,13 @@ test('004. A Darwin Society is archived with the pinned Restic and its Broker re
  await boot('first Broker readiness');
  await until(()=>owned(base).length===0,30000,()=>'first Broker residue: '+owned(base).join('\n'));
  const archived=spawnSync(process.execPath,[entry('oma'),'archive','--society',society],{cwd:project,env,encoding:'utf8',timeout:300000});
+ if(process.arch==='x64'){
+  // The pinned x64 Restic is unsigned: its image cannot be bound, so archive refuses and keeps the workspace.
+  assert.notEqual(archived.status,0,archived.stderr);assert.match(archived.stderr,/no supported bounded Mach-O code signature/,archived.stderr);
+  assert.doesNotMatch(archived.stderr,/Session workspace archived/,archived.stderr);
+  const kept=await boot('Broker after refused archive');assert.doesNotMatch(kept,/Restoring archived/,kept);
+  await until(()=>owned(base).length===0,30000,()=>'Broker residue: '+owned(base).join('\n'));return;
+ }
  assert.equal(archived.status,0,archived.stderr);assert.match(archived.stderr,/Session workspace archived/,archived.stderr);
  const again=spawnSync(process.execPath,[entry('oma'),'archive','--society',society],{cwd:project,env,encoding:'utf8',timeout:120000});
  assert.equal(again.status,0,again.stderr);assert.match(again.stderr,/already archived/,again.stderr);

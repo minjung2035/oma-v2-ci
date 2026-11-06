@@ -202,7 +202,8 @@ jobs:
           if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi
       - name: Back up, verify and restore real Society storage with the pinned Restic on Darwin
         id: darwin_storage
-        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        # The pinned x64 Restic is unsigned and is refused on Darwin; product test 004 qualifies that refusal.
+        if: ${{ !cancelled() && runner.os == 'macOS' && runner.arch == 'ARM64' && steps.native_build.outcome == 'success' }}
         timeout-minutes: 10
         run: |
           mkdir -p .scratch/native-runtime

@@ -13,7 +13,7 @@ import { inheritedDescriptorPath } from "@oma/native/descriptor-path";
 import { bundledJobHelper } from "@oma/native/darwin-job-launch";
 import { resticReleaseFor } from "@oma/domain/deployment";
 import { launchDarwinJobScope } from "./darwin-execution.js";
-import type { CommandSpec } from "@oma/domain/process-command";
+import { ExecutionNotStarted, type CommandSpec } from "@oma/domain/process-command";
 
 export function requireResticSuccess(result: ProcessObservation): string {
   if (result.kind !== "exited" || result.exitCode !== 0)
@@ -43,7 +43,8 @@ async function runDarwinRestic(executable: string, command: Omit<CommandSpec, "e
     const scope = await launchDarwinJobScope({ ...command, executable } as CommandSpec, {
       files: slots.map((fd, index) => ({ target: index + 3, fd })), ...(fence === undefined ? {} : { cooperationFd: fence }), directoryFd: directory,
       imageDigests: { helper, images: [pin.binarySha256] },
-      ...(signal === undefined ? {} : { signal }), ...(stdoutSink === undefined ? {} : { stdoutSink }) });
+      ...(signal === undefined ? {} : { signal }), ...(stdoutSink === undefined ? {} : { stdoutSink }) })
+      .catch(error => { throw error instanceof ExecutionNotStarted && error.cause !== undefined ? error.cause : error; });
     try {
       await scope.prepared;
       scope.release();
