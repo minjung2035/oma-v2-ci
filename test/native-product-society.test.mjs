@@ -207,3 +207,26 @@ test('007. Human CLI commands on Darwin: the package store lists and reboot reco
  assert.notEqual(recovery.status,0);assert.match(recovery.stderr,/recovered automatically when the Society opens/,recovery.stderr);
  assert.equal(existsSync(join(base,'data','oma','demo')),false,'the refusal creates no Society state');
 });
+
+test('008. The real Host restarts its Broker child after a SIGKILL and still ends everything on Ctrl-D',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-restart-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,steps:[{wait:480},{write:hex('\x04'),wait:30}]};
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),PI_OFFLINE:'1',TERM:'xterm-256color'}});
+ let stdout='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',()=>{});
+ const ended=new Promise(resolve=>child.once('exit',code=>resolve(code)));
+ // The Broker child of this Host: the product's own broker entry under this state root.
+ const brokers=()=>owned(base).filter(line=>line.includes(entry('broker'))).map(line=>Number(line.trim().split(/\s+/)[0]));
+ const storeOpen=()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).some(name=>existsSync(join(data,name,'runtime.sqlite')));}catch{return false;}};
+ const first=await until(()=>storeOpen()&&brokers()[0],300000,()=>'first Broker generation: '+owned(base).join('\n'));
+ process.kill(first,'SIGKILL');
+ const second=await until(()=>brokers().find(pid=>pid!==first),240000,()=>'no replacement Broker after SIGKILL: '+owned(base).join('\n'));
+ assert.notEqual(second,first);
+ const status=await ended,terminal=JSON.parse(stdout||'{}');
+ const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').slice(-3000);
+ assert.equal(status,0,screen);assert.equal(terminal.ready,true,screen);assert.equal(terminal.code,0,screen);
+ await until(()=>owned(base).length===0,60000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
+});
