@@ -16,6 +16,12 @@ import { tryHoldSociety } from "#oma-test/app/runtime/society-lease";
 import { digestCacheTrees } from "@oma/storage/cache-trees";
 
 const tool = process.env.OMA_RESTIC_COMMAND ?? managedResticPath();
+/** Whether a held descriptor is the directory at `path`, by inode rather than a
+ * Linux /proc link (Darwin has none). */
+const heldIs = (fd, path) => { try { const held = fs.fstatSync(fd), named = lstatSync(path); return held.dev === named.dev && held.ino === named.ino; } catch { return false; } };
+const setExtendedAttribute = file => process.platform === "darwin"
+  ? execFileSync("/usr/bin/xattr", ["-w", "oma-test", "preserve", file])
+  : execFileSync("python3", ["-c", "import os,sys; os.setxattr(sys.argv[1], 'user.oma-test', b'preserve')", file]);
 function fixture() {
   assert.ok(tool && existsSync(tool), "Install the pinned host dependency: npm run setup:storage");
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-session-storage-"))), project = join(root, "project");
@@ -156,8 +162,8 @@ test("007. Failure after cold commit and partial reclamation recovers the exact 
     const a = f.society("first"), before = await digestCacheTrees(a.stateRoot, a.roots);
     let injected = false;
     fs.fsyncSync = fd => {
-      const path = fs.readlinkSync(`/proc/self/fd/${fd}`);
-      if (path === join(a.stateRoot, "repos") && !injected && readdirSync(path).length === 0) {
+      const path = join(a.stateRoot, "repos");
+      if (heldIs(fd, path) && !injected && readdirSync(path).length === 0) {
         injected = true; throw Object.assign(Error("injected reclaim failure"), { code: "EIO" });
       }
       original(fd);
@@ -182,9 +188,8 @@ test("008. Interrupted publication keeps cold selection and recovers without rep
     fs.fsyncSync = function(fd) {
       // renameat now publishes through held parents. Fail the source-parent
       // flush after staging is visible, while cold selection still owns retry.
-      const parent = readlinkSync(`/proc/self/fd/${fd}`);
-      if (parent.startsWith(`${a.stateRoot}/.session-storage-stage-`) && parent.endsWith("/restored") &&
-          existsSync(join(a.stateRoot, "staging")) && !injected) {
+      const restored = readdirSync(a.stateRoot).filter(name => name.startsWith(".session-storage-stage-")).map(name => join(a.stateRoot, name, "restored"));
+      if (restored.some(parent => heldIs(fd, parent)) && existsSync(join(a.stateRoot, "staging")) && !injected) {
         injected = true; throw Object.assign(Error("injected restore publication failure"), { code: "EIO" });
       }
       return original(fd);
@@ -205,7 +210,7 @@ test("009. Unreadable files and extended attributes retain the complete original
     const a = f.society("first"), file = join(a.workspace, "ignored/secret");
     chmodSync(file, 0); await assert.rejects(a.storage.archive(a.residents));
     assert.equal(lstatSync(file).mode & 0o777, 0); chmodSync(file, 0o600);
-    execFileSync("python3", ["-c", "import os,sys; os.setxattr(sys.argv[1], 'user.oma-test', b'preserve')", file]);
+    setExtendedAttribute(file);
     await assert.rejects(a.storage.archive(a.residents), /unpreserved metadata/);
     assert.equal(readFileSync(file, "utf8"), "ignored private bytes\n");
     assert.equal(selection(a).phase, "hot");
@@ -262,9 +267,11 @@ test("013. Default hot close/resume reads no payload, hashes no trees and starts
   try {
     const a=f.society("hot"); writeFileSync(join(a.workspace,"ignored/large"),Buffer.alloc(32*1024*1024,42));
     const before=await digestCacheTrees(a.stateRoot,a.roots);let payloadReads=0;
+    // Payload identity by inode (Darwin has no /proc fd links): every digested file and the DB.
+    const payload=new Set([...before.metadata.values()].filter(entry=>entry.type==="file").map(entry=>String(entry.sourceInode)));
+    payload.add(String(lstatSync(join(a.stateRoot,"runtime.sqlite")).ino));
     fs.readSync=(fd,...args)=>{
-      const path=readlinkSync(`/proc/self/fd/${fd}`);
-      if(path===join(a.stateRoot,"runtime.sqlite") || a.roots.some(root=>path.startsWith(join(a.stateRoot,root)+"/"))) {payloadReads++;throw Error("hot path must not read payload");}
+      if(payload.has(String(fs.fstatSync(fd).ino))) {payloadReads++;throw Error("hot path must not read payload");}
       return original(fd,...args);
     };syncBuiltinESMExports();
     await a.storage.close(a.residents);await a.storage.restore();
