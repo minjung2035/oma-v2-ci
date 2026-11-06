@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a39332be0a73cf0300b494b3a6273d413517e895481cde7aa5fb8ee54f2d9668` (15950 files).
+verification input digest `43fd52a61ffde582b8fa7d1888deea2e210b56bf3a8fa7dcabd86648580611aa` (15951 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4807,3 +4807,9 @@ SOURCE133 `885bfed390b`, Native42218179357. Ubuntu SUCCESS. Mac26 제품 경로 
 - 006: Broker stack은 `context effect or observation failed`(git context 게시의 accepted 실패)였으나 그 owner가 원래 오류를 버려 근본 원인이 없었다. 원래 오류를 cause로 보존하고 Broker 진단은 cause 사슬 전체를 출력한다.
 - 009: GOAL 게시가 실패해 seed Worker가 활성화되지 않았다(Worker 요청 0). 006에 종속된다.
 - 005: 정리 실패는 writer가 아니라 제품이 user immutable flag로 봉인한 private runtime generation이었다(다음 시작이 회수). 시험 root 정리가 flag를 먼저 해제한다.
+
+### SOURCE134 실제 결과와 SOURCE135 수리 — Darwin pinned entry reopen
+
+SOURCE134 `200237cb98d`, Native42225429924. Ubuntu SUCCESS. **Mac26 제품 경로 7/9**(005 정리 수리 확인). 006의 cause 사슬이 근본 원인을 보였다: GOAL 게시 뒤 mail fanout이 `reopenPinned`에서 실패해 `mail fanout is not fully materialized`였다.
+Darwin pin은 권한 독립 O_PATH가 없어 O_EVTONLY(event-only) descriptor이고, 기존 Darwin reopen은 `/dev/fd/N`을 열었다. Darwin의 `/dev/fd`는 같은 open description을 복제할 뿐이라 event-only pin에서 read/write 접근을 얻지 못한다(§6.1의 duplicate 반례와 같은 성질). 따라서 기존 inode에 append하는 owned file(mail fanout·journal·log 등)의 Darwin 경로가 동작하지 않았다.
+SOURCE135는 Darwin에서 pin이 가리키는 inode의 현재 경로를 `fcntl(F_GETPATH)`로 얻어 요청 flag와 `O_NOFOLLOW_ANY`로 다시 열고, 결과가 pin과 같은 dev/ino일 때만 반환한다. 다른 inode면 STORE_CORRUPT로 닫는다. Linux `/proc/self/fd` reopen은 그대로다. `native-darwin-reopen`001이 append·독립 read cursor·이름 변경 뒤 같은 inode 도달을 고정한다. 009(Worker submit)는 006의 GOAL 게시에 종속된다. status view 게시 실패는 하위 원인 전체를 기록하도록 했다.

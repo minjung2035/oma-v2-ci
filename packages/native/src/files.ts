@@ -52,6 +52,7 @@ function syscalls() {
   return native;
 }
 let darwinOpen: ((directory: number, path: string, flags: number, type: string, mode: number) => number) | undefined;
+let darwinControl: ((fd: number, command: number, type: string, value: Buffer) => number) | undefined;
 function checked(result: number): number {
   if (result >= 0) return result;
   const value = errno();
@@ -203,8 +204,16 @@ export function pinBeneath(directory: number, path: string, directoryOnly = fals
 export function reopenPinned(pin: number, flags: number): number {
   if (!Number.isSafeInteger(pin) || pin < 0) throw new TypeError("invalid entry pin");
   if (process.platform === "darwin") {
-    const expected = fstatSync(pin, { bigint: true });
-    const result = openSync(`/dev/fd/${pin}`, flags);
+    // A Darwin pin is event-only, and /dev/fd only duplicates that description,
+    // so it cannot gain read or write access. Reopen the pinned inode's own
+    // current path without following any link, then require the same inode.
+    const expected = fstatSync(pin, { bigint: true }), named = Buffer.alloc(1024);
+    darwinControl ??= load(null).func("int fcntl(int fd, int command, ...)");
+    if (darwinControl(pin, 50 /* F_GETPATH */, "void *", named) !== 0) checked(-1);
+    const end = named.indexOf(0), path = named.subarray(0, end < 0 ? named.length : end).toString("utf8");
+    if (!path.startsWith("/")) throw new StoreError("STORE_CORRUPT", "pinned entry has no observable path");
+    darwinOpen ??= load(null).func("int openat(int directory, const char *path, int flags, ...)");
+    const result = checked(darwinOpen(-2 /* AT_FDCWD */, path, (flags & ~constants.O_NOFOLLOW) | 0x01000000 /* O_CLOEXEC */ | 0x20000000 /* O_NOFOLLOW_ANY */, "unsigned int", 0));
     const actual = fstatSync(result, { bigint: true });
     if (actual.dev !== expected.dev || actual.ino !== expected.ino)
       return withCleanup(() => { throw new StoreError("STORE_CORRUPT", "reopened entry is not the pinned inode"); }, () => closeSync(result));
