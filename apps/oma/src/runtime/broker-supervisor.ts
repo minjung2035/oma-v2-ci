@@ -34,7 +34,6 @@ import { RestartPolicy } from "@oma/process/restart-policy";
  * stopped by then.
  */
 import type { Socket } from "node:net";
-import { endpointListening } from "@oma/client/connection";
 import { join } from "node:path";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD, spawnSupervisedService, type ChildProcess } from "@oma/process/async";
 import { SOCIETY_OWNED_EXIT } from "@oma/native/process-lock";
@@ -43,7 +42,7 @@ import { HOST_CHANNEL_ENV, HOST_CHANNEL_FD, HostChannelReader, encodeHostMessage
 import { pinDarwinPrivateChild, type PrivateParentPin } from "@oma/native/private-parent";
 import { socketDescriptor } from "@oma/native/linux";
 import { StoreError } from "@oma/domain/errors";
-import { createBrokerChannel } from "./broker-channel.js";
+import { brokerEndpointListening, createBrokerChannel } from "./broker-channel.js";
 import type { BrokerChannel, ChannelLimits } from "@oma/client/channel";
 
 export type BrokerState =
@@ -89,7 +88,7 @@ export interface BrokerHandle {
 /** Endpoint absence is not broker death; the society lease still owns
  * admission. An inconclusive observation never authorizes a new spawn. */
 export function brokerListening(runRoot: string, timeoutMs = 500): Promise<boolean> {
-  return endpointListening(join(runRoot, "admin.sock"), timeoutMs);
+  return brokerEndpointListening(join(runRoot, "admin.sock"), timeoutMs);
 }
 
 export interface SuperviseOptions {

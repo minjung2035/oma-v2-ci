@@ -44,6 +44,22 @@ export function dialOwnedChildMachChannel(path: string, handshakeSeconds: number
   const name = machRendezvousName(path); duration(handshakeSeconds);
   return dialExpectedMachChannel(path, handshakeSeconds, borrowDarwinPrivateChild(child), () => lookupMachService(name));
 }
+/** Whether a live owner currently holds this endpoint's rendezvous. Absence
+ * is BOOTSTRAP_UNKNOWN_SERVICE or a dead name; anything else is unknown and
+ * refuses, never "nothing is listening". Grants no peer or role authority. */
+export function machEndpointListening(path: string): boolean {
+  let service: MachSendRight;
+  try { service = lookupMachService(machRendezvousName(path)); }
+  catch (error) {
+    if ((error as { machCode?: number }).machCode === 1102 /* BOOTSTRAP_UNKNOWN_SERVICE */) return false;
+    throw unavailable("Mach endpoint presence could not be observed");
+  }
+  return withCleanup(() => {
+    const state = service.destination();
+    if (state === "unknown") throw unavailable("Mach endpoint presence could not be observed");
+    return state === "present";
+  }, () => service.close());
+}
 function dialExpectedMachChannel(path: string, handshakeSeconds: number,
   source: { readonly token: readonly number[]; alive(): boolean; close(): void },
   acquire: () => MachSendRight): { readonly socket: Duplex; readonly ready: Promise<void> } {

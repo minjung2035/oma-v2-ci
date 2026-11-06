@@ -261,5 +261,10 @@ test('012. A Host dials its own Broker child over Mach by private child identity
  assert.deepEqual(result.answer,{request:'ping',peer:result.host,broker:result.broker},'the Broker served exactly the kernel-identified Host');
  assert.equal(result.afterReturn,'AUTH_FAILED','a returned child identity cannot open another connection');
  assert.deepEqual(result.brokerExit,{code:0,signal:null});
- host.disconnect();assert.deepEqual(await Promise.race([closed,delay(10000).then(()=>'host did not exit')]),{code:0,signal:null},stderr);
+ // Process end is 'exit'; 'close' also waits for every holder of the stdio pipes.
+ const exited=host.exitCode!==null||host.signalCode!==null?Promise.resolve({code:host.exitCode,signal:host.signalCode}):new Promise(resolve=>host.once('exit',(code,signal)=>resolve({code,signal})));
+ host.disconnect();assert.deepEqual(await Promise.race([exited,delay(10000).then(()=>'host did not exit')]),{code:0,signal:null},stderr+' stages: '+trail());
+ const fixture=fileURLToPath(new URL('./fixtures/darwin-owned-broker-rpc.mjs',import.meta.url)),limit=performance.now()+10000;let left;
+ while((left=spawnSync('/bin/ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(fixture)&&line.includes(base))).length&&performance.now()<limit)await delay(50);
+ assert.deepEqual(left,[],'no fixture Host or Broker process remains');
 });

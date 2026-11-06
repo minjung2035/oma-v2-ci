@@ -23,13 +23,12 @@ async function world() {
 "@oma/domain/deployment": deploymentMeaning,
 
     'node:path': { join: (...parts) => parts.join('/') },
-    '@oma/client/connection': { endpointListening: async () => false },
     "@oma/native/process-lock": { SOCIETY_OWNED_EXIT: 73 },
     "@oma/domain/errors": { StoreError },
     // Darwin-only identity acquisition; reaching it on this platform is a failure.
     "@oma/native/private-parent": { pinDarwinPrivateChild() { throw new Error('Darwin child pin used off Darwin'); } },
     "@oma/native/linux": { socketDescriptor() { throw new Error('Darwin channel descriptor read off Darwin'); } },
-    './broker-channel.js': { createBrokerChannel: (limits, peer) => ({ limits, peer }) },
+    './broker-channel.js': { createBrokerChannel: (limits, peer) => ({ limits, peer }), brokerEndpointListening: async () => false },
     './assets.js': { launchLocationArgv: () => [] },
     '@oma/protocol/host-channel': {
       HOST_CHANNEL_ENV: 'CHANNEL', HOST_CHANNEL_FD: 3,

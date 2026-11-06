@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `1293e987e41b5caf4056a2359451ba191d0cb6598b0ecf62824d34cdadc286b1` (15949 files).
+verification input digest `0b253a53e2cba3b1cb7e304ff2091e513e654af8c11a811d10a44c5b64780c90` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4660,3 +4660,9 @@ Darwin 제품 경로 시험 `native-product-society`(새 `oma` Society→Broker 
 SOURCE110 `ff3c8c523e0`, Native42146331692. Ubuntu job 전체 PASS(공통 runtime·실제 Linux scope/crash/Git sandbox·durable 회귀 포함)로 DR74 변경의 Linux 회귀가 없다.
 Mac26·Mac26 Intel·Mac15 모두 Society 001–011 PASS다. 012는 Mach 왕복·비자식 pin 거절·반환 identity의 AUTH_FAILED·Broker 자식 정상 종료까지 **모두 통과**했다. 실패는 Host fixture가 모든 owner를 반환한 뒤에도 종료하지 않은 것 하나이며, SOURCE109의 25분 정지도 이 원인이다. 남은 handle을 단계 기록에 남기도록 했다.
 제품 경로: **Personal 시작은 실제 macOS에서 PASS**(birth 게시·SIGTERM 뒤 무잔존)다. 새 Society는 60초 안에 birth+configuration이 관측되지 않았고 stderr는 비어 있었다. SOURCE111은 birth와 configuration을 나눠 기다리고 시간 초과 시 file tree·process·terminal tail을 보존한다.
+
+### SOURCE111 실제 Mac 결과와 SOURCE112 수리
+
+SOURCE111 `61201d0a8ef`, Native42148722489. Mac26 Society 001–011 PASS, 012는 다시 기능 단언 전부 PASS였다. 결과 직후 Host의 활성 자원은 자기 stderr·IPC·회수 중인 child뿐이었고 2초 뒤 기록이 없어 Host process 자체는 끝났다. 실패는 stdio pipe까지 기다리는 `close` 판정이었다. SOURCE112는 `exit`로 Host 종료를 판정하고 fixture process 무잔존을 별도로 확인한다.
+제품 경로: Personal PASS 재현. 새 Society는 Host가 `the connection could not be opened`로 즉시 종료했다. bootstrap의 기존 Broker 탐지가 Darwin에서도 Unix socket connect를 사용했고, Darwin Broker는 Mach rendezvous만 쓰므로 이 관측은 의미가 없으며 긴 TMPDIR 경로에서는 ENOENT가 아닌 오류로 실패했다. 실제 제품 결함이다.
+SOURCE112는 Darwin에서 같은 경로의 Mach rendezvous를 lookup한다. UNKNOWN_SERVICE·dead name은 부재, live send right는 존재, 그 밖의 관측 실패는 BROKER_UNAVAILABLE로 거절한다(부재로 읽지 않음). Linux는 기존 socket 관측을 유지한다.
