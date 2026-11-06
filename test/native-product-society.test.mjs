@@ -41,7 +41,8 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  await until(()=>owned(base).length===0,30000,'Host and its children ended: '+owned(base).join('\n'));
  // 2. The real Broker entry boots that Society through the Darwin composition.
  const society=birth.id,runRoot=join(base,'run','oma',society);
- const broker=start([entry('broker'),'--society',society,'--state-root',root,'--run-root',runRoot,'--config',join(root,'config.json')],project,env);running.push(broker);
+ // The Host's own argv (broker-supervisor): the bound project is prepared by this Broker.
+ const broker=start([entry('broker'),'--society',society,'--state-root',root,'--run-root',runRoot,'--config',join(root,'config.json'),'--project-dir',project],project,env);running.push(broker);
  await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,180000,()=>'Broker readiness '+evidence(base,broker));
  assert.match(broker.stderr(),/broker ready/,broker.stderr());
  assert.deepEqual(await stop(broker),{code:0,signal:null},broker.stderr());

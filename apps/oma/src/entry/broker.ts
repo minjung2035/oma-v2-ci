@@ -303,7 +303,13 @@ async function main(): Promise<void> {
             worldDir: join(stateRoot, "world"), society,
             ownerSignal: preparationAbort.signal,
             checkNode: cfg.installation.node, checkAssetsDir: libdir, };
-        if (developerTools !== undefined) canonicalDirectory = openDirectory(gitPaths.projectGit);
+        if (developerTools !== undefined) {
+            try { canonicalDirectory = openDirectory(gitPaths.projectGit); }
+            catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+                throw new StoreError("BROKER_UNAVAILABLE", "the Society's project repository is not prepared; start it through oma or with --project-dir", { cause: error });
+            }
+        }
         const canonicalExecution = developerTools === undefined || canonicalDirectory === undefined ? undefined :
             { executable: developerTools.git, directories: new Map([[gitPaths.projectGit, canonicalDirectory]]),
                 directory(repository: string): number | undefined {
