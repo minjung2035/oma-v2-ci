@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `f5aa14877a463edeb264127476215b71a5fe4fb3c8ba63ba3992f63e9806fc67` (15949 files).
+verification input digest `51d18a08437b48ba356f8a165eb14ce7b1bf05d9ff884f507763268c85e438f6` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4673,3 +4673,7 @@ SOURCE112 `5518e0e9899`, Native42151174757. Mac26 Society **12/12 PASS**(Host→
 새 Society는 이번에 실제 `oma`가 birth·configuration을 게시하고 SIGTERM으로 정상 종료했다. 실제 Broker는 fence·execution recovery를 지나 runtime generation에서 `UNSUPPORTED_PROFILE: runtime generation requires canonical roots and a trusted digest`로 거절했다.
 원인은 owner 간 형식 불일치다. Society bootstrap은 `installation.libdir`을 `${libdir}/`로 쓰고 config owner도 이를 허용하지만, Darwin runtime generation과 Mac Git sandbox는 끝 slash 없는 canonical root만 받는다. 유효한 설치가 항상 거절되는 제품 결함이다.
 SOURCE113은 config bytes를 바꾸지 않고, Broker 조립에서 canonical root를 한 번 만들어 Git preparation·candidate·quarantine에 넘기며 runtime generation도 같은 정규화를 한다.
+
+### SOURCE113 실제 Mac 결과와 SOURCE114 진단
+
+SOURCE113 `028a6f10b38`, Native42152557290. Mac26 Society 12/12·Personal PASS 재현. 새 Society의 실제 Broker는 runtime generation을 통과했고(약50초) 이후 `contained filesystem operation failed: ENOENT`로 시작에 실패했다. 이 내부 오류는 위치 정보가 없었다. SOURCE114는 StoreError가 아닌 예기치 않은 Broker 시작 오류에 한해 stack을 Broker stderr에 남긴다.

@@ -395,11 +395,11 @@ async function main(): Promise<void> {
             await stop(0);
             return;
         }
-        console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
+        console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.stack ?? error.message : String(error));
         await stop(1);
     }
 }
 void main().catch(error => {
-    console.error("broker initialization failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
+    console.error("broker initialization failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.stack ?? error.message : String(error));
     process.exitCode = 1;
 });
