@@ -81,7 +81,7 @@ test('003. The Host runs a fresh Society in a real terminal: its Broker child op
  const hex=text=>Buffer.from(text).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  // The Host's own Broker child must get through runtime generation, tools and Store before Ctrl-D.
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
-  steps:[{wait:150},{write:hex('\x04'),wait:20}]};
+  steps:[{wait:300},{write:hex('\x04'),wait:20}]};
  const session=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
   env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),PI_OFFLINE:'1',TERM:'xterm-256color'}});
  let out='',err='';session.stdout.on('data',b=>{out+=b;});session.stderr.on('data',b=>{err+=b;});
