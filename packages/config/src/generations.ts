@@ -318,12 +318,16 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
         }
         for (const directory of GENERATION_DIRECTORIES) { fchmodSync(sub[directory]!, 0o500); fsyncHeldDir(sub[directory]!, join(staging, directory), faults); }
       }, () => cleanupAll(Object.values(sub).map(fd => () => closeSync(fd))));
-      fchmodSync(tree, 0o500);
       fsyncHeldDir(tree, staging, faults);
+      faultAt(faults, "derived-rename", "before", target);
+      // Renaming a directory updates its own `..` entry: Darwin requires write
+      // permission on the moved directory itself, so the held tree is sealed
+      // read-only only after it is in place (its contents are already sealed).
+      renameAt(parent, stagingName, parent, name);
+      faultAt(faults, "derived-rename", "after-visible", target);
+      fchmodSync(tree, 0o500);
+      fsyncHeldDir(tree, target, faults);
     }, () => closeSync(tree));
-    faultAt(faults, "derived-rename", "before", target);
-    renameAt(parent, stagingName, parent, name);
-    faultAt(faults, "derived-rename", "after-visible", target);
     fsyncHeldDir(parent, generations, faults);
   });
 }

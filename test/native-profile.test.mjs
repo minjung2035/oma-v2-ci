@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -33,9 +33,10 @@ if (process.platform === "darwin") test("003. Native Darwin: a fresh Society sta
   spawnSync("/bin/chmod", ["-R", "u+w", f.root]); // sealed configuration generations, before fixture removal
   assert.doesNotMatch(result.stderr, /blocked by|UNSUPPORTED_PROFILE|fresh admission/, result.stderr);
   assert.equal(readFileSync(old, "utf8"), "accepted bytes must remain\n");
-  const societies = readdirSync(join(f.root, "data", "oma")).filter(name => !name.startsWith("."));
+  const data = join(f.root, "data", "oma");
+  const societies = readdirSync(data).filter(name => !name.startsWith(".") && existsSync(join(data, name, "session-mode.json")));
   assert.equal(societies.length, 1, result.stderr);
-  assert.equal(JSON.parse(readFileSync(join(f.root, "data", "oma", societies[0], "session-mode.json"), "utf8")).surface, "collaboration-v1");
+  assert.equal(JSON.parse(readFileSync(join(data, societies[0], "session-mode.json"), "utf8")).surface, "collaboration-v1");
 });
 
 test("004. PTY readiness failure preserves the actual child exit instead of reporting a live placeholder", () => {

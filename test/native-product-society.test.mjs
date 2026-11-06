@@ -24,7 +24,7 @@ const evidence=(base,owner)=>JSON.stringify({files:spawnSync('/usr/bin/find',[ba
  stderr:owner.stderr().slice(-4096),stdout:owner.stdout().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-4096)},null,1);
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
 
-test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:240000},async t=>{
+test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-product-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
@@ -43,7 +43,7 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  const society=birth.id,runRoot=join(base,'run','oma',society);
  // The Host's own argv (broker-supervisor): the bound project is prepared by this Broker.
  const broker=start([entry('broker'),'--society',society,'--state-root',root,'--run-root',runRoot,'--config',join(root,'config.json'),'--project-dir',project],project,env);running.push(broker);
- await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,180000,()=>'Broker readiness '+evidence(base,broker));
+ await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,300000,()=>'Broker readiness '+evidence(base,broker));
  assert.match(broker.stderr(),/broker ready/,broker.stderr());
  assert.deepEqual(await stop(broker,90000),{code:0,signal:null},broker.stderr());
  await until(()=>owned(base).length===0,30000,'no Broker descendant remains: '+owned(base).join('\n'));

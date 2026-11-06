@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `9a2062f97b75fef05e29890c8e6dce6e394e0d8fe48e8117f048ee3a6ae524be` (15949 files).
+verification input digest `83cdfefefb3c8362b2205991c93888579789ff3c62b1bc985ccd135d7bb12cfc` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4696,3 +4696,9 @@ SOURCE117은 preparation 경계에서 시작되지 않은 실행을 원래 원�
 
 SOURCE117 `5dab668ef2f`, Native42158577774. **Mac26에서 Society 12/12와 제품 경로 2/2 PASS**다: 실제 `oma`가 새 Society를 만들고, 실제 Broker가 `broker ready`에 도달한 뒤 SIGTERM에 exit0으로 정상 drain하며 잔존 process가 없다. Personal도 PASS다. Mac26 Intel은 `broker ready`까지 도달했으나 drain이 시험의 20초 상한을 넘었다(전체184초, 느린 runner). 제품 grace보다 짧은 시험 상한이므로 90초로 조정한다.
 처음 실행된 Mac26 공통 suite는 466 중 461 PASS·5 FAIL이다. 3개(`mac-worker-plan`005, `native-darwin-recovery`005, `native-profile`003)는 DR74로 폐기한 일괄 차단을 단언하던 시험이며 남은 실제 계약으로 바꾼다: private profile owner 없는 Mac Worker spawn 거절, 기본 Darwin launch의 실제 job scope 실행·journal retire, 새 state root에서 시작하며 기존 VM bytes 보존. `runtime-maintenance`001은 SOURCE117의 typed reason 반환에 맞춘다. `native-darwin-fence`001 ordinary는 첫 실행에서 creator mapped image ESRCH였고 다른 두 mode는 PASS다. 원인 미확인으로 보존하고 재실행에서 확인한다.
+
+### SOURCE118 실제 Mac 결과와 SOURCE119 수리
+
+SOURCE118 `55c8d4469dd`, Native42160212718. Society는 세 Mac 모두 12/12다. Mac26은 제품 경로 2/2·공통 suite 464/466 PASS다.
+**Mac15 제품 결함**: 새 Society Host가 `Cannot read settings: directory-relative operation failed: EACCES`로 종료했다. config generation 게시가 최상위 staging 디렉터리를 0500으로 봉인한 뒤 rename했다. 디렉터리 rename은 자기 `..` 항목을 갱신하므로 Darwin은 이동되는 디렉터리 자체의 쓰기 권한을 요구한다(Mac26에서는 관측되지 않음). SOURCE119는 이미 봉인된 내용은 그대로 두고, 쥐고 있는 최상위 tree fd를 rename 뒤에 0500으로 봉인·flush한다. context snapshot은 이미 같은 순서였다. 검증은 mode를 보지 않으므로 bytes·형식 의미는 같다.
+Intel은 Broker가 `git fsck`를 job scope에서 실행 중일 때 시험의 180초 상한에 걸렸다(SOURCE117에서는 184초 만에 ready). 시험 상한을 300초로, step·job 제한을 그에 맞게 늘린다. `native-profile`003은 Society 수를 birth가 있는 항목으로 센다. `native-darwin-fence`001은 공통 suite에서만 간헐적으로 creator 조회 실패(1102/ESRCH)가 나며 전용 Society step에서는 재현되지 않는다. 원인 미확인으로 보존한다.
