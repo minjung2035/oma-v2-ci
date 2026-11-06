@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `267ac63c5110c057fa8b9529d831425d5409f75588d33fd17c935007b3d1334a` (15950 files).
+verification input digest `c66d24239c21128f354342ac1b032b689185d2b4891101c2c38395c622458bd6` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4789,3 +4789,7 @@ NATIVE-002·spec §4.3·§5·§6의 요구를 실제 Mac 근거와 대조한 작
 | G-PROCESS | fork/setsid/close-all-fds·leader/runner/broker/host SIGKILL·PID 재사용·restart에서 전체 후손 종료와 populated/empty/unknown producer | LaunchOnlyOnce+CID scope의 detached 후손·fence FD close·실행 owner 사망·Host SIGKILL 뒤 Society 배제 유지와 전체 scope 사망 뒤 재취득(012까지 세 Mac PASS). 다른 boot의 scope는 positive empty. 정상 Broker drain의 release 전 취소 정산 | Mac15 populated termination 1건 재확인, 실제 Worker/Pi scope의 kill-restart, 제품 경로에서 Broker SIGKILL 뒤 재시작 |
 | G-FILES | directory-relative·no-follow·같은 inode repair·no-replace publish·parent flush·exact executable | Mac 공통 suite 466/466의 파일 경쟁·publication·repair, config generation 봉인 순서 수리, temp root 정규화, Seatbelt Worker private state anchor, image 검증 job scope의 Restic/Node exact image 결박 | StateRoot capture·private work/source fetch의 제품 경로 인수, x64 Restic(무서명) 대안 |
 | G-AUTH | 실제 sender·살아 있는 process·현재 run 소속·기대 Broker·현재 권한 | Host↔자기 Broker child의 private child pin Mach RPC(012), Principal engine의 Host-attested Broker identity로 실제 Broker 호출·ADDRESS_NOT_FOUND(005 본문), Worker inherited peer endpoint의 실제 Worker 시작 | Worker 금지 효과 반례(worker-tools), restart·sleep 뒤 capability, release 서명 Keychain/SIP |
+
+### 로컬 Linux 전체 회귀 — SOURCE132 입력
+
+이 개발 host의 전체 local suite는 170 실패로 SOURCE110 기준선과 같은 수·원인 분류(namespace launcher ENOENT125·bwrap8·cloc5와 그 broker 경로 파생)다. SOURCE110 이후의 macOS 수리(temp root 정규화·private state anchor·preparation 정산·Restic Darwin 경로·engine 시작 진단·Broker 탐지·Host attestation 등)로 늘어난 Linux 실패는 없다. 새로 보인 `verification-policy`020은 이름을 바꾼 `darwin-evidence`006의 lane 요구 문자열 갱신 누락이었고 수리했다. Ubuntu CI job은 matrix의 마지막이라 매 push에 취소되었으므로 먼저 실행하도록 바꿨다.

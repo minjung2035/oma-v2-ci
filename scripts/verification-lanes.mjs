@@ -126,7 +126,7 @@ const definitions = {
       "003. Native darwin: signal observations refuse missing PID, delivery and inherited positive controls",
       "004. Native darwin: launchd observations reject missing image controls, cleanup and live independent jobs",
       "005. Native darwin: launchd scope refuses ambiguous lookup, admission and child cleanup evidence",
-      "006. Native darwin: Personal startup cannot hide a Society gate bypass or a changed saved mode",
+      "006. Native darwin: Personal startup cannot hide a provisioned Society or a changed saved mode",
       "007. Native darwin: suspended image observations require real positive contexts and coherent pre-release validation",
       "008. Native darwin: evidence refuses ",
       "009. Native darwin: failed attempts remain explicit failures, never observations",
