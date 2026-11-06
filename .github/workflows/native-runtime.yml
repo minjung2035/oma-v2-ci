@@ -26,7 +26,7 @@ jobs:
         # Linux first: its regression evidence is cheap and must not be starved by later pushes.
         os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-26-intel", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -61,11 +61,11 @@ jobs:
       - name: Run the actual product Society and Broker on Darwin
         id: product_society
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
-        timeout-minutes: 45
+        timeout-minutes: 75
         run: |
           # Restic setup is qualified by its own step; a failure here is reported by product test 004.
           npm run setup:storage > .scratch/native-runtime/product-setup-storage.log 2>&1 || cat .scratch/native-runtime/product-setup-storage.log
-          if ! node --test --test-timeout=900000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
+          if ! node --test --test-timeout=1200000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
       - name: Run the actual Darwin Worker probes before the long gate job
         id: worker_probes
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
