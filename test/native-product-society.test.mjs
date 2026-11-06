@@ -45,7 +45,7 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  const broker=start([entry('broker'),'--society',society,'--state-root',root,'--run-root',runRoot,'--config',join(root,'config.json'),'--project-dir',project],project,env);running.push(broker);
  await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,180000,()=>'Broker readiness '+evidence(base,broker));
  assert.match(broker.stderr(),/broker ready/,broker.stderr());
- assert.deepEqual(await stop(broker),{code:0,signal:null},broker.stderr());
+ assert.deepEqual(await stop(broker,90000),{code:0,signal:null},broker.stderr());
  await until(()=>owned(base).length===0,30000,'no Broker descendant remains: '+owned(base).join('\n'));
 });
 

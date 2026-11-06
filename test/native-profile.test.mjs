@@ -27,12 +27,15 @@ test("002. Native entry: retired VM commands refuse before any filesystem effect
     assert.deepEqual(readdirSync(f.root), ["project"]);
   }
 });
-if (process.platform === "darwin") test("003. Native Darwin: Society refuses before provisioning and preserves old bytes", t => {
+if (process.platform === "darwin") test("003. Native Darwin: a fresh Society starts in a new state root and preserves old bytes", { timeout: 60000 }, t => {
   const f = fixture(t), old = join(f.root, "old-vm-state"); writeFileSync(old, "accepted bytes must remain\n");
   const result = f.run(["--mode", "society"]);
-  assert.equal(result.status, 4, result.stderr);
+  spawnSync("/bin/chmod", ["-R", "u+w", f.root]); // sealed configuration generations, before fixture removal
+  assert.doesNotMatch(result.stderr, /blocked by|UNSUPPORTED_PROFILE|fresh admission/, result.stderr);
   assert.equal(readFileSync(old, "utf8"), "accepted bytes must remain\n");
-  assert.deepEqual(readdirSync(f.root).sort(), ["old-vm-state", "project"]);
+  const societies = readdirSync(join(f.root, "data", "oma")).filter(name => !name.startsWith("."));
+  assert.equal(societies.length, 1, result.stderr);
+  assert.equal(JSON.parse(readFileSync(join(f.root, "data", "oma", societies[0], "session-mode.json"), "utf8")).surface, "collaboration-v1");
 });
 
 test("004. PTY readiness failure preserves the actual child exit instead of reporting a live placeholder", () => {

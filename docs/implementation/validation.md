@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `175d0c1273d5890e31f54da8dcde21cea4618c9dec234b05822fc7328d59696c` (15949 files).
+verification input digest `9a2062f97b75fef05e29890c8e6dce6e394e0d8fe48e8117f048ee3a6ae524be` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4691,3 +4691,8 @@ ready 직후 SIGTERM에서 초기 reconcile 중이던 작업 1개가 CANCELLED_B
 
 SOURCE116 `8a99d03ae0c`, Native42157006782. stack으로 두 원인을 확인했다. (1) drain이 ExecutionRuntime admission을 닫은 뒤 시작된 preparation은 `ExecutionNotStarted`를 받았고, preparation 계층이 이 내부 표지를 원인(BROKER_UNAVAILABLE)으로 바꾸지 않고 넘겨 reconcile이 INTERNAL_ERROR로 분류했다. (2) coordinator는 release 전 취소를 scope 사망 확인·retire 뒤에만 CANCELLED_BEFORE_COMMIT으로 보고하는데(정리 미확인은 RUN_TERMINATION_UNKNOWN), preparation 계층이 이를 uncertain으로 기록하고 shutdown barrier에 다시 던져 정상 drain을 실패시켰다.
 SOURCE117은 preparation 경계에서 시작되지 않은 실행을 원래 원인으로 돌려주고, coordinator가 정산한 release 전 취소를 정산된 결과로 다룬다. 다른 실패는 기존대로 uncertain·shutdown fence로 남는다. `preparation-port`002·003이 이를 고정한다.
+
+### SOURCE117 실제 Mac 결과 — 새 Society 전체 제품 경로 PASS(Mac26)
+
+SOURCE117 `5dab668ef2f`, Native42158577774. **Mac26에서 Society 12/12와 제품 경로 2/2 PASS**다: 실제 `oma`가 새 Society를 만들고, 실제 Broker가 `broker ready`에 도달한 뒤 SIGTERM에 exit0으로 정상 drain하며 잔존 process가 없다. Personal도 PASS다. Mac26 Intel은 `broker ready`까지 도달했으나 drain이 시험의 20초 상한을 넘었다(전체184초, 느린 runner). 제품 grace보다 짧은 시험 상한이므로 90초로 조정한다.
+처음 실행된 Mac26 공통 suite는 466 중 461 PASS·5 FAIL이다. 3개(`mac-worker-plan`005, `native-darwin-recovery`005, `native-profile`003)는 DR74로 폐기한 일괄 차단을 단언하던 시험이며 남은 실제 계약으로 바꾼다: private profile owner 없는 Mac Worker spawn 거절, 기본 Darwin launch의 실제 job scope 실행·journal retire, 새 state root에서 시작하며 기존 VM bytes 보존. `runtime-maintenance`001은 SOURCE117의 typed reason 반환에 맞춘다. `native-darwin-fence`001 ordinary는 첫 실행에서 creator mapped image ESRCH였고 다른 두 mode는 PASS다. 원인 미확인으로 보존하고 재실행에서 확인한다.

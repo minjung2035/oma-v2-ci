@@ -107,16 +107,17 @@ test("004. Actual opening-only Host crash remains unknown and leaves journal byt
   } finally { journal.close(); }
 });
 
-test("005. Actual application guard retires positive noncreation and preserves unsupported refusal on retry", async t => {
+test("005. The default Darwin launch runs a trusted command in its own job scope and retires the journal", async t => {
   if (process.platform !== "darwin") return assert.throws(currentDarwinAuditToken, { code: "UNSUPPORTED_PROFILE" });
   const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-darwin-guard-")));
   ExecutionJournal.initialize(root); const runtime = new ExecutionRuntime(root);
   t.after(async () => { await runtime.close(); rmSync(root, { recursive: true }); });
-  const command = { executable: process.execPath, argv: ["-e", "require('node:fs').writeFileSync('entered','forbidden')"], env: {}, cwd: root,
+  const command = { executable: process.execPath, argv: ["-e", "process.exit(0)"], env: {}, cwd: root,
     timeoutMs: 1000, stdoutBytes: 0, stderrBytes: 0 };
   for (let attempt = 0; attempt < 2; ++attempt) {
-    await assert.rejects(runtime.run("candidate", command, undefined, () => {}), { code: "UNSUPPORTED_PROFILE" });
-    assert.deepEqual(ExecutionJournal.inspect(root), []); assert.equal(existsSync(join(root, "entered")), false);
+    const result = await runtime.run("candidate", command, undefined, () => {});
+    assert.equal(result.kind, "exited"); assert.equal(result.exitCode, 0, result.stderr.toString());
+    assert.deepEqual(ExecutionJournal.inspect(root), []); assert.equal(runtime.confirmDead("candidate"), true);
   }
 });
 

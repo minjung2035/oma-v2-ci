@@ -9,7 +9,6 @@ import{DARWIN_EXECUTION_JOURNAL_VERSION,EXECUTION_JOURNAL_VERSION}from'@oma/prot
 import{launchDarwinJobScope}from'@oma/process/darwin-execution';
 import{runnerScope}from'@oma/platform-linux/runner-scope';
 import{PreparationExecutor,preparationShutdownBarrier}from'@oma/process/preparation';
-import{ExecutionNotStarted}from'@oma/process/owned-execution';
 import{ExecutionRuntime}from'#oma-test/app/runtime/execution-runtime';
 const deferred=()=>{let resolve;const promise=new Promise(yes=>{resolve=yes;});return{promise,resolve};};
 const command=(root,script)=>{const c={executable:realpathSync(process.execPath),argv:['-e',script],env:{HOME:root,TMPDIR:root},cwd:root,timeoutMs:null,stdoutBytes:32,stderrBytes:4096};return process.platform==='linux'?runnerScope(c):c;};
@@ -29,7 +28,7 @@ test('001. Recovery maintenance refuses a live journal owner and closes every ne
  await assert.rejects(runtime.begin('resident:alice',()=>{authorized=true;return command(root,'');},signal,()=>{},()=>{}),{code:'BROKER_UNAVAILABLE'});
  if(process.platform==='darwin'){
   const executor=new PreparationExecutor();
-  await assert.rejects(executor.run(command(root,'')),e=>e instanceof ExecutionNotStarted&&e.cause?.code==='BROKER_UNAVAILABLE');
+  await assert.rejects(executor.run(command(root,'')),{code:'BROKER_UNAVAILABLE'});
   assert.equal(executor.quiescence,'quiescent');await preparationShutdownBarrier();
  }
  assert.equal(authorized,false);assert.deepEqual(ExecutionJournal.inspect(root),[]);

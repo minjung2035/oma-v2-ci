@@ -58,9 +58,8 @@ test("003. Mac Worker App port refuses selected developer roots overlapping writ
 if(process.platform==='linux')test("004. Linux Worker composition refuses a Mac installation launch",()=>{
   assert.throws(()=>createResidentEngineEffects(tools),{code:'UNSUPPORTED_PROFILE'});
 });
-if(process.platform==='darwin')test("005. Mac Worker product composition refuses spawn while native gates remain open",()=>{
-  assert.throws(()=>residentEngineEffects.sandbox.spawn({command:'/must-not-execute',args:[],cwd:'/tmp',env:{},
-    privateInputs:[{fd:3,bytes:Buffer.from('not an approved live scope')}]}),{code:'UNSUPPORTED_PROFILE'});
+if(process.platform==='darwin')test("005. Mac Worker product composition refuses a spawn with no private profile owner",()=>{
+  assert.throws(()=>residentEngineEffects.sandbox.spawn({command:'/must-not-execute',args:[],cwd:'/tmp',env:{}}),{code:'UNSUPPORTED_PROFILE'});
 });
 
 test("003. Private Node keeps the selected distribution's package managers and fixed preload",()=>{
