@@ -3020,7 +3020,7 @@
   "node:string_decoder": 1,
   "node:timers/promises": 11,
   "node:url": 19,
-  "node:util": 12,
+  "node:util": 14,
   "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,

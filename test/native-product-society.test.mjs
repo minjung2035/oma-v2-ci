@@ -33,6 +33,16 @@ function removeTree(base){
   const left=spawnSync('/usr/bin/find',[base,'-maxdepth','8'],{encoding:'utf8'}).stdout.split('\n').slice(0,60);
   throw new Error(`${error.message}; writers:\n${writers}\nleft:\n${left.join('\n')}`);}
 }
+/** A tool result that names a refusal; a receipt's own `"error":null` is not one. */
+function refused(text){
+ try{const value=JSON.parse(text);return value===null||typeof value!=='object'||value.error!=null||['failed','refused'].includes(value.execution)||value.acceptance==='refused';}
+ catch{return /BROKER_UNAVAILABLE|AUTH_FAILED|UNSUPPORTED_PROFILE|\berror\b|denied|EPERM/i.test(text);}
+}
+/** Every Resident log the Broker kept under this root, newest bytes last: why a Worker run ended. */
+function residentLogs(base){
+ const files=spawnSync('/usr/bin/find',[base,'-path','*/logs/resident/*','-type','f'],{encoding:'utf8'}).stdout.split('\n').filter(Boolean);
+ return files.map(file=>{let bytes='';try{bytes=readFileSync(file,'utf8');}catch(error){bytes=String(error);}return `--- ${file}\n${bytes.slice(-3000)}`;}).join('\n').slice(-12000)||'no Resident log files';
+}
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
 
 test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
@@ -200,8 +210,8 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const principal=provider.seen.filter(seen=>!worker(seen.body)),workers=provider.seen.filter(seen=>worker(seen.body));
  assert.ok(principal.length>=2,`Principal requests ${principal.length}:\n`+screen);
  const goal=toolResults(principal[1].body).at(-1)?.text??'';
- assert.doesNotMatch(goal,/BROKER_UNAVAILABLE|AUTH_FAILED|UNSUPPORTED_PROFILE|error/i,goal+'\n'+screen);
- assert.ok(workers.length>=1,`no seeded Worker reached the model through its relay; goal result: ${goal}\n`+screen);
+ assert.ok(!refused(goal),goal+'\n'+screen);
+ assert.ok(workers.length>=1,`no seeded Worker reached the model through its relay; goal result: ${goal}\n${screen}\nResident logs:\n${residentLogs(base)}`);
  await until(()=>owned(base).length===0,60000,()=>'no Host, Broker, Worker or engine process remains: '+owned(base).join('\n'));
 });
 
@@ -266,9 +276,9 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
  const workers=provider.seen.filter(seen=>worker(seen.body));
  const results=workers.flatMap(seen=>toolResults(seen.body).map(result=>result.text));
- assert.ok(results.some(result=>!/error|denied|EPERM/i.test(result)&&result.length>=0)&&workers.length>=2,`Worker requests ${workers.length}; results ${JSON.stringify(results).slice(0,3000)}`);
+ assert.ok(results.some(result=>!refused(result))&&workers.length>=2,`Worker requests ${workers.length}; results ${JSON.stringify(results).slice(0,3000)}\nResident logs:\n${residentLogs(base)}`);
  const submitted=results.find(result=>/"state"\s*:\s*"succeeded"/.test(result));
- assert.ok(submitted,`no Worker submission receipt succeeded: ${JSON.stringify(results).slice(0,4000)}`);
+ assert.ok(submitted,`no Worker submission receipt succeeded: ${JSON.stringify(results).slice(0,4000)}\nResident logs:\n${residentLogs(base)}`);
  await until(()=>owned(base).length===0,60000,()=>'no process remains: '+owned(base).join('\n'));
 });
 
@@ -298,7 +308,7 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
  assert.equal(status,0,stderr);
  const merges=provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').flatMap(seen=>toolResults(seen.body).map(result=>result.text));
- assert.ok(merges.some(result=>/"state"\s*:\s*"succeeded"/.test(result)),`worker-1 integration did not succeed: ${JSON.stringify(merges).slice(0,4000)}`);
+ assert.ok(merges.some(result=>/"state"\s*:\s*"succeeded"/.test(result)),`worker-1 integration did not succeed: ${JSON.stringify(merges).slice(0,4000)}\nResident logs:\n${residentLogs(base)}`);
  const society=readdirSync(data).find(name=>!name.startsWith('.')&&existsSync(join(data,name,'repos','project.git')));
  const git=(...args)=>spawnSync('/usr/bin/git',['--git-dir',join(data,society,'repos','project.git'),...args],{encoding:'utf8'}).stdout.trim();
  assert.equal(git('show','refs/heads/main:fix.txt'),'fixed','the canonical main holds the integrated candidate');

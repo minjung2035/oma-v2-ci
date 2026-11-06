@@ -1,6 +1,7 @@
 /** Memory-only Resident coordination. Ledger facts and authorization remain
  * with their feature owners; this owner holds execution, hints and backoff. */
 import type { ExecutionScopePin, ExecutionObservation } from "@oma/contracts/runtime";
+import { inspect } from "node:util";
 import { StoreError } from "@oma/domain/errors";
 import type { ExecutionTicket } from "./owned-execution.js";
 import { ResidentSupervisor } from "./resident-supervisor.js";
@@ -183,7 +184,11 @@ export class ResidentRuntime<Witness> {
         record.observation = { ...record.observation, activeState: success ? "inactive" : "failed", subState: success ? "dead" : "failed",
           result: success ? "success" : result.kind, execMainStatus: result.exitCode ?? -1 };
         if (success) { record.failures = 0; if (record.wake) this.ports.hint(); }
-        else this.retry(record);
+        else {
+          // Backoff and the start limit hide each run's own end; name it once.
+          console.error(JSON.stringify({ event: "resident.ended", actor, execution: record.observation.scope, end: result }));
+          this.retry(record);
+        }
       }, error => {
         record.uncertain = true;
         record.observation = { ...record.observation, activeState: "unknown", subState: "unknown", result: "unknown", execMainStatus: -1 };
@@ -192,6 +197,8 @@ export class ResidentRuntime<Witness> {
     }, error => {
       record.observation = { ...record.observation, activeState: this.ports.confirmDead(actor) ? "failed" : "unknown", result: "launch-failed", subState: "failed" };
       record.uncertain = !this.ports.confirmDead(actor);
+      console.error(JSON.stringify({ event: "resident.launch", actor, uncertain: record.uncertain,
+        cause: inspect(error, { depth: 6, breakLength: Infinity }) }));
       if (!record.uncertain) this.retry(record);
       throw error;
     }).finally(() => { if (record.starting === task) record.starting = null; });

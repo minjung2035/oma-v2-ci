@@ -1,6 +1,7 @@
 import type { ReconcileLedger, ReconcileMail, ReconcileGit, ReconcileReview, ReconcileUnits, ReconcileLifecycle, ReconcileEffects } from "./ports.js";
 // REC-001/002: operation counts, process observations and activation are distinct facts.
 import { AsyncLocalStorage } from "node:async_hooks";
+import { inspect } from "node:util";
 import type { Actor } from "@oma/contracts";
 import { StoreError, classifyError, errorCodeOf } from "@oma/domain/errors";
 import { assertNever } from "@oma/domain/exhaustive";
@@ -263,7 +264,9 @@ export class ReconcileModule {
           this.retainRecoveryFailure(error);
           const reason = errorCodeOf(error);
           diagnostics.push({ agent: agent.name, outcome: "unknown", reason });
-          console.error(JSON.stringify({ event: "reconcile.unit", agent: agent.name, code: reason }));
+          console.error(JSON.stringify({ event: "reconcile.unit", agent: agent.name, code: reason,
+            // The code alone cannot say why a run failed to start; keep its cause chain.
+            cause: inspect(error, { depth: 6, breakLength: Infinity }) }));
         }
     } finally { this.diagnostics = Object.freeze([
       ...this.diagnostics.filter(value => value.agent !== actor), ...diagnostics.map(value => Object.freeze(value))]); }
