@@ -298,7 +298,7 @@ export class Broker {
         // Derived publication can still reveal corruption; observe it through
         // the same admission owner without changing an accepted outcome.
         this.health.observe(error);
-        console.error("status view publish failed:", error instanceof Error ? error.message : String(error));
+        console.error("status view publish failed:", inspect(error, { depth: 6, breakLength: Infinity }));
       } finally { release(); }
     });
   }
