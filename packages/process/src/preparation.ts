@@ -77,11 +77,15 @@ export class PreparationExecutor {
           if (observation.kind !== "exited") { this.uncertain = true; unprovenPreparations.add(this); }
         }, error => {
           if (error instanceof ExecutionNotStarted) return;
+          // The execution owner reports a pre-release cancellation only after it
+          // confirmed the scope's death and retired it; that is a settled outcome.
+          if (selected !== undefined && error instanceof StoreError && error.code === "CANCELLED_BEFORE_COMMIT") return;
           this.uncertain = true; unprovenPreparations.add(this); throw error;
         });
         nativeClosures.add(closure);
         void closure.then(() => nativeClosures.delete(closure), () => { nativeClosures.delete(closure); });
-        return await run;
+        // Nothing started is not uncertain; the caller receives the typed reason (e.g. closed admission).
+        try { return await run; } catch (error) { throw error instanceof ExecutionNotStarted && error.cause !== undefined ? error.cause : error; }
       }
       const placement = acquirePreparationPlacement();
       let task: ReturnType<typeof startProcess>;

@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `f3850e298658e04c81d011288e433ff7b4c5684f953c4c67c25048d81924857d` (15949 files).
+verification input digest `175d0c1273d5890e31f54da8dcde21cea4618c9dec234b05822fc7328d59696c` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4686,3 +4686,8 @@ SOURCE114 `d1b45be9ce0`, Native42153882186. 새 Society의 실제 Broker가 runt
 
 SOURCE115 `9288ccd4697`, Native42155468597. **실제 macOS에서 새 `oma` Society의 실제 Broker가 `broker ready`에 도달했다**(runtime generation·developer tools·project 준비·Store·Resident·Mach endpoint 포함). Society 12/12·Personal PASS다.
 ready 직후 SIGTERM에서 초기 reconcile 중이던 작업 1개가 CANCELLED_BEFORE_COMMIT, 2개가 INTERNAL_ERROR로 기록됐고 drain이 `CANCELLED_BEFORE_COMMIT: execution was cancelled before release`로 끝나지 않아 exit1이었다. 정상적인 release 전 취소가 drain 실패로 전파되는 경로와 INTERNAL_ERROR의 원인을 찾기 위해, SOURCE116은 INTERNAL_ERROR reconcile 기록과 drain 실패에 원래 stack을 남긴다.
+
+### SOURCE116 실제 Mac 결과와 SOURCE117 수리
+
+SOURCE116 `8a99d03ae0c`, Native42157006782. stack으로 두 원인을 확인했다. (1) drain이 ExecutionRuntime admission을 닫은 뒤 시작된 preparation은 `ExecutionNotStarted`를 받았고, preparation 계층이 이 내부 표지를 원인(BROKER_UNAVAILABLE)으로 바꾸지 않고 넘겨 reconcile이 INTERNAL_ERROR로 분류했다. (2) coordinator는 release 전 취소를 scope 사망 확인·retire 뒤에만 CANCELLED_BEFORE_COMMIT으로 보고하는데(정리 미확인은 RUN_TERMINATION_UNKNOWN), preparation 계층이 이를 uncertain으로 기록하고 shutdown barrier에 다시 던져 정상 drain을 실패시켰다.
+SOURCE117은 preparation 경계에서 시작되지 않은 실행을 원래 원인으로 돌려주고, coordinator가 정산한 release 전 취소를 정산된 결과로 다룬다. 다른 실패는 기존대로 uncertain·shutdown fence로 남는다. `preparation-port`002·003이 이를 고정한다.

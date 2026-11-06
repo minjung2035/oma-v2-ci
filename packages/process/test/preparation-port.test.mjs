@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PreparationExecutor, configurePreparationExecution, preparationShutdownBarrier } from '../dist/preparation.js';
 import { ExecutionNotStarted } from '../dist/owned-execution.js';
+import { StoreError } from '@oma/domain/errors';
 const command = () => ({executable:process.execPath,argv:['original'],env:{VALUE:'original'},timeoutMs:null,stdoutBytes:64,stderrBytes:64});
 const result = {kind:'exited',exitCode:0,signal:null,errorCode:null,stdout:Buffer.from('complete'),stderr:Buffer.alloc(0),stdoutTruncated:false,stderrTruncated:false,elapsedMs:1};
 test('001. The configured owner sees frozen launch inputs and shutdown waits for its complete result',async()=>{
@@ -24,11 +25,19 @@ test('002. A positively unstarted provider returns its bookkeeping while an unce
  const notStarted=new ExecutionNotStarted(new Error('no scope created'));
  let error=notStarted;const release=configurePreparationExecution({run(){throw error;}});
  try {
-  const executor=new PreparationExecutor();await assert.rejects(executor.run(command()),e=>e===notStarted);
+  const executor=new PreparationExecutor();await assert.rejects(executor.run(command()),e=>e===notStarted.cause,'the caller receives the typed reason nothing started');
   await preparationShutdownBarrier();assert.equal(executor.blocked,false);
   error=new Error('scope outcome unknown');await assert.rejects(executor.run(command()),e=>e===error);assert.equal(executor.blocked,true);
   await assert.rejects(preparationShutdownBarrier(),{code:'RUN_TERMINATION_UNKNOWN'});
   assert.equal(executor.reverifyStale(()=> 'unknown'),'unknown');assert.equal(executor.blocked,true);
   assert.equal(executor.reverifyStale(()=> 'quiescent'),'quiescent');await preparationShutdownBarrier();assert.equal(executor.blocked,false);
+ }finally{release();}
+});
+test('003. A pre-release cancellation the execution owner already settled does not fence shutdown',async()=>{
+ const cancelled=new StoreError('CANCELLED_BEFORE_COMMIT','execution was cancelled before release');
+ const release=configurePreparationExecution({run(){return Promise.reject(cancelled);}});
+ try {
+  const executor=new PreparationExecutor();await assert.rejects(executor.run(command()),e=>e===cancelled);
+  await preparationShutdownBarrier();assert.equal(executor.blocked,false);assert.equal(executor.quiescence,'quiescent');
  }finally{release();}
 });
