@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `98c41ed0e5759d6d8585c8d54f7aa0bf307465e3463e9bf417d11f72e5ff2c92` (15949 files).
+verification input digest `ef0fe5bb91dc1eef8ba5980a21ce3b846ee7728cb35330c87279af990c87754a` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4737,3 +4737,11 @@ Darwin `ResticProcess`는 `/dev/fd` exec 대신 `launchDarwinJobScope`로 실행
 ### SOURCE125 — 고정 Restic Darwin binary의 서명 확인
 
 고정 Restic 0.19.1 Darwin archive를 내려받아 checksum을 확인하고 공통 Mach-O parser로 대조했다. arm64 binary는 ad-hoc CodeDirectory(`6f23d5d672ad8600f5867ae25464f992835d35db`)를 가지므로 image 검증 job scope로 결박할 수 있다. **x64 binary는 서명이 없어** exact image 결박이 불가능하다. pathname exec로 낮추지 않고 x64에서는 Restic 효과만 `selected image has no supported bounded Mach-O code signature`로 거절하고 원래 작업공간을 유지한다(NATIVE-002의 owner별 거절). Intel은 spec상 호환성 관측 대상이다. Darwin storage step은 ARM64 runner에서만 실행하고, 제품 경로 004는 x64에서 이 거절과 작업공간 보존을 확인한다. Restic 거절이 내부 `ExecutionNotStarted` 표지 대신 원래 원인으로 보이게 했다.
+
+### SOURCE124 실제 결과와 SOURCE126
+
+SOURCE124 `a40d447e52e`, Native42175524579. **Darwin arm64에서 Restic 설치·검증이 image 검증 job scope로 실행됐다**(`restic 0.19.1 ... darwin/arm64`). Intel 독립 설치는 0 FAIL로 `@oma/git` 시간 제한 수리를 확인했다.
+남은 실패와 SOURCE126 처리:
+- 제품 경로 004(arm64): Restic이 실제로 실행됐으나 두 번째 명령부터 `empty password`였다. Darwin의 `/dev/stdin` open은 descriptor를 복제하여 offset을 공유하므로 같은 password FD를 쓰는 다음 명령이 EOF를 읽는다(Linux `/proc/self/fd/0` reopen은 독립 offset). Darwin에서는 held password를 positioned read(offset 불변)로 읽어 명령마다 자기 stdin pipe로 준다.
+- Darwin storage 시험 15건: macOS `tmpdir()`의 `/var` symlink 조상을 제품이 정책대로 거절했다. 시험 root를 realpath로 만든다.
+- 제품 경로 003/005: 실제 Host의 Principal engine(Pi interactive)이 시작 직후 `Session ended.`로 끝나 TUI가 나타나지 않았다(Personal은 정상). engine stderr는 의도적으로 보관하지 않아 원인이 보이지 않았고 이는 Linux에도 있는 사용자 결함이다. engine이 첫 protocol 출력 전에 쓴 stderr(아직 prompt·provider bytes가 없음)만 최대 4KB 보관하고 그 시점에 끝나면 종료 이유로 보여준다. 이후 stderr는 기존처럼 보관하지 않는다(`p0-review4`017).

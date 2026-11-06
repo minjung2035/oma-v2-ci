@@ -1,7 +1,7 @@
 /** Restic argv and child/FD lifetime. Storage supplies stream validation;
  * this module cannot interpret checkpoints, tree digests or archive metadata. */
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, constants, openSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { withAsyncCleanup } from "@oma/native/cleanup";
@@ -76,7 +76,14 @@ export class ResticProcess {
       const sink = options.stdoutSink === undefined ? undefined : (bytes: Uint8Array) => {
         try { options.stdoutSink!(bytes); } catch (error) { failed = { error }; throw error; }
       };
-      const result = await runDarwinRestic(own.executable, { argv: [...this.common, ...argv], stdinFd: own.password,
+      // Darwin's /dev/stdin open duplicates the descriptor and shares its offset, so a
+      // second command would read the held password at EOF. Read it positioned
+      // (the held offset is unchanged) and give each command its own stdin pipe.
+      const size = fstatSync(own.password).size;
+      if (!Number.isSafeInteger(size) || size < 1 || size > 4096) throw new StoreError("STORE_CORRUPT", "session storage password has an invalid size");
+      const secret = Buffer.alloc(size);
+      if (readSync(own.password, secret, 0, size, 0) !== size) throw new StoreError("STORE_CORRUPT", "session storage password could not be read whole");
+      const result = await runDarwinRestic(own.executable, { argv: [...this.common, ...argv], input: secret,
         env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", LC_ALL: "C", TZ: "UTC", HOME: own.projectRoot, TMPDIR: own.stage, [SOCIETY_FENCE_ENV]: String(SOCIETY_FENCE_FD) },
         timeoutMs: null, stdoutBytes: options.spool === undefined && options.stdoutSink === undefined ? 1024 * 1024 : 0, stderrBytes: 256 * 1024, stderrOverflow: "discard",
         ...(options.stdoutSink === undefined ? {} : { stdoutOverflow: "discard" as const }),

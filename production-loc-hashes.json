@@ -1128,7 +1128,7 @@
     },
     {
       "path": "packages/engine/src/pi-rpc.ts",
-      "sha256": "d9b76da6dcdc8e92e468f6a831136e740b709d43975c409b90eb1aa7d4c54150"
+      "sha256": "6a5b725ea039606955f6d1314bb91643c6bf2317dd72e9b4130883ed739d62f6"
     },
     {
       "path": "packages/engine/src/pi-runtime.ts",
@@ -1156,7 +1156,7 @@
     },
     {
       "path": "packages/engine/src/principal-session.ts",
-      "sha256": "711d82ef1fc079dc6edbd5d09d4714f4e94b5b91d03c7ddcc980f5d0be83a637"
+      "sha256": "0669ae9958f328e8661222c0ce6d6ca7f6c7cfe58ee6dee0bad665a2a5768945"
     },
     {
       "path": "packages/engine/src/session-directories.ts",
@@ -1872,7 +1872,7 @@
     },
     {
       "path": "packages/process/src/restic.ts",
-      "sha256": "2dc2b6668aabc9803da27ed1cb07d670da24024277c06b56a812a1616ba0d031"
+      "sha256": "d5d3ba6c180d862dc38286851c9d123ca6c3f0ae29d1263be92f1b7c55c03dde"
     },
     {
       "path": "packages/process/src/run.ts",

@@ -65,6 +65,10 @@ export class PiRpcClient {
   private partialLineTimer: Timer | null = null;
   private pending: PendingWrite | null = null;
   private stderrCount = 0;
+  /** Only what the engine wrote before its first protocol output: no prompt or
+   * provider bytes exist yet. Kept so a failed startup can say why. */
+  private startup: Buffer[] | null = [];
+  private startupBytes = 0;
   private endTransport!: (result: PiTransportEnd) => void;
   readonly completion: Promise<PiTransportEnd>;
 
@@ -124,7 +128,13 @@ export class PiRpcClient {
       if (this.observers.has(observer)) observer(event);
     }
   };
+  /** The engine's own words if it ended before producing any protocol output. */
+  get startupDiagnostic(): string | null {
+    if (this.startup === null || this.startupBytes === 0) return null;
+    return Buffer.concat(this.startup).toString("utf8").replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").trim().slice(-1024) || null;
+  }
   private readonly onData = (data: Buffer | string): void => {
+    this.startup = null;
     if (this.state !== "open") return;
     if (!Buffer.isBuffer(data)) {
       this.terminate(
@@ -165,6 +175,10 @@ export class PiRpcClient {
     // Drain without retaining or copying prompt/provider bytes to public logs.
     const length =
       typeof data === "string" ? Buffer.byteLength(data) : data.byteLength;
+    if (this.startup !== null && this.startupBytes < 4096) {
+      const bytes = (typeof data === "string" ? Buffer.from(data) : Buffer.from(data)).subarray(0, 4096 - this.startupBytes);
+      this.startup.push(bytes); this.startupBytes += bytes.length;
+    }
     this.stderrCount = Math.min(
       Number.MAX_SAFE_INTEGER,
       this.stderrCount + length,

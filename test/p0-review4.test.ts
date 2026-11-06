@@ -437,3 +437,16 @@ test("016. Typed and pasted text are read by one rule -- a typed U+FFFD is kept,
 
 // P0V-26/N02 and P0V-95 unit-name cases are retained in the raw archive.
 // Actual execution-owner isolation is covered by NATIVE-RESIDENT-ISOLATION-01.
+
+test("017. An engine that ends before any protocol output names its own startup words; later stderr is never kept", async t => {
+  const failing = spawn(process.execPath, ["-e", `process.stderr.write('\\x1b[31mFailed to load extension: EPERM\\x1b[0m\\n'); process.exit(1);`], { stdio: ["pipe", "pipe", "pipe"] });
+  const early = new PiRpcClient(failing, { frameBytes: 64 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1 });
+  t.after(() => { early.close(); failing.kill("SIGKILL"); });
+  await early.completion;
+  assert.equal(early.startupDiagnostic, "Failed to load extension: EPERM");
+  const running = spawn(process.execPath, ["-e", `process.stdout.write('{"type":"ready"}\\n'); setTimeout(() => { process.stderr.write('provider bytes after startup\\n'); process.exit(0); }, 100);`], { stdio: ["pipe", "pipe", "pipe"] });
+  const later = new PiRpcClient(running, { frameBytes: 64 * 1024, idleStreamSeconds: 1, receiptWaitSeconds: 1 });
+  t.after(() => { later.close(); running.kill("SIGKILL"); });
+  await later.completion;
+  assert.equal(later.startupDiagnostic, null, "stderr after the first protocol output is drained, not retained");
+});

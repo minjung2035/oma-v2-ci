@@ -146,6 +146,7 @@ export class PrincipalSession {
         // observation or leave a reclaimed terminal waiting on a lost callback.
         await withAsyncCleanup(async () => cleanupAll([
           () => { if (result.state === "failed") reason = `Session ended with an error: ${this.errorWords(result.error)}`; },
+          () => { const startup = this.rpc.startupDiagnostic; if (startup !== null) reason = `Session ended during startup: ${startup}`; },
           () => this.ui?.close(),
           () => this.handBack(reason),
           () => { this.turns.settle(); },

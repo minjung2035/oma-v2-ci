@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { verifyResticInventory } from "@oma/storage/restic-verification";
@@ -13,7 +13,7 @@ const source = { paths: new Set(["repos", "repos/file"]), metadata: new Map([
   ["repos/file", { type: "file", mode: 0o600, uid: "1000", gid: "1000", mtimeNs: "1700000000123456789", size: 4 }],
 ]) };
 function spool() {
-  const root = mkdtempSync(join(tmpdir(), "oma-storage-verification-")), file = join(root, "spool");
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-storage-verification-"))), file = join(root, "spool");
   return { file, write: text => writeFileSync(file, text, { mode: 0o600 }), close: () => rmSync(root, { recursive: true, force: true }) };
 }
 test("001. Storage inventory verifies snapshot binding, exact nanosecond metadata and all members", async () => {

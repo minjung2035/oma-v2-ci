@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -18,7 +18,7 @@ import { digestCacheTrees } from "@oma/storage/cache-trees";
 const tool = process.env.OMA_RESTIC_COMMAND ?? managedResticPath();
 function fixture() {
   assert.ok(tool && existsSync(tool), "Install the pinned host dependency: npm run setup:storage");
-  const root = mkdtempSync(join(tmpdir(), "oma-session-storage-")), project = join(root, "project");
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "oma-session-storage-"))), project = join(root, "project");
   mkdirSync(project); chmodSync(root, 0o700);
   const git = (path, ...args) => execFileSync("git", ["-C", path, ...args], { env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" }, stdio: "pipe" }).toString();
   git(project, "init", "-b", "main"); git(project, "config", "user.name", "Test"); git(project, "config", "user.email", "test@example.invalid");
