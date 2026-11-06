@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `650b8305df8800660d9f2914c4b6099a11b5374f0d9c2563ed2ca9f23ffe9435` (15949 files).
+verification input digest `74f1ace8fa948312cbeabd163c6d792703f6807d78180b414968e80464dabd4a` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4728,3 +4728,8 @@ Host는 Principal engine을 일반 owned child로 시작하므로 Darwin engine�
 
 SOURCE121 `4effdae768d`, Native42171221927(SOURCE122 push로 일부 취소). Society는 세 Mac 모두 12/12다. 새 Darwin storage step과 제품 step은 `npm run setup:storage`가 `Installed Restic could not run`으로 실패했다. 설치기와 제품 `ResticProcess`가 모두 검증한 FD를 `/dev/fd/3`로 exec하는데, Darwin은 descriptor 경로 exec를 거절한다(§6.1 기존 반례). **Darwin에서 Restic backup/restore는 현재 동작하지 않는 제품 결함이다.** pathname exec로 낮추지 않고, spec이 채택한 Darwin exact-executable primitive(main image digest를 생성 전 검증하는 job scope)로 옮기는 작업을 진행한다. 그동안 제품 step은 Restic 설치 실패에 막히지 않고 다른 제품 시험을 실행하며, 제품 경로 004가 이 실패를 보고한다.
 제품 경로 005: 실제 Host를 PTY에서 실행하고 engine 기본 모델을 scripted provider로 지정한다. Principal이 `oma_send`(없는 주소)를 호출하면 다음 요청의 tool result가 Broker의 `ADDRESS_NOT_FOUND`여야 한다. SOURCE122의 attested Broker identity로 engine이 실제 Mach 경로로 Broker에 인증·호출했다는 증거다.
+
+### SOURCE124 — Darwin Restic을 image 검증 job scope로 이전
+
+SOURCE122(`f842ebc4792`, 일부 취소)는 세 Mac Society 12/12다. 제품 step은 당시의 Restic 설치 실패로 중단됐다. Mac26 독립 설치는 `@oma/git` 1/27이 isolated smoke 30초 제한에서 ETIMEDOUT이었다. 일괄 차단 제거 뒤 context preparation과 실제 `git fsck`가 Darwin launchd job·Seatbelt로 실행되기 때문이며, Darwin에서만 제한을 180초로 늘린다.
+Darwin `ResticProcess`는 `/dev/fd` exec 대신 `launchDarwinJobScope`로 실행한다. 고정 Restic `binarySha256`을 main image 기대 digest로 넘기고 job helper가 생성 전 선택한 bytes의 CodeDirectory와 실제 mapped image를 대조한 뒤 release한다. cwd는 held directory, password는 stdin FD, slot 3–7은 Linux와 같다. 설치기의 설치 후 확인도 같은 경로로 `restic version`을 실행한다. Linux FD exec는 그대로다. 고정 Restic Darwin binary의 CodeDirectory 유무와 실제 backup/verify/restore는 다음 Mac 실행이 판정한다.

@@ -15,7 +15,7 @@ import { listOwnedDirectory, removeOwnedFile, removeOwnedTree, repairOwnedEntryM
 import { collectLeasedTree, leasePathOf, TreeLease } from "@oma/storage/tree-lease";
 import { observeProjectBinding } from "./project-binding.js";
 import { ResticProcess } from "@oma/process/restic";
-import { openResticTool } from "@oma/storage/restic-tool";
+import { openResticTool, resticExecutablePath } from "@oma/storage/restic-tool";
 import { verifyResticDump } from "@oma/storage/restic-tar";
 import { verifyResticInventory } from "@oma/storage/restic-verification";
 import { parseStorageState, readStorageText, type SessionStorageState, type StorageCheckpoint, type StorageResident, type StoragePhase } from "./session-storage-state.js";
@@ -124,7 +124,7 @@ export class SessionStorage {
   private async repository<T>(cold: boolean, run: (restic: ResticProcess, stage: string, lock: ProcessLock) => Promise<T>, signal?: AbortSignal): Promise<T | null> {
     const cleanups: (() => void)[] = [];
     return withAsyncCleanup(async () => {
-      const tool = await openResticTool(this.options.env);
+      const tool = await openResticTool(this.options.env), executable = resticExecutablePath(this.options.env);
       if (tool === null) {
         if (cold) throw new StoreError("BROKER_UNAVAILABLE", "this session is archived; run npm run setup:storage before reopening it");
         this.options.log("Session workspace retained: install the verified storage tool with npm run setup:storage."); return null;
@@ -177,7 +177,7 @@ export class SessionStorage {
         throw new StoreError("STORE_CORRUPT", "session repository credential is not private");
       const restic = new ResticProcess({ tool, password, fence: this.options.fence, projectLock: held.descriptor,
         stageLease: lease.descriptor, projectRoot: this.projectRoot, stage, source: this.options.stateRoot,
-        ...(signal === undefined ? {} : { signal }) });
+        ...(executable === null ? {} : { executable }), ...(signal === undefined ? {} : { signal }) });
       if (config === null) {
         await restic.init(); fsyncTree(join(this.projectRoot, "repository"));
       }

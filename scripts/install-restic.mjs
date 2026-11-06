@@ -41,11 +41,17 @@ await withAsyncCleanup(async () => {
   // through exec: the installation pathname may already name another file.
   if (await digestDescriptor(executable) !== pin.binarySha256) throw new Error("Restic differs from the pinned release; kept for inspection");
   fchmodSync(executable, 0o755); fsyncSync(executable);
-  const result = spawnSync(inheritedDescriptorPath(3, "execute"), ["version"], {
-    encoding: "utf8", stdio: ["ignore", "pipe", "pipe", executable],
-    timeout: 10000, killSignal: "SIGKILL", maxBuffer: 65536,
-  });
-  if (result.error || result.signal || result.status !== 0) throw new Error("Installed Restic could not run");
-  console.log(result.stdout.trim());
+  if (process.platform === "darwin") {
+    // Darwin refuses descriptor exec; the job helper binds the mapped image to the pin.
+    const { verifyInstalledDarwinRestic } = await import("@oma/process/restic");
+    console.log((await verifyInstalledDarwinRestic(target, executable)).trim());
+  } else {
+    const result = spawnSync(inheritedDescriptorPath(3, "execute"), ["version"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "pipe", executable],
+      timeout: 10000, killSignal: "SIGKILL", maxBuffer: 65536,
+    });
+    if (result.error || result.signal || result.status !== 0) throw new Error("Installed Restic could not run");
+    console.log(result.stdout.trim());
+  }
   console.log(`Installed verified session storage tool: ${target}`);
 }, () => closeSync(executable));

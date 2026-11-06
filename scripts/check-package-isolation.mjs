@@ -88,7 +88,8 @@ try {
       if (typeof smoke !== "string" || !/^test\/[a-z-]+\.mjs$/.test(smoke)) throw new Error("invalid isolated runtime smoke path");
       const target = join(directory, "installed-runtime.mjs");
       writeFileSync(target, readFileSync(join(root, workspace.path, smoke)));
-      execFileSync(process.execPath, [target], { cwd: directory, env, stdio: "pipe", timeout: 30000 });
+      // Darwin preparations run through launchd job scopes and Seatbelt, far slower than a Linux spawn.
+      execFileSync(process.execPath, [target], { cwd: directory, env, stdio: "pipe", timeout: process.platform === "darwin" ? 180000 : 30000 });
     }
     const publicNames = Object.keys(workspace.manifest.exports).map(subpath => workspace.manifest.name + (subpath === "." ? "" : subpath.slice(1)));
     const imports = publicNames.map(name => `await import(${JSON.stringify(name)});`).join("\n");

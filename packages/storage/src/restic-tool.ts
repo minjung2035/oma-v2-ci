@@ -14,6 +14,10 @@ export function managedResticPath(env: NodeJS.ProcessEnv = process.env): string 
   if (data === null || !isAbsolute(data)) return null;
   return join(data, "oma-toolchain", "restic", RESTIC_RELEASE.version, `${process.platform}-${process.arch}`, "restic");
 }
+/** The installation path openResticTool verifies (Darwin selects it by digest). */
+export function resticExecutablePath(env: NodeJS.ProcessEnv = process.env): string | null {
+  return env.OMA_RESTIC_COMMAND ?? managedResticPath(env) ?? null;
+}
 export async function openResticTool(env: NodeJS.ProcessEnv = process.env): Promise<number | null> {
   const managed = managedResticPath(env), executable = env.OMA_RESTIC_COMMAND ?? managed;
   if (executable === null || executable === undefined) return null;
