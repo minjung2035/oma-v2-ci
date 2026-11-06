@@ -282,7 +282,8 @@ export class ExecutionCoordinator<Witness> {
         if (population === "empty") break;
         if (population === "unknown") throw new StoreError("RUN_TERMINATION_UNKNOWN", "scope observation failed; ownership retained",
           failures.length ? { cause: new AggregateError(failures) } : undefined);
-        if (failures.length) throw new StoreError("RUN_TERMINATION_UNKNOWN", "populated scope termination failed; ownership retained",
+        if (failures.length) throw new StoreError("RUN_TERMINATION_UNKNOWN",
+          `populated scope termination failed; ownership retained (${failures.map(error => error instanceof Error ? error.message : String(error)).join("; ").slice(0, 1024)})`,
           { cause: new AggregateError(failures) });
         await setTimeout(10);
         try { scope.terminate(); } catch (error) { failures.push(error); }

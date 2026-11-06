@@ -1520,7 +1520,7 @@
     },
     {
       "path": "packages/native/src/darwin-society-fence.ts",
-      "sha256": "c198f69ce9755cd6cbbd5ccd28650e2154cc2c79b9dc4ea9af13536e5519b7da"
+      "sha256": "88db10cbe8fe604604d44ce98958c1bdd988945544f4c5c36e8799e7de994be1"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
@@ -1832,7 +1832,7 @@
     },
     {
       "path": "packages/process/src/owned-execution.ts",
-      "sha256": "040bfe0be785901a4229f3eea61223de212bf9b1fd7fdc3d04a5536ccb7ae0ae"
+      "sha256": "bba80a706e930493ed6e94826ed512c2da4abd5f76f364a5c7eb7f7eb28b8ec1"
     },
     {
       "path": "packages/process/src/packet-stream.ts",
@@ -2292,7 +2292,7 @@
     },
     {
       "path": "packages/tool-files/src/private-state.ts",
-      "sha256": "70c903b1dd9e58661dd7939bfe31227858ff2af17a8e8241c0702869ad3dfe9f"
+      "sha256": "47b657ac448e4b7fef9039ce73d3deaa12c92ef177fe45688452660d3ee4df54"
     },
     {
       "path": "packages/tool-files/src/results.ts",

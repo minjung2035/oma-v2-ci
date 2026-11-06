@@ -46,14 +46,34 @@ function invoke(run: DarwinSocietyFenceRunner, control: string, argv: readonly s
 let receive: ((channel: number, descriptors: Int32Array) => number) | undefined;
 export type HeldDarwinSocietyFence = { readonly kind: "held"; readonly fd: number; release(): void } | { readonly kind: "busy" };
 
+/** A creator returns its port as its last scope dies: acquisition can observe
+ * the port still bound and its creator already gone. That is a vacated holder,
+ * not an unauthenticated one; acquisition is retried within a short bound and
+ * exclusivity is still decided only by the kernel bind. */
+const VACATED_ATTEMPTS = 50, VACATED_PAUSE_MS = 20;
 export function holdDarwinSocietyFence(name: string, run: DarwinSocietyFenceRunner): HeldDarwinSocietyFence {
+  for (let attempt = 1; ; attempt++) {
+    const held = holdOnce(name, run);
+    if (held !== "vacated") return held;
+    if (attempt >= VACATED_ATTEMPTS)
+      throw new StoreError("BROKER_UNAVAILABLE", "Society fence exclusion resource stayed occupied after its creator ended");
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, VACATED_PAUSE_MS);
+  }
+}
+function holdOnce(name: string, run: DarwinSocietyFenceRunner): HeldDarwinSocietyFence | "vacated" {
   const tag = identity(name), port = String(darwinSocietyFencePort(name)), image = assets(), channel = controlSocketPair();
   let fence: number | undefined;
   let parent: number | undefined = channel.parent, child: number | undefined = channel.child;
-  return withCleanup<HeldDarwinSocietyFence>(() => {
+  return withCleanup<HeldDarwinSocietyFence | "vacated">(() => {
     const acquired = invoke(run, image.control, ["acquire", image.producer, tag, image.hash, port], channel.child);
     if (acquired.kind === "busy") {
-      if (acquired.errno !== 48 || invoke(run, image.control, ["holder", tag, image.hash, port]).kind !== "matched")
+      if (acquired.errno !== 48)
+        throw new StoreError("BROKER_UNAVAILABLE", "Society fence exclusion resource is occupied without an authenticated owner");
+      let holder: string;
+      // A holder that cannot be discovered at all may have just ended; the next
+      // bind decides. A discovered non-matching holder is refused as before.
+      try { holder = invoke(run, image.control, ["holder", tag, image.hash, port]).kind; } catch { return "vacated"; }
+      if (holder !== "matched")
         throw new StoreError("BROKER_UNAVAILABLE", "Society fence exclusion resource is occupied without an authenticated owner");
       return { kind: "busy" };
     }

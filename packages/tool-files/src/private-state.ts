@@ -14,9 +14,15 @@ function withDirectory<T>(path: string, create: boolean, use: (fd: number) => T)
   let fd = openRoot("/");
   try {
     for (const name of path.split("/").filter(Boolean)) {
-      let created = false;
-      if (create) try { mkdirAt(fd, name, 0o700); created = true; } catch (error) { if (code(error) !== "EEXIST") throw error; }
-      const next = openAt(fd, name, DIRECTORY);
+      let created = false, next: number;
+      // Open first: a sandbox refuses mkdir on an existing ancestor it may not
+      // write (EPERM before EEXIST), so only a missing component is created.
+      try { next = openAt(fd, name, DIRECTORY); }
+      catch (error) {
+        if (!create || code(error) !== "ENOENT") throw error;
+        try { mkdirAt(fd, name, 0o700); created = true; } catch (made) { if (code(made) !== "EEXIST") throw made; }
+        next = openAt(fd, name, DIRECTORY);
+      }
       try { if (created) { fsyncSync(next); fsyncSync(fd); } }
       catch (error) { closeSync(next); throw error; }
       closeSync(fd); fd = next;

@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `83cdfefefb3c8362b2205991c93888579789ff3c62b1bc985ccd135d7bb12cfc` (15949 files).
+verification input digest `fa181df4c928216fcccaaaa70fcd8f7a3197c413725704a74ea4382521004713` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4702,3 +4702,12 @@ SOURCE117 `5dab668ef2f`, Native42158577774. **Mac26에서 Society 12/12와 제�
 SOURCE118 `55c8d4469dd`, Native42160212718. Society는 세 Mac 모두 12/12다. Mac26은 제품 경로 2/2·공통 suite 464/466 PASS다.
 **Mac15 제품 결함**: 새 Society Host가 `Cannot read settings: directory-relative operation failed: EACCES`로 종료했다. config generation 게시가 최상위 staging 디렉터리를 0500으로 봉인한 뒤 rename했다. 디렉터리 rename은 자기 `..` 항목을 갱신하므로 Darwin은 이동되는 디렉터리 자체의 쓰기 권한을 요구한다(Mac26에서는 관측되지 않음). SOURCE119는 이미 봉인된 내용은 그대로 두고, 쥐고 있는 최상위 tree fd를 rename 뒤에 0500으로 봉인·flush한다. context snapshot은 이미 같은 순서였다. 검증은 mode를 보지 않으므로 bytes·형식 의미는 같다.
 Intel은 Broker가 `git fsck`를 job scope에서 실행 중일 때 시험의 180초 상한에 걸렸다(SOURCE117에서는 184초 만에 ready). 시험 상한을 300초로, step·job 제한을 그에 맞게 늘린다. `native-profile`003은 Society 수를 birth가 있는 항목으로 센다. `native-darwin-fence`001은 공통 suite에서만 간헐적으로 creator 조회 실패(1102/ESRCH)가 나며 전용 Society step에서는 재현되지 않는다. 원인 미확인으로 보존한다.
+
+### SOURCE119 실제 결과 — Intel·Ubuntu job 전체 PASS, SOURCE120 수리
+
+SOURCE119 `0844dc1379f`, Native42164081851. **Mac26 Intel job 전체 SUCCESS**(Society 12/12·제품 경로 2/2·공통 suite 466/466·독립 설치), **Ubuntu job SUCCESS**다. Mac26·Mac15는 Society 12/12·제품 경로 2/2(Mac15 EACCES 수리 확인)다. 공통 suite는 각463/466이다. Darwin gates job이 처음으로 실제 실행됐다(120 중111 OBSERVED).
+남은 실패와 SOURCE120 처리:
+- `native-darwin-fence`001: 마지막 scope가 끝나 creator가 port를 반환하는 순간의 재획득이 busy(port 아직 bind됨)를 본 뒤 holder 조회에서 이미 사라진 creator(1102/ESRCH)를 만나 오류로 끝났다. 직전 Society가 끝난 직후 `oma`를 다시 시작하는 사용자에게도 같은 경쟁이 생기는 제품 결함이다. 발견조차 안 되는 holder를 비워진 것으로 보고 짧은 상한 안에서 획득을 다시 시도한다. 배타성은 여전히 kernel bind만 정하며, 발견된 비일치 holder와 상한 소진은 기존처럼 거절한다.
+- Worker gate(bootstrap/tools 6건): 실제 Seatbelt Worker Pi가 OMA extension을 load하며 `directory-relative operation failed: EPERM`로 실패했다. tool-files private state가 `/`부터 모든 상위 요소에 mkdirat를 먼저 시도했고, Seatbelt는 쓸 수 없는 기존 상위(`/Users` 등)의 mkdir을 EEXIST보다 먼저 EPERM으로 거절한다. 먼저 열고 없는 요소만 만든다.
+- Personal gate(3건): fixture가 DR74로 폐기한 Society 일괄 거절(exit4)을 단언했다. Personal 고유 확인은 유지하고 그 항목을 validator·evidence 시험과 함께 제거한다.
+- Mac15 `native-integration-directory`001: populated scope termination 실패로 ownership을 보존했다(fail-closed). 원인 오류가 빈 AggregateError로만 남아 오류 문구에 하위 원인을 포함하게 했다. G-PROCESS의 기존 미해결 항목으로 유지한다.

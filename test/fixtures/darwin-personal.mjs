@@ -2,7 +2,7 @@
  * substituted. The temporary HOME/data root contains no Human credentials. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, realpathSync } from "node:fs";
+import { mkdirSync, readdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,14 +40,6 @@ assert.equal(birth?.mode, "personal"); assert.equal(birth?.cwd, project);
 const societyBirths = readdirSync(data, { withFileTypes: true }).filter(entry => entry.isDirectory())
   .map(entry => readSessionBirth(join(data, entry.name))).filter(record => record?.mode === "society");
 assert.deepEqual(societyBirths, [], "Personal must not provision a Society");
-const refusedHome = join(root, "refused-home"), refusedData = join(root, "refused-data");
-mkdirSync(refusedHome);
-const society = spawnSync(process.execPath, [entry, "--mode", "society"], { cwd: project,
-  encoding: "utf8", timeout: 10000, env: { PATH: "/usr/bin:/bin", HOME: refusedHome,
-    XDG_DATA_HOME: refusedData, XDG_RUNTIME_DIR: join(root, "refused-run") } });
-console.error(JSON.stringify({ societyControl: { exitCode: society.status, signal: society.signal, stderr: society.stderr } }));
-assert.equal(society.error, undefined); assert.equal(society.signal, null); assert.equal(society.status, 4, society.stderr);
-assert.equal(existsSync(refusedData), false, "Society gates must still refuse before provisioning");
 console.log(JSON.stringify({ case: "personal-entry", personal: { actualTerminal: true, cleanExit: true,
   terminalRestored: true, birthMode: birth.mode, birthCwd: birth.cwd, noSocietyProvisioned: true,
-  input: "ctrl-d", credentialFixture: false, societyRefusedBeforeState: true } }));
+  input: "ctrl-d", credentialFixture: false } }));

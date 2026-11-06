@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 37,
-  "NOT_REVIEWED": 14366,
+  "CHANGED_WITHOUT_ORACLE": 38,
+  "NOT_REVIEWED": 14365,
   "REMOVED": 220
  },
  "lanes": {
@@ -1201,10 +1201,12 @@
   {
    "path": "packages/config/src/generations.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "43fa4ca240abf5c384064e0f470deffa0015e1eb707bb22503fbba99d75b7020"
   },
   {
    "path": "packages/config/src/index.ts",
@@ -2809,7 +2811,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/native/src/darwin-supervisor.ts",
@@ -3370,7 +3373,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/packet-stream.ts",
@@ -4207,7 +4211,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/tool-files/src/results.ts",

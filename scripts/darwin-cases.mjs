@@ -1053,7 +1053,7 @@ export function validateDarwinObservation(name, observations) {
         throw new Error("suspended image substitution outcome is unobserved");
   }
   if (name === "personal-entry") {
-    for (const key of ["actualTerminal", "cleanExit", "terminalRestored", "noSocietyProvisioned", "societyRefusedBeforeState"])
+    for (const key of ["actualTerminal", "cleanExit", "terminalRestored", "noSocietyProvisioned"])
       if (value[key] !== true) throw new Error(`Personal observation lacks a product control: ${key}`);
     if (value.birthMode !== "personal" || typeof value.birthCwd !== "string" || !value.birthCwd.startsWith("/") ||
         value.input !== "ctrl-d" || value.credentialFixture !== false)

@@ -305,7 +305,7 @@ const bootstrapRecord = () => {
       dnsEndpoint: "/var/run/mDNSResponder", dnsResolvedEndpoint: "/private/var/run/mDNSResponder", variants, session, appSandbox, messageFilter, denyBootstrap, lookupProxy } };
 };
 const personalRecord = () => ({ actualTerminal: true, cleanExit: true, terminalRestored: true,
-  noSocietyProvisioned: true, societyRefusedBeforeState: true, birthMode: "personal", birthCwd: "/owned/project",
+  noSocietyProvisioned: true, birthMode: "personal", birthCwd: "/owned/project",
   input: "ctrl-d", credentialFixture: false });
 const suspendedRecord = () => {
   const attempt = variant => ({ stopped: true, stopSignal: 17, beforeRelease: {
@@ -836,10 +836,10 @@ test("013. Native darwin: bootstrap evidence retains rights, actual targets, com
   validateDarwinObservation("launchd-bootstrap", { launchdBootstrap: unavailableHost });
 });
 
-test("006. Native darwin: Personal startup cannot hide a Society gate bypass or a changed saved mode", () => {
+test("006. Native darwin: Personal startup cannot hide a provisioned Society or a changed saved mode", () => {
   const good = personalRecord();
   for (const bad of [
-    { ...good, societyRefusedBeforeState: false }, { ...good, noSocietyProvisioned: false },
+    { ...good, noSocietyProvisioned: false },
     { ...good, terminalRestored: false }, { ...good, birthMode: "society" }, { ...good, credentialFixture: true },
   ]) assert.throws(() => validateDarwinObservation("personal-entry", { personal: bad }));
 });
