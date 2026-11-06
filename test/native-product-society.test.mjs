@@ -193,7 +193,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
  const provider=await scriptedProvider((request)=>worker(request)?text('Worker acknowledged the goal.'):
-  continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
+  continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})),{tls:true});
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
@@ -202,7 +202,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:420},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),NODE_EXTRA_CA_CERTS:provider.caFile,TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
@@ -263,7 +263,7 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and submit it.'},expectedRevision:null}));
   const done=toolResults(request).length;
   return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_send',{to:['principal'],subject:'fix',content:{kind:'text',value:'Submitted.'},attachments:[{commit:'HEAD'}]})):text('Submitted.');
- });
+ },{tls:true});
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-submit-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
@@ -272,7 +272,7 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),NODE_EXTRA_CA_CERTS:provider.caFile,TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
@@ -296,7 +296,7 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
   if(actor(request)!=='worker-1')return text('Leaving this to worker-1.');
   const done=toolResults(request).length;
   return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_merge',{change:{candidate:'HEAD'},tier:'LOW',title:'fix',reason:'fix'})):text('Integrated.');
- });
+ },{tls:true});
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-merge-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
@@ -305,7 +305,7 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
   steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
-  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),TERM:'xterm-256color'}});
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),NODE_EXTRA_CA_CERTS:provider.caFile,TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
