@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 31,
-  "NOT_REVIEWED": 14372,
+  "CHANGED_WITHOUT_ORACLE": 38,
+  "NOT_REVIEWED": 14365,
   "REMOVED": 220
  },
  "lanes": {
@@ -97,10 +97,12 @@
   {
    "path": "apps/oma/src/application/society-bootstrap.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "8283604ddb8b3cdc2f44dbc79ea41e767f5d456edcfea394702e2882568657aa"
   },
   {
    "path": "apps/oma/src/application/society-conversation.ts",
@@ -283,10 +285,12 @@
   {
    "path": "apps/oma/src/engine/resident-effects.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "b9c72c6687f26603dd5ace9032989ed6a6017e232e24e85f6cae61351f8ecd22"
   },
   {
    "path": "apps/oma/src/engine/settings-files.ts",
@@ -333,18 +337,22 @@
   {
    "path": "apps/oma/src/entry/oma-society.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "4ec334c8835397a34f3334d4b3bdd7aded269b28398ea524addb5176aa811593"
   },
   {
    "path": "apps/oma/src/entry/oma.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "27f98abf87c8fbd357649e69b884f9cdefab83a65f1ff42a24e46512099362ac"
   },
   {
    "path": "apps/oma/src/entry/personal-host.ts",
@@ -513,10 +521,13 @@
   {
    "path": "apps/oma/src/runtime/execution-runtime.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62",
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "b73feb3a7db79f41182543dd7b3c67e49e63fb09689be357a37cd35b881c2389"
   },
   {
    "path": "apps/oma/src/runtime/extension-integrity.ts",
@@ -664,10 +675,12 @@
   {
    "path": "apps/oma/src/runtime/native-support.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "727973c14283faca49f04b0e00ab677bf54df8c3104af55748add2f55ca08c16"
   },
   {
    "path": "apps/oma/src/runtime/packages/index.ts",
@@ -3109,10 +3122,12 @@
   {
    "path": "packages/platform-mac/package.json",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR74"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "1b4a45f4082f27d60b24666ed90d2a0b145f1b38797949556c9143e5418795d4"
   },
   {
    "path": "packages/platform-mac/src/audit-peer.ts",

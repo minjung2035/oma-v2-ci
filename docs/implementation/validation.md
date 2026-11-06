@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c38bd3a8dc7cc6af6eac6a0875339ce30cb317e86713fca77869c32dac009966` (15949 files).
+verification input digest `1293e987e41b5caf4056a2359451ba191d0cb6598b0ecf62824d34cdadc286b1` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4654,3 +4654,9 @@ macOS 제품 경로(Host·Broker·Runner·Worker Pi)의 실제 실행은 SOURCE1
 이 개발 host의 전체 local suite는 bwrap·namespace launcher·cloc 부재로 170개가 실패했다(launcher ENOENT125·bwrap8·cloc2와 그 broker 경로 파생). 제거한 파일을 참조하던 review ledger와 검증 입력 binding은 재생성 뒤 PASS다. Linux 판정은 prerequisite가 설치된 Ubuntu CI가 소유한다.
 SOURCE109의 `native-society-lease`012는 양 Mac26에서 001–011 PASS 뒤 결과 없이 job 제한25분에 취소됐다. 원시 log는 권한상 열람 불가다. SOURCE110은 단계 기록 파일·모든 대기의 상한·step timeout을 추가하여 같은 정지를 진단 가능하게 한다. 원인은 아직 미확인이다.
 Darwin 제품 경로 시험 `native-product-society`(새 `oma` Society→Broker `broker ready`→무잔존 종료, Personal 시작)를 Mac CI에 추가했다.
+
+### SOURCE110 실제 Mac 결과와 SOURCE111 진단
+
+SOURCE110 `ff3c8c523e0`, Native42146331692. Ubuntu job 전체 PASS(공통 runtime·실제 Linux scope/crash/Git sandbox·durable 회귀 포함)로 DR74 변경의 Linux 회귀가 없다.
+Mac26·Mac26 Intel·Mac15 모두 Society 001–011 PASS다. 012는 Mach 왕복·비자식 pin 거절·반환 identity의 AUTH_FAILED·Broker 자식 정상 종료까지 **모두 통과**했다. 실패는 Host fixture가 모든 owner를 반환한 뒤에도 종료하지 않은 것 하나이며, SOURCE109의 25분 정지도 이 원인이다. 남은 handle을 단계 기록에 남기도록 했다.
+제품 경로: **Personal 시작은 실제 macOS에서 PASS**(birth 게시·SIGTERM 뒤 무잔존)다. 새 Society는 60초 안에 birth+configuration이 관측되지 않았고 stderr는 비어 있었다. SOURCE111은 birth와 configuration을 나눠 기다리고 시간 초과 시 file tree·process·terminal tail을 보존한다.

@@ -68,6 +68,9 @@ if (mode === 'broker') {
       await new Promise(resolve => child.exitCode !== null || child.signalCode !== null ? resolve() : child.once('exit', resolve));
       process.send({ kind: 'result', host: process.pid, broker: child.pid, notChild: notChild === null, answer, afterReturn,
         brokerExit: { code: child.exitCode, signal: child.signalCode } });
+      // Names whatever still keeps this Host alive once every owner was returned.
+      stage(`resources ${process.getActiveResourcesInfo().join(',')}`);
+      setTimeout(() => stage(`resources-later ${process.getActiveResourcesInfo().join(',')}`), 2000).unref();
     } catch (error) { child.kill('SIGKILL'); fail(error); }
   });
   child.once('exit', (code, signal) => { if (code !== 0) fail(new Error(`Broker child ended ${code ?? signal}`)); });
