@@ -6,13 +6,16 @@ SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD c
 이 기본 소유권 구현과 실제 전체 제품 실행의 인수 범위를 구분한다.
 각 source/input/runtime의 결박과 실패 원시는 아래 SOURCE별 기록을 따른다. 후속 성공으로 이전 종료 unknown을 삭제하지 않는다.
 
+2026-11-06 SOURCE130까지 실제 Mac(주 대상 Mac26 arm64)에서 확인한 제품 경로: 새 Society 생성→Broker ready→SIGTERM 정상 drain, Personal 시작, 실제 Host PTY 실행과 Ctrl-D 무잔존 종료, `oma archive`의 Restic backup/verify·restore, 실제 Host 아래 Principal engine→Broker Mach 인증 호출, 실제 Seatbelt Worker 시작·RPC·session 재개. Society 소유권 12/12(세 Mac), 공통 suite 466/466(Mac26·Intel).
+
 | 남은 제품 작업 | 닫히지 않은 범위 |
 |---|---|
-| Society 실행 결합 | Principal/Engine의 실제 physical scope·현재 Host RPC/role과 전체 CLI 경로 인수 |
+| Worker 실제 작업 | Seatbelt Worker의 compiler 링크(SDKROOT 수리 판정 대기)·금지 효과 반례, GOAL→seed Worker→relay model 제품 경로(006) |
 | G-FILES | 전체 제품 경로의 StateRoot capture·private work/source fetch·남은 외부 writer/진단 결박과 수명 인수 |
-| G-PROCESS | 이전 populated-scope termination unknown의 원인·실제 제품 Runner/Worker/Pi·manual CLI scope 연결 |
-| G-AUTH/복구 | 제품 Host/Broker/engine의 current capability와 restart/reboot/sleep·release Keychain/SIP 검증 |
-| 최종 인수 | 위 변경을 포함한 실제 Society/Personal·Git/도구/Restic 및 전체 Linux 회귀·새 설치 시나리오 |
+| G-PROCESS | Mac15 populated-scope termination 1건(원인 후보 수리 후 재확인)·실제 Worker/Pi scope의 kill/restart 인수 |
+| G-AUTH/복구 | restart/sleep 상황의 current capability, release 서명 Keychain/SIP 검증 |
+| 플랫폼 범위 | macOS x64의 고정 Restic은 무서명이라 archive만 거절(호환성 대상). macOS 15 결과는 매 실행 끝에 취소되어 판정이 적음 |
+| 최종 인수 | 세 gate 공식 판정, 전체 Linux 회귀(Ubuntu job을 먼저 실행하도록 변경)·새 설치 시나리오 |
 
 아래 초기 관측과 실패는 역사적 기록이며 최신 제품 완료 선언이 아니다.
 
