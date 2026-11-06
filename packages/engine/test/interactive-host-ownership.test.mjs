@@ -12,7 +12,7 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
   const timers = new Set(), channels = [], hooks = {}, sent = [], picks = [], changes = [], signals = [], commands = {}, modules = [], notices = [],
     modes = [], overrides = [];
-  const session = { messages: [], extensionRunner: { async emit() { return {}; } }, model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
+  const session = { messages: [], settingsManager: { getLastChangelogVersion() {}, setLastChangelogVersion() {} }, extensionRunner: { async emit() { return {}; } }, model: { id: 'initial', provider: 'fake' }, thinkingLevel: 'off',
     modelRuntime: {}, scopedModels: [], sessionManager: {},
     subscribe() { return () => {}; },
     async abort() { modules.push('abort'); },
@@ -39,7 +39,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
     hideThinkingBlock = true;
     shutdown() {} renderProjectTrustWarningIfNeeded() {} suggestBugReport() {} crashReportInstructions() {}
     updateTerminalTitle() {} getPathCommandArgument() {} showSessionSelector() {} toggleThinkingBlockVisibility() {}
-    getChangelogForDisplay() {} showNewVersionNotification() {}
+    showNewVersionNotification() {}
     stop() {}
     async handleFatalRuntimeError(_prefix, error) { modules.push(['fatal', error]); }
     handleExportCommand() {} getCrashExtensionHint() {} showManagedToolStatus() {}

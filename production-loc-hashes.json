@@ -1064,7 +1064,7 @@
     },
     {
       "path": "packages/engine/src/pi-compat/contacts.json",
-      "sha256": "65781e7fad9e0aa056f6fdf81f6601eeb7f99bf3d8fd3188f2b43f5419a0540a"
+      "sha256": "207349507c75793b078ce134681d66cee9d9e679ba4fd2589a2e72892ffc6453"
     },
     {
       "path": "packages/engine/src/pi-compat/env.ts",
@@ -1076,7 +1076,7 @@
     },
     {
       "path": "packages/engine/src/pi-compat/interactive-mode.ts",
-      "sha256": "bdc13d9247fe9b69034116d261ba05edfb6fd37fc0610d370a98b32128ffb2de"
+      "sha256": "dc87f7f01a69d68e568cc9fb7e999f4eebcde89741f381fa40f926ec32fab4a5"
     },
     {
       "path": "packages/engine/src/pi-compat/interactive-tool-setup.ts",
@@ -1092,7 +1092,7 @@
     },
     {
       "path": "packages/engine/src/pi-compat/pi-private.d.ts",
-      "sha256": "183d54fecd1bafc43dd6fa7fdca95a5a7e5553023b4de4105d93789bafab77bc"
+      "sha256": "ad8b1f5e4e21a1eb5f173ee029cba471a319222f878f7c9f2cb1e9c532b3e776"
     },
     {
       "path": "packages/engine/src/pi-compat/prompt-editor.ts",

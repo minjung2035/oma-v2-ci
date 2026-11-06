@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 37,
-  "NOT_REVIEWED": 14366,
+  "CHANGED_WITHOUT_ORACLE": 38,
+  "NOT_REVIEWED": 14365,
   "REMOVED": 220
  },
  "lanes": {
@@ -2000,7 +2000,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/engine/src/pi-compat/env.ts",
@@ -2021,7 +2022,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/engine/src/pi-compat/interactive-tool-setup.ts",
@@ -2049,7 +2051,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/engine/src/pi-compat/prompt-editor.ts",
@@ -2837,10 +2840,12 @@
   {
    "path": "packages/native/src/files.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "a2d6b6e51bcd594fa7aaf8c1bd4d9c8019a1dc82a66c84a11fc5ee31fe829374"
   },
   {
    "path": "packages/native/src/identity.ts",

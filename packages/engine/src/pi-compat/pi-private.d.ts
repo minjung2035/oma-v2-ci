@@ -1,4 +1,4 @@
-/** Pi 1.0.1 compatibility boundary; the scoped preload resolves this module
+/** Pi 1.2.0 compatibility boundary; the scoped preload resolves this module
  * inside the same pinned installation as the interactive entry. */
 declare module "@earendil-works/pi-coding-agent/dist/utils/tools-manager.js" {
   export function getToolPath(tool: "fd" | "rg"): string | null;

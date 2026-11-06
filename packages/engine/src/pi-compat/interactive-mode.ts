@@ -16,8 +16,6 @@ export const PI_INTERACTIVE_PRIVATE_MEMBERS = Object.freeze([
   "handleFatalRuntimeError",
   "renderProjectTrustWarningIfNeeded",
   "suggestBugReport",
-  "getChangelogForDisplay",
-  "showNewVersionNotification",
   "crashReportInstructions",
   "updateTerminalTitle",
   "handleExportCommand",
@@ -44,8 +42,6 @@ interface InteractiveModeInternals {
   getCrashExtensionHint(error: unknown): string | undefined;
   crashReportInstructions(): string;
   suggestBugReport(): void;
-  getChangelogForDisplay(): string | undefined;
-  showNewVersionNotification(release: unknown): void;
   showManagedToolStatus(status: { type: string; message: string }): void;
   renderProjectTrustWarningIfNeeded(): void;
   showSessionSelector(): void;
@@ -78,7 +74,7 @@ export function setThinkingBlockHidden(visibility: ThinkingVisibility, hidden: b
 }
 interface ModeRuntime {
   dispose(): Promise<void>;
-  readonly session: Pick<AgentSession, "sessionManager" | "sessionFile">;
+  readonly session: Pick<AgentSession, "sessionManager" | "sessionFile" | "settingsManager">;
 }
 export interface InteractiveModeControl {
   shutdown(): Promise<void>;
@@ -102,11 +98,15 @@ export function adaptInteractiveMode(mode: InteractiveMode): InteractiveModeCont
   assertInteractiveCompatibility(mode, VERSION);
   // The only cast follows version and every private member/field validation.
   const own = mode as unknown as InteractiveModeInternals;
-  // OMA owns its release UI. Suppress only automatic Pi release displays,
-  // not /changelog, extension updates, ordinary warnings or the update machinery.
-  own.getChangelogForDisplay = () => undefined;
-  own.showNewVersionNotification = () => {};
+  // OMA owns its release UI. Suppress only the automatic Pi release notice,
+  // through the public method, not /changelog, extension updates or warnings.
+  mode.showNewVersionNotification = () => {};
   const failure = (runtime: ModeRuntime, label: string): void => {
+    // Startup shows only changelog entries newer than the last seen version;
+    // recording the bundled version through the public settings API leaves
+    // no automatic entry (and no install report) while /changelog stays whole.
+    const settings = runtime.session.settingsManager;
+    if (settings.getLastChangelogVersion() !== VERSION) settings.setLastChangelogVersion(VERSION);
     const fatal = own.handleFatalRuntimeError.bind(mode);
     own.handleFatalRuntimeError = async (prefix, error) => {
       try { await runtime.dispose(); }

@@ -11,7 +11,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
   const calls = [], hooks = {}, writes = [], commands = {}, picks = [];
   const birth = { id: 'personal-id', mode: 'personal', cwd: '/fixture/work', history: '/fixture/history' };
   const manager = { getCwd: () => birth.cwd, getSessionDir: () => birth.history };
-  const session = { messages: [], sessionFile: '/fixture/history/current.jsonl', extensionRunner: {
+  const session = { messages: [], settingsManager: { getLastChangelogVersion() {}, setLastChangelogVersion() {} }, sessionFile: '/fixture/history/current.jsonl', extensionRunner: {
     async emit(event) { calls.push(event.type); if (event.type === 'session_before_switch' && beforeSwitch) return beforeSwitch(event); return hooks[event.type]?.(event, context); },
   }, async abort() { calls.push('abort'); if (fail === 'abort') throw new Error('injected abort'); }, dispose() {} };
   const context = { cwd: birth.cwd, isIdle: () => true, ui: { addAutocompleteProvider(factory) { calls.push(['autocomplete', factory({})]); }, setStatus() {}, setHeader(factory) { factory?.({}, { fg: (_color, text) => text }).render(80); }, setFooter() {}, notify(...args) { calls.push(['notice', ...args]); },
@@ -34,7 +34,7 @@ function world({ fail, close, dispose, run, construct, catalog, beforeSwitch, se
     renderProjectTrustWarningIfNeeded() {} suggestBugReport() {} crashReportInstructions() {}
     updateTerminalTitle() {} handleExportCommand() {} getPathCommandArgument() {} getCrashExtensionHint() {}
     showManagedToolStatus() {} showSessionSelector() {} getRegisteredToolDefinition() {} toggleThinkingBlockVisibility() {}
-    getChangelogForDisplay() {} showNewVersionNotification() {}
+    showNewVersionNotification() {}
     stop() { calls.push('stop'); if (fail === 'stop') throw new Error('injected stop'); }
     async shutdown() { await runtime.dispose(); calls.push('upstream-exit'); }
     async handleFatalRuntimeError(_prefix, error) { calls.push(['upstream-fatal', error]); }

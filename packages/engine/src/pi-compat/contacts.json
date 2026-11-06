@@ -18,8 +18,6 @@
         "handleFatalRuntimeError",
         "renderProjectTrustWarningIfNeeded",
         "suggestBugReport",
-        "getChangelogForDisplay",
-        "showNewVersionNotification",
         "crashReportInstructions",
         "updateTerminalTitle",
         "handleExportCommand",
@@ -34,7 +32,7 @@
       "fields": [
         "hideThinkingBlock"
       ],
-      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal. Automatic Pi release displays are suppressed without changing manual changelog, extension updates or ordinary warnings."
+      "reason": "Only this checked adapter accesses private hooks unavailable in the pinned public SDK. Hosts consume semantic mode controls; exact version/member shape is validated before use. Titles use the public injected Terminal. Automatic release displays use public surfaces: the public showNewVersionNotification method and SettingsManager's last changelog version, without changing manual changelog, extension updates or ordinary warnings."
     },
     {
       "id": "optional-search-tool-module",

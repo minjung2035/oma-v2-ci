@@ -314,3 +314,17 @@ test("019. Pi UI adaptation releases only the methods owned by this session", ()
   assert.equal(ui.notify, base.notify); assert.equal(ui.setHeader, later);
   ui.notify("later", "info"); assert.deepEqual(seen, ["oma:notice", "later"]);
 });
+
+test("020. Release displays are suppressed through public surfaces: the declared notice method and the recorded changelog version", async () => {
+  const { InteractiveMode, SettingsManager } = await import("@earendil-works/pi-coding-agent");
+  assert.equal(typeof InteractiveMode.prototype.showNewVersionNotification, "function");
+  assert.ok(!(PI_INTERACTIVE_PRIVATE_MEMBERS as readonly string[]).includes("showNewVersionNotification"));
+  assert.ok(!(PI_INTERACTIVE_PRIVATE_MEMBERS as readonly string[]).includes("getChangelogForDisplay"));
+  const settings = SettingsManager.inMemory();
+  settings.setLastChangelogVersion("1.2.0");
+  assert.equal(settings.getLastChangelogVersion(), "1.2.0");
+  // The engine's startup lookup reads exactly this recorded version and
+  // shows only entries newer than it.
+  const mode = readFileSync(join(PI_ROOT, "dist", "modes", "interactive", "interactive-mode.js"), "utf8");
+  assert.ok(mode.includes("this.settingsManager.getLastChangelogVersion()") && mode.includes("getNewEntries(entries, lastVersion)"));
+});
