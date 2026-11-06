@@ -11,7 +11,7 @@ import { assertResidentContext, assertSandboxInstallation } from "@oma/protocol/
 import { trustedAbsolutePath, type ValidatedRunLease } from "@oma/protocol/run-lease";
 import { prepareSeatbelt, type SeatbeltPath } from "./seatbelt.js";
 import { machRendezvousName } from "./mach-address.js";
-import { decodeMacDeveloperTools, type MacDeveloperTools } from "@oma/protocol/mac-developer-tools";
+import { decodeMacDeveloperTools, type MacDeveloperTools, macSdkRoot } from "@oma/protocol/mac-developer-tools";
 import { developerToolDirectories, developerToolSystemFrameworks, DEVELOPER_TOOL_SUPPORT_FILES } from "./developer-tools.js";
 
 const ENGINE_KEYS = ["GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
@@ -50,7 +50,7 @@ export function residentSeatbelt(host: SandboxHost, lease: ValidatedRunLease, di
     if (beneath(host.stateRoot!, root) || beneath(root, host.stateRoot!) || writable.some(entry => beneath(root, entry.path) || beneath(entry.path, root)))
       throw new StoreError("UNSUPPORTED_PROFILE", "Mac Worker installation roots overlap private state");
   const base = { ...residentEnvironment({ libdir: host.libdir, node: host.node, home: directories.home, temporary: directories.home, toolchainNode: toolNode }, developerBins),
-    GIT_EXEC_PATH: tools.execPath, DEVELOPER_DIR: tools.developer };
+    GIT_EXEC_PATH: tools.execPath, DEVELOPER_DIR: tools.developer, SDKROOT: macSdkRoot(tools) };
   const allowed = new Set([...Object.keys(base), ...ENGINE_KEYS]);
   for (const [key, value] of Object.entries(environment))
     if (!allowed.has(key) || typeof value !== "string" || value.includes("\0"))

@@ -1776,7 +1776,7 @@
     },
     {
       "path": "packages/platform-mac/src/resident-sandbox.ts",
-      "sha256": "69acc6335d0ef30976667be1001af8c0378a7c3b649f87b4530d3cf8a66de66b"
+      "sha256": "c3f4732bae2956afcec861abcdedd143fe65a341a975679bc4a355c6933455fa"
     },
     {
       "path": "packages/platform-mac/src/seatbelt.ts",
@@ -1956,7 +1956,7 @@
     },
     {
       "path": "packages/protocol/src/mac-developer-tools.ts",
-      "sha256": "99cb49e5309ad4d44ce2712fd58454b17abd2d33a221f99ce3ad5da557cec7df"
+      "sha256": "61612917936347bfb9641353c98fe7cc06a7247423c9bc0cf49efe730e44d863"
     },
     {
       "path": "packages/protocol/src/methods.ts",

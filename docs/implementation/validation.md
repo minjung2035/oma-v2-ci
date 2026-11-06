@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `24638eeffd8e6e06d49e897c06d62b99f146c266eb69a9e31f110fcbf6f57f4d` (15950 files).
+verification input digest `267ac63c5110c057fa8b9529d831425d5409f75588d33fd17c935007b3d1334a` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4770,3 +4770,9 @@ SOURCE129 `a35afb8678a`, Native42194559884. **실제 Seatbelt Worker가 Mac26에
 - `worker-tools`: fixture의 가짜 `pi` 객체에 현재 extension이 쓰는 `on`이 없어(`pi.on is not a function`) 실패했다. Linux 시험과 같은 최소 API로 맞춘다.
 - 제품 경로 001·004: Broker ready 직후 SIGTERM이 초기 reconcile job의 setup(정지 image 검증·setup 전송) 중에 도착해 drain이 `RUN_TERMINATION_UNKNOWN`으로 끝났다. owner가 release 전 target을 종료하면 정지된 image는 workload를 실행하지 않았으므로 그 setup 종료를 CANCELLED_BEFORE_COMMIT으로 보고하고 원래 오류를 cause로 남긴다. 전체 scope 사망은 owner의 settle이 여전히 별도로 관측한다.
 - 제품 경로 005: 정리된 알림과 history가 원인을 보였다. Principal의 모든 model 요청이 `Request timed out`이었다. 시험이 PTY harness를 `spawnSync`로 실행해 같은 process의 scripted provider event loop를 막았기 때문이다(시험 결함). 비동기 spawn으로 바꾼다. history에서 Principal이 fake/scripted 모델로 요청을 시작했고 OMA가 record health 알림을 주입한 것도 확인했다.
+
+### SOURCE130 실제 결과와 SOURCE131
+
+SOURCE130 `f61b8a223e1`, Native42198450759. **Mac26 제품 경로 001–004 PASS**(release 전 종료를 취소로 정산하는 수리로 SIGTERM drain 정상). **제품 경로 005의 시험 본문도 PASS**: 실제 Host 아래 scripted Principal의 `oma_send`가 attested Mach 경로로 Broker에 인증·호출되어 Broker 자신의 `ADDRESS_NOT_FOUND` 응답을 받았다. 실패는 t.after 정리의 `rmSync` ENOTEMPTY(삭제 직전까지 쓰는 파일)였고 재시도를 둔다.
+`worker-bootstrap`은 Mac26·Intel PASS를 재현했다. `worker-tools`는 실제 Seatbelt Worker 안에서 git init/commit/log, npm, collaboration record read, 자기 script 실행까지 통과하고 `cc` 링크에서 `ld: library 'System' not found`로 실패했다. sandbox 안의 xcrun이 SDK를 찾지 못해 clang이 sysroot를 넘기지 못한 것이다. 선택된 developer root에서 결정되는 macOS SDK(이미 읽기 허용된 contents 아래)를 Worker 환경의 `SDKROOT`로 명시한다. Seatbelt policy는 넓히지 않는다.
+제품 경로 006(로컬 커밋)을 함께 보낸다: scripted Principal이 `oma_goal`로 GOAL을 게시하면 seed Worker가 Seatbelt scope에서 깨어 relay를 거쳐 model에 도달해야 한다.

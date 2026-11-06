@@ -41,3 +41,10 @@ export function decodeMacDeveloperToolsHex(value: unknown): MacDeveloperTools {
   try { parsed = JSON.parse(text); } catch { return refuse(); }
   return decodeMacDeveloperTools(parsed);
 }
+/** The macOS SDK of the selected developer root. Inside a Worker's Seatbelt
+ * scope xcrun cannot discover it, so compilers and linkers receive it as
+ * SDKROOT; it lies beneath the already readable developer contents. */
+export function macSdkRoot(tools: MacDeveloperTools): string {
+  return tools.developer === "/Library/Developer/CommandLineTools" ? `${tools.developer}/SDKs/MacOSX.sdk`
+    : `${tools.developer}/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk`;
+}

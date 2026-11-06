@@ -31,7 +31,7 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
  const running=[];
  t.after(async()=>{for(const owner of running)if(owner.child.exitCode===null&&owner.child.signalCode===null){owner.child.kill('SIGKILL');await Promise.race([owner.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  // 1. The real product entry creates the Society: birth, binding and configuration.
  const host=start([entry('oma')],project,env);running.push(host);
  const root=await until(()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>join(data,name))
@@ -56,7 +56,7 @@ test('002. A fresh Personal session is born on Darwin and stops without residue'
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
  const personal=start([entry('oma'),'--mode','personal'],project,env);
  t.after(async()=>{if(personal.child.exitCode===null&&personal.child.signalCode===null){personal.child.kill('SIGKILL');await Promise.race([personal.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  const root=await until(()=>{try{return readdirSync(sessions).map(name=>join(sessions,name)).find(path=>{try{return readSessionBirth(path)!==null;}catch{return false;}});}catch{return undefined;}},60000,()=>'Personal birth '+evidence(base,personal));
  const birth=readSessionBirth(root);assert.equal(birth.mode,'personal');assert.equal(birth.cwd,project);
  assert.doesNotMatch(personal.stderr(),/UNSUPPORTED_PROFILE|blocked by/,personal.stderr());
@@ -67,7 +67,7 @@ test('002. A fresh Personal session is born on Darwin and stops without residue'
 test('003. The Host runs a fresh Society in a real terminal: its Broker child opens the Store and Ctrl-D ends everything',{timeout:540000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-host-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  const hex=text=>Buffer.from(text).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  // The Host's own Broker child must get through runtime generation, tools and Store before Ctrl-D.
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
@@ -99,7 +99,7 @@ test('004. A Darwin Society is archived with the pinned Restic and its Broker re
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1',OMA_RESTIC_COMMAND:restic};
  const running=[];
  t.after(async()=>{for(const owner of running)if(owner.child.exitCode===null&&owner.child.signalCode===null){owner.child.kill('SIGKILL');await Promise.race([owner.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
-  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  const host=start([entry('oma')],project,env);running.push(host);
  const root=await until(()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>join(data,name))
   .find(path=>{try{return readSessionBirth(path)!==null&&existsSync(join(path,'config.json'));}catch{return false;}});}catch{return undefined;}},120000,()=>'fresh Society '+evidence(base,host));
@@ -132,7 +132,7 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  const {scriptedProvider,tools,call,text,toolResults}=await import('../dist/test/fixtures/scripted-provider.js');
  const provider=await scriptedProvider([tools(call('oma_send',{to:['nobody'],subject:'no such Worker',content:{kind:'text',value:'x'}})),text('No such Worker.')]);
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-principal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  // The product's default Principal model is the engine's own default: point it at the script.
  const agentDir=join(data,'engine');provider.configure(agentDir);
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
@@ -172,7 +172,7 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  const provider=await scriptedProvider((request)=>worker(request)?text('Worker acknowledged the goal.'):
   continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
- t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
  const agentDir=join(data,'engine');provider.configure(agentDir);
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
