@@ -83,7 +83,7 @@ export class ContextCoordinator {
     const policy = acceptedFailurePolicy(error, recovering ? "recovering" : "accepted", knowledge);
     if (policy.terminal === "failed") this.store.transaction(tx => tx.setOperationFailed(id, policy.code));
     else if (policy.terminal === "unknown") this.unknown(id);
-    throw new AcceptedFailure(policy.code, failureMessage(error) ?? "context effect or observation failed", knowledge);
+    throw new AcceptedFailure(policy.code, failureMessage(error) ?? "context effect or observation failed", knowledge, { cause: error });
   }
   private async materializeAndSettle(operation: OperationOf<"context.publish">): Promise<void> {
     this.effects.publishSnapshot(operation, this.publication.observe(operation));

@@ -1,5 +1,6 @@
 // IPC-002/003/005: one in-flight request; accepted workflow artifacts never
 // belong to socket cleanup. EOF, close, error and timeout are distinct events.
+import { inspect } from "node:util";
 import { ConnectionDecoder, FrameError, encodeFrame, type DecoderEvent } from "@oma/protocol/frame";
 import { AcceptedFailure, StoreError, publicFailure } from "@oma/domain/errors";
 import { deadline } from "@oma/process/deadline";
@@ -125,7 +126,7 @@ export class RpcConnection {
     const mapped = code === "ENOSPC" || code === "EDQUOT" ? new StoreError("STORAGE_FULL", "raw transport storage is full") : error;
     const failure = mapped instanceof FrameError ? { code: mapped.code, message: mapped.message, retry: "never" as const } : publicFailure(mapped);
     // The caller only learns INTERNAL_ERROR; the Broker's own diagnostics keep why.
-    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", mapped instanceof Error ? mapped.stack ?? mapped.message : String(mapped));
+    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", inspect(mapped, { depth: 6, breakLength: Infinity }));
     return encodeFrame({ v: 1, id, ok: false, error: failure });
   }
   private fatal(error: unknown, id = this.id()): void {

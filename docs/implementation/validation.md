@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `4ea004ca59394e65b70c5cfedc3ade62a07faf1b0d1c07122ee55430e59ab3a6` (15950 files).
+verification input digest `a39332be0a73cf0300b494b3a6273d413517e895481cde7aa5fb8ee54f2d9668` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4800,3 +4800,10 @@ SOURCE132 `4393fca55c8`, Native42206468594. **Ubuntu job SUCCESS**(SOURCE119 이
 - 006: scripted Principal의 `oma_goal`(raw body를 stream하는 `context.publish`)이 Broker에서 `INTERNAL_ERROR`(acceptance unknown)로 끝났다. 같은 Host·Broker에서 일반 frame 호출인 `oma_send`(005)는 성공하므로 Mach 경로의 raw stream upload가 가장 유력한 후보다. 호출자에게는 INTERNAL_ERROR만 주되 Broker stderr에 원래 stack을 남기고, 시험은 Host 화면(Broker 알림 포함)을 보존한다.
 - 005: 본문 PASS 뒤 정리에서 ENOTEMPTY가 반복된다. 정리 실패 시 `lsof +D`로 writer와 남은 파일을 보고한다.
 - Intel 002(Personal 시작)는 이번에 처음 실패했고 원인은 다음 결과로 확인한다.
+
+### SOURCE133 실제 결과와 SOURCE134
+
+SOURCE133 `885bfed390b`, Native42218179357. Ubuntu SUCCESS. Mac26 제품 경로 6/9.
+- 006: Broker stack은 `context effect or observation failed`(git context 게시의 accepted 실패)였으나 그 owner가 원래 오류를 버려 근본 원인이 없었다. 원래 오류를 cause로 보존하고 Broker 진단은 cause 사슬 전체를 출력한다.
+- 009: GOAL 게시가 실패해 seed Worker가 활성화되지 않았다(Worker 요청 0). 006에 종속된다.
+- 005: 정리 실패는 writer가 아니라 제품이 user immutable flag로 봉인한 private runtime generation이었다(다음 시작이 회수). 시험 root 정리가 flag를 먼저 해제한다.

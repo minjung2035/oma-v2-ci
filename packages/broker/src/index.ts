@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import type { BrokerDependencies, BrokerLedger, BrokerMail, BrokerUnits, BrokerViews, BrokerReconcile, BrokerStatusRefresh } from "./ports.js";
 // MUST [AUTH-001..003]/[IPC-*]/[REC-007]: authenticated transport and lifetime handoff.
 import type { Duplex } from "node:stream";
@@ -437,7 +438,7 @@ export class Broker {
   private failureAnswer(id: string, error: unknown): object {
     this.health.observe(error);
     const failure = publicFailure(error);
-    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", error instanceof Error ? error.stack ?? error.message : String(error));
+    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", inspect(error, { depth: 6, breakLength: Infinity }));
     return Broker.errorAnswer(id, failure);
   }
   private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void {

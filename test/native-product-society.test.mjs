@@ -25,6 +25,9 @@ const evidence=(base,owner)=>JSON.stringify({files:spawnSync('/usr/bin/find',[ba
  stderr:owner.stderr().slice(-4096),stdout:owner.stdout().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-4096)},null,1);
 /** Removes a test root; if something still writes there, names it and its writers. */
 function removeTree(base){
+ // The product seals private runtime generations with the user immutable flag
+ // (recovered by the next start); a test root clears it before removal.
+ spawnSync('/usr/bin/chflags',['-R','nouchg',base]);spawnSync('/bin/chmod',['-R','u+w',base]);
  try{rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});}
  catch(error){const writers=spawnSync('/usr/sbin/lsof',['+D',base],{encoding:'utf8',timeout:20000}).stdout;
   const left=spawnSync('/usr/bin/find',[base,'-maxdepth','8'],{encoding:'utf8'}).stdout.split('\n').slice(0,60);
