@@ -25,7 +25,7 @@ jobs:
         # This work branch qualifies on Darwin; other manual runs default to Linux.
         os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["macos-26", "macos-26-intel", "macos-15", "ubuntu-24.04"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -60,9 +60,10 @@ jobs:
       - name: Run the actual product Society and Broker on Darwin
         id: product_society
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
-        timeout-minutes: 12
+        timeout-minutes: 30
         run: |
-          if ! node --test --test-timeout=600000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
+          if ! npm run setup:storage > .scratch/native-runtime/product-setup-storage.log 2>&1; then cat .scratch/native-runtime/product-setup-storage.log; exit 1; fi
+          if ! node --test --test-timeout=900000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
       - name: Preserve Society creator crash reports
         if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         run: |
@@ -198,6 +199,23 @@ jobs:
         timeout-minutes: 15
         run: |
           if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi
+      - name: Back up, verify and restore real Society storage with the pinned Restic on Darwin
+        id: darwin_storage
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        timeout-minutes: 10
+        run: |
+          mkdir -p .scratch/native-runtime
+          if ! npm run setup:storage > .scratch/native-runtime/darwin-setup-storage.log 2>&1; then cat .scratch/native-runtime/darwin-setup-storage.log; exit 1; fi
+          if ! node --test --test-reporter=./scripts/native-tap-reporter.mjs test/session-storage.test.mjs test/session-storage-verification.test.mjs > .scratch/native-runtime/darwin-storage-tests.log 2>&1; then cat .scratch/native-runtime/darwin-storage-tests.log; exit 1; fi
+      - name: Preserve Darwin storage observations
+        if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: native-storage-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            .scratch/native-runtime/darwin-setup-storage.log
+            .scratch/native-runtime/darwin-storage-tests.log
+          retention-days: 14
       - name: Install the actual pinned Linux native prerequisites
         if: runner.os == 'Linux'
         run: bash scripts/setup-native-linux-ci.sh .scratch/native-runtime

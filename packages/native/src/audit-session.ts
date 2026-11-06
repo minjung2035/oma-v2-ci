@@ -229,13 +229,24 @@ export function signalDarwinCoalitionMember(identity: DarwinCoalitionIdentity, p
   const api = native(), before = Buffer.alloc(56);
   if (api.info(pid, 17, 0n, before, before.length) !== before.length) return false;
   if (coalition(pid) !== identity.coalitionId) return false;
+  // A scanned member may exit between observation and capability acquisition.
+  // Only the same generation still observed live keeps the refusal unknown.
+  const vanished = (): boolean => {
+    const now = Buffer.alloc(56);
+    return api.info(pid, 17, 0n, now, now.length) !== now.length ||
+      now.readBigUInt64LE(16) !== before.readBigUInt64LE(16) || now.readUInt32LE(32) !== before.readUInt32LE(32);
+  };
   const port = Buffer.alloc(4);
-  if (api.taskName(api.task, pid, port) !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff)
+  if (api.taskName(api.task, pid, port) !== 0 || !port.readUInt32LE() || port.readUInt32LE() === 0xffffffff) {
+    if (vanished()) return false;
     unknown("Darwin member task-name capability is unavailable");
+  }
   const token = Buffer.alloc(32), count = Buffer.alloc(4); count.writeUInt32LE(8);
   return withCleanup(() => {
-    if (api.taskInfo(port.readUInt32LE(), 15 /* TASK_AUDIT_TOKEN */, token, count) !== 0 || count.readUInt32LE() !== 8)
+    if (api.taskInfo(port.readUInt32LE(), 15 /* TASK_AUDIT_TOKEN */, token, count) !== 0 || count.readUInt32LE() !== 8) {
+      if (vanished()) return false;
       unknown("Darwin member kernel audit token is unavailable");
+    }
     const after = Buffer.alloc(56);
     if (api.info(pid, 17, 0n, after, after.length) !== after.length ||
         before.readBigUInt64LE(16) === 0n || before.readBigUInt64LE(16) !== after.readBigUInt64LE(16) ||

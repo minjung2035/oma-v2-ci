@@ -1,11 +1,12 @@
 /** Actual product path on Darwin: a fresh `oma` Society, then its Broker to readiness. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,readdirSync,realpathSync,rmSync} from 'node:fs';
+import {existsSync,mkdirSync,mkdtempSync,readdirSync,realpathSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawn,spawnSync} from 'node:child_process';
 import {readSessionBirth} from '#oma-test/app/runtime/session-mode';
+import {managedResticPath} from '@oma/storage/restic-tool';
 
 const entry=name=>join(import.meta.dirname,'../apps/oma/dist/entry',name+'.js');
 function darwin(t){if(process.platform==='darwin')return true;t.diagnostic('NOT_RUN: actual Darwin product Society');return false;}
@@ -61,4 +62,59 @@ test('002. A fresh Personal session is born on Darwin and stops without residue'
  assert.doesNotMatch(personal.stderr(),/UNSUPPORTED_PROFILE|blocked by/,personal.stderr());
  assert.notEqual(await stop(personal),null,'Personal ends on SIGTERM: '+personal.stderr());
  await until(()=>owned(base).length===0,30000,'no Personal descendant remains: '+owned(base).join('\n'));
+});
+
+test('003. The Host runs a fresh Society in a real terminal: its Broker child opens the Store and Ctrl-D ends everything',{timeout:540000},async t=>{
+ if(!darwin(t))return;
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-host-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ const hex=text=>Buffer.from(text).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ // The Host's own Broker child must get through runtime generation, tools and Store before Ctrl-D.
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:150},{write:hex('\x04'),wait:20}]};
+ const session=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),PI_OFFLINE:'1',TERM:'xterm-256color'}});
+ let out='',err='';session.stdout.on('data',b=>{out+=b;});session.stderr.on('data',b=>{err+=b;});
+ const ended=new Promise(resolve=>session.once('exit',(code,signal)=>resolve({code,signal})));
+ let store=null;
+ const watch=(async()=>{while(session.exitCode===null&&session.signalCode===null){
+  try{for(const name of readdirSync(data))if(!name.startsWith('.')&&existsSync(join(data,name,'runtime.sqlite'))){store=join(data,name);return;}}catch{}
+  await new Promise(resolve=>setTimeout(resolve,200));}})();
+ const status=await ended;await watch;
+ const terminal=JSON.parse(out||'{}'),screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-3000);
+ assert.deepEqual(status,{code:0,signal:null},err+screen);
+ assert.equal(terminal.ready,true,screen);
+ assert.notEqual(store,null,'the Host-supervised Broker opened the Society Store: '+screen);
+ assert.equal(readSessionBirth(store).surface,'collaboration-v1');
+ assert.equal(terminal.exited,true,screen);assert.equal(terminal.code,0,screen);
+ await until(()=>owned(base).length===0,30000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
+});
+
+test('004. A Darwin Society is archived with the pinned Restic and its Broker restores the verified workspace',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const restic=process.env.OMA_RESTIC_COMMAND??managedResticPath();
+ if(!restic||!existsSync(restic)){t.diagnostic('NOT_RUN: the pinned Restic is not installed (npm run setup:storage)');return;}
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-archive-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1',OMA_RESTIC_COMMAND:restic};
+ const running=[];
+ t.after(async()=>{for(const owner of running)if(owner.child.exitCode===null&&owner.child.signalCode===null){owner.child.kill('SIGKILL');await Promise.race([owner.exited,new Promise(resolve=>setTimeout(resolve,5000))]);}
+  spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true});});
+ const host=start([entry('oma')],project,env);running.push(host);
+ const root=await until(()=>{try{return readdirSync(data).filter(name=>!name.startsWith('.')).map(name=>join(data,name))
+  .find(path=>{try{return readSessionBirth(path)!==null&&existsSync(join(path,'config.json'));}catch{return false;}});}catch{return undefined;}},120000,()=>'fresh Society '+evidence(base,host));
+ assert.notEqual(await stop(host),null,host.stderr());
+ const society=readSessionBirth(root).id,argv=[entry('broker'),'--society',society,'--state-root',root,'--run-root',join(base,'run','oma',society),'--config',join(root,'config.json'),'--project-dir',project];
+ const boot=async what=>{const broker=start(argv,project,env);running.push(broker);
+  await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,300000,()=>what+' '+evidence(base,broker));
+  assert.match(broker.stderr(),/broker ready/,broker.stderr());
+  assert.deepEqual(await stop(broker,90000),{code:0,signal:null},broker.stderr());return broker.stderr();};
+ await boot('first Broker readiness');
+ await until(()=>owned(base).length===0,30000,()=>'first Broker residue: '+owned(base).join('\n'));
+ const archived=spawnSync(process.execPath,[entry('oma'),'archive','--society',society],{cwd:project,env,encoding:'utf8',timeout:300000});
+ assert.equal(archived.status,0,archived.stderr);assert.match(archived.stderr,/Session workspace archived/,archived.stderr);
+ const again=spawnSync(process.execPath,[entry('oma'),'archive','--society',society],{cwd:project,env,encoding:'utf8',timeout:120000});
+ assert.equal(again.status,0,again.stderr);assert.match(again.stderr,/already archived/,again.stderr);
+ const restored=await boot('restoring Broker readiness');
+ assert.match(restored,/Archived session workspace restored and verified/,restored);
+ await until(()=>owned(base).length===0,30000,()=>'restoring Broker residue: '+owned(base).join('\n'));
 });

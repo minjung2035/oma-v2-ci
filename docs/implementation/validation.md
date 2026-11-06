@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `fa181df4c928216fcccaaaa70fcd8f7a3197c413725704a74ea4382521004713` (15949 files).
+verification input digest `c0a7ed54b0ea5cd70574d8690e802428a802a4b56b221112f3f732f2ae9cc2ac` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4711,3 +4711,10 @@ SOURCE119 `0844dc1379f`, Native42164081851. **Mac26 Intel job 전체 SUCCESS**(S
 - Worker gate(bootstrap/tools 6건): 실제 Seatbelt Worker Pi가 OMA extension을 load하며 `directory-relative operation failed: EPERM`로 실패했다. tool-files private state가 `/`부터 모든 상위 요소에 mkdirat를 먼저 시도했고, Seatbelt는 쓸 수 없는 기존 상위(`/Users` 등)의 mkdir을 EEXIST보다 먼저 EPERM으로 거절한다. 먼저 열고 없는 요소만 만든다.
 - Personal gate(3건): fixture가 DR74로 폐기한 Society 일괄 거절(exit4)을 단언했다. Personal 고유 확인은 유지하고 그 항목을 validator·evidence 시험과 함께 제거한다.
 - Mac15 `native-integration-directory`001: populated scope termination 실패로 ownership을 보존했다(fail-closed). 원인 오류가 빈 AggregateError로만 남아 오류 문구에 하위 원인을 포함하게 했다. G-PROCESS의 기존 미해결 항목으로 유지한다.
+
+### SOURCE121 — CI 대기 중 병행 구현
+
+- Mac CI에 Darwin storage step을 추가했다: 고정 Restic 설치 뒤 실제 Society lease로 `session-storage`·`session-storage-verification`의 backup/verify/restore를 실행한다.
+- 제품 경로 시험 003: 실제 Host를 PTY에서 실행한다. Host가 띄운 Broker child가 Store를 열 때까지(runtime generation·tools 포함) 진행하고 Ctrl-D로 Host·Broker·engine이 모두 끝나 잔존 process가 없어야 한다. SOURCE109의 Host→자기 Broker Mach expected-peer 경로가 제품 Host에서 실행된다.
+- 제품 경로 시험 004: 새 Society → Broker ready → 정지 → 실제 `oma archive`(Restic backup/verify·hot 회수, 재실행 시 already archived) → Broker 재시작에서 restore·검증 뒤 ready → 무잔존 정지.
+- G-PROCESS: Darwin coalition 구성원 종료가 scan hint 뒤 task-name/audit token 취득 사이에 정상 종료한 구성원을 즉시 unknown으로 거절했다. 같은 generation을 다시 관측해 이미 사라졌으면 미전송(false)으로 돌려주고, 같은 generation이 살아 있을 때만 unknown을 유지한다. 종료 owner는 다음 반복에서 population을 다시 관측한다. Mac15 `native-integration-directory`001의 populated scope termination 실패 후보 원인이며 실제 확인은 다음 실행이 소유한다.

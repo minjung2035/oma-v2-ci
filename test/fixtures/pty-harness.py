@@ -41,7 +41,7 @@ def main():
     if ready is None:
         pump(1.5)
     else:
-        deadline = time.time() + 20
+        deadline = time.time() + float(spec.get("readyTimeout", 20))
         while ready not in out and time.time() < deadline:
             pump(0.05)
             done, raw = os.waitpid(pid, os.WNOHANG)
