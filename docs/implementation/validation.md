@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0b253a53e2cba3b1cb7e304ff2091e513e654af8c11a811d10a44c5b64780c90` (15949 files).
+verification input digest `f5aa14877a463edeb264127476215b71a5fe4fb3c8ba63ba3992f63e9806fc67` (15949 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4666,3 +4666,10 @@ Mac26·Mac26 Intel·Mac15 모두 Society 001–011 PASS다. 012는 Mach 왕복·
 SOURCE111 `61201d0a8ef`, Native42148722489. Mac26 Society 001–011 PASS, 012는 다시 기능 단언 전부 PASS였다. 결과 직후 Host의 활성 자원은 자기 stderr·IPC·회수 중인 child뿐이었고 2초 뒤 기록이 없어 Host process 자체는 끝났다. 실패는 stdio pipe까지 기다리는 `close` 판정이었다. SOURCE112는 `exit`로 Host 종료를 판정하고 fixture process 무잔존을 별도로 확인한다.
 제품 경로: Personal PASS 재현. 새 Society는 Host가 `the connection could not be opened`로 즉시 종료했다. bootstrap의 기존 Broker 탐지가 Darwin에서도 Unix socket connect를 사용했고, Darwin Broker는 Mach rendezvous만 쓰므로 이 관측은 의미가 없으며 긴 TMPDIR 경로에서는 ENOENT가 아닌 오류로 실패했다. 실제 제품 결함이다.
 SOURCE112는 Darwin에서 같은 경로의 Mach rendezvous를 lookup한다. UNKNOWN_SERVICE·dead name은 부재, live send right는 존재, 그 밖의 관측 실패는 BROKER_UNAVAILABLE로 거절한다(부재로 읽지 않음). Linux는 기존 socket 관측을 유지한다.
+
+### SOURCE112 실제 Mac 결과와 SOURCE113 수리
+
+SOURCE112 `5518e0e9899`, Native42151174757. Mac26 Society **12/12 PASS**(Host→자기 Broker 자식 Mach RPC 012 포함), Personal PASS다.
+새 Society는 이번에 실제 `oma`가 birth·configuration을 게시하고 SIGTERM으로 정상 종료했다. 실제 Broker는 fence·execution recovery를 지나 runtime generation에서 `UNSUPPORTED_PROFILE: runtime generation requires canonical roots and a trusted digest`로 거절했다.
+원인은 owner 간 형식 불일치다. Society bootstrap은 `installation.libdir`을 `${libdir}/`로 쓰고 config owner도 이를 허용하지만, Darwin runtime generation과 Mac Git sandbox는 끝 slash 없는 canonical root만 받는다. 유효한 설치가 항상 거절되는 제품 결함이다.
+SOURCE113은 config bytes를 바꾸지 않고, Broker 조립에서 canonical root를 한 번 만들어 Git preparation·candidate·quarantine에 넘기며 runtime generation도 같은 정규화를 한다.

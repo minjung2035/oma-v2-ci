@@ -215,6 +215,8 @@ async function main(): Promise<void> {
         if (cfg.society !== society)
             throw new StoreError("INVALID_REQUEST", "config society does not match the requested society");
         assertHostDirectoryLayout(cfg.installation.libdir);
+        // Configuration accepts the normalized `${libdir}/` spelling; physical owners receive one canonical root.
+        const libdir = cfg.installation.libdir.endsWith("/") ? cfg.installation.libdir.slice(0, -1) : cfg.installation.libdir;
         // No schema search, path flattening or cross-installation fallback.
         assertRuntimeAssets(runtimeAssets(cfg.installation.libdir), { schema: SCHEMA_PATH });
         assertDeploymentDigest(cfg.installation.libdir, cfg.installation.deploymentDigest);
@@ -259,7 +261,7 @@ async function main(): Promise<void> {
             if (projectDir === undefined || realpathSync(projectDir) !== projectDir || binding.kind !== "bound" ||
                 binding.binding.society !== society || binding.binding.canonicalProjectPath !== projectDir)
                 throw new StoreError("INVALID_REQUEST", "startup project does not match the society's committed binding");
-            preparation = prepareSociety({ node: cfg.installation.node, libdir: cfg.installation.libdir,
+            preparation = prepareSociety({ node: cfg.installation.node, libdir,
                 stateRoot, society, projectDir, fence: claim.fence,
                 signal: preparationAbort.signal, log: line => console.error(line) });
             const prepared = await preparation;
@@ -300,7 +302,7 @@ async function main(): Promise<void> {
         const gitPaths = { stateRoot, projectGit: projectGitPathAt(stateRoot), contextGit: join(stateRoot, "repos", "context.git"),
             worldDir: join(stateRoot, "world"), society,
             ownerSignal: preparationAbort.signal,
-            checkNode: cfg.installation.node, checkAssetsDir: cfg.installation.libdir, };
+            checkNode: cfg.installation.node, checkAssetsDir: libdir, };
         if (developerTools !== undefined) canonicalDirectory = openDirectory(gitPaths.projectGit);
         const canonicalExecution = developerTools === undefined || canonicalDirectory === undefined ? undefined :
             { executable: developerTools.git, directories: new Map([[gitPaths.projectGit, canonicalDirectory]]),

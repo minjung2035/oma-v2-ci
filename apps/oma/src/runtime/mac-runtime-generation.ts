@@ -67,7 +67,9 @@ export function prepareMacRuntimeGeneration(sourceInstallation: SourceInstallati
 }
 function* runtimeGenerationSteps(sourceInstallation: SourceInstallation, parent: string, protectedNode?: ProtectedMacNode): Generator<void, MacRuntimeGeneration, void> {
   if (process.platform !== "darwin" || (process.getuid?.() ?? 0) <= 0) refused("private immutable runtime generations require an ordinary Darwin owner");
-  const installation = Object.freeze({ ...sourceInstallation });
+  // Configuration accepts the normalized `${libdir}/` form; the generation owns one canonical root.
+  const libdir = sourceInstallation.libdir.length > 1 && sourceInstallation.libdir.endsWith("/") ? sourceInstallation.libdir.slice(0, -1) : sourceInstallation.libdir;
+  const installation = Object.freeze({ ...sourceInstallation, libdir });
   if (!isDeploymentDigest(installation.deploymentDigest) || resolve(parent) !== parent || resolve(installation.libdir) !== installation.libdir ||
       resolve(installation.node) !== installation.node)
     refused("runtime generation requires canonical roots and a trusted digest");
