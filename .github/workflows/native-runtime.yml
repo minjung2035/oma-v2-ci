@@ -23,7 +23,8 @@ jobs:
       max-parallel: 2
       matrix:
         # This work branch qualifies on Darwin; other manual runs default to Linux.
-        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["macos-26", "macos-26-intel", "macos-15", "ubuntu-24.04"]') || fromJSON('["ubuntu-24.04"]') }}
+        # Linux first: its regression evidence is cheap and must not be starved by later pushes.
+        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-26-intel", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
