@@ -8,7 +8,7 @@ import {spawnSync} from 'node:child_process';
 import {managedResticPath} from '@oma/storage/restic-tool';
 import {digestCacheTrees} from '@oma/storage/cache-trees';
 
-test('001. A pinned Restic backup and restore reproduces every entry the storage verifier digests',{timeout:120000},async t=>{
+test('001. The pinned Restic restores every digested entry on Darwin except a symlink\'s own time',{timeout:120000},async t=>{
  if(process.platform!=='darwin'){t.diagnostic('NOT_RUN: actual Darwin Restic round trip');return;}
  const restic=process.env.OMA_RESTIC_COMMAND??managedResticPath();
  if(!restic||!existsSync(restic)){t.diagnostic('NOT_RUN: the pinned Restic is not installed (npm run setup:storage)');return;}
@@ -27,8 +27,14 @@ test('001. A pinned Restic backup and restore reproduces every entry the storage
   assert.equal(result.status,0,`restic ${args.join(' ')}: ${result.stderr}`);return result.stdout;};
  run(['init']);run(['backup','tree']);run(['restore','latest','--target',join(base,'restored')]);
  const before=await digestCacheTrees(source,['tree']),after=await digestCacheTrees(join(base,'restored'),['tree']);
+ // sourceInode names the observed inode for diagnostics; the digest excludes it.
+ const comparable=value=>value===undefined?undefined:JSON.stringify({...value,sourceInode:undefined});
  const differences=[...before.metadata].flatMap(([path,value])=>{const restored=after.metadata.get(path);
-  return JSON.stringify(restored)===JSON.stringify(value)?[]:[{path,original:value,restored}];});
- assert.deepEqual(differences,[],JSON.stringify(differences,null,1));
- assert.equal(after.digest,before.digest);
+  return comparable(restored)===comparable(value)?[]:[{path,original:value,restored}];});
+ // The pinned Restic restores everything the verifier digests except a symlink's own
+ // time on Darwin; ResticProcess.restore applies that from the snapshot listing.
+ const unexpected=differences.filter(({original,restored})=>!(original.type==='symlink'&&restored?.type==='symlink'&&
+  comparable({...original,mtimeNs:undefined})===comparable({...restored,mtimeNs:undefined})));
+ assert.deepEqual(unexpected,[],JSON.stringify(unexpected,null,1));
+ assert.deepEqual(differences.map(entry=>entry.path),['tree/link'],'only the symlink time is left for the product to apply');
 });

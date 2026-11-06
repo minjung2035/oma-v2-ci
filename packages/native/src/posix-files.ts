@@ -20,6 +20,7 @@ function initialize() {
     link: libc.func("int linkat(int from, const char *source, int to, const char *name, int flags)"),
     symlink: libc.func("int symlinkat(const char *target, int fd, const char *name)"),
     readlink: libc.func("intptr_t readlinkat(int fd, const char *name, void *buffer, size_t size)"),
+    times: libc.func("int utimensat(int fd, const char *name, const void *times, int flags)"),
   };
 }
 function entry(fd: number, name: string): void {
@@ -30,6 +31,15 @@ function checked(result: number): void {
   if (result === 0) return;
   const code = getSystemErrorName(-errno());
   throw Object.assign(new Error(`directory-relative operation failed: ${code}`), { code });
+}
+/** Sets one entry's own access and modification time to exactly `mtimeNs`,
+ * never following a final symlink (the link itself is changed). */
+export function setLinkTimesAt(fd: number, name: string, mtimeNs: bigint): void {
+  entry(fd, name);
+  if (typeof mtimeNs !== "bigint" || mtimeNs < 0n || mtimeNs >= 1n << 62n) throw new TypeError("invalid entry time");
+  const seconds = mtimeNs / 1_000_000_000n, nanos = mtimeNs % 1_000_000_000n, times = Buffer.alloc(32);
+  for (const offset of [0, 16]) { times.writeBigInt64LE(seconds, offset); times.writeBigInt64LE(nanos, offset + 8); }
+  checked((native ??= initialize()).times(fd, name, times, process.platform === "linux" ? 0x100 : 0x20 /* AT_SYMLINK_NOFOLLOW */));
 }
 export function renameAt(from: number, source: string, to: number, name: string): void {
   entry(from, source); entry(to, name); checked((native ??= initialize()).rename(from, source, to, name));

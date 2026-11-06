@@ -2883,7 +2883,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `0747be9d98fb92fa56d1811ff0bc845ec6454d005d242112ae88c2f053cb3b16` (15950 files).
+verification input digest `ae10d727b4e96027662542a058dd63d5ddb5df479af14ebfb3026df3b1d1e3e0` (15950 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4751,3 +4751,10 @@ SOURCE124 `a40d447e52e`, Native42175524579. **Darwin arm64에서 Restic 설치·
 SOURCE126 `9062bb57754`, Native42180175014. **Mac26 arm64에서 제품 경로 004 PASS**: 실제 `oma archive`가 고정 Restic(image 검증 job scope)으로 backup·verify·hot 회수를 하고, Broker 재시작이 archive를 restore·검증한 뒤 ready에 도달했다. storage 시험은 9/18로 개선됐다.
 - 제품 경로 003/005: 새 종료 이유가 원인을 보였다. `required interactive extensions could not be loaded: ... tool path passes through a link or a non-directory`. Principal engine에는 TMPDIR가 전달되지 않아 Node `tmpdir()`가 `/tmp`이고, macOS `/tmp`(그리고 사용자 TMPDIR의 `/var`)는 symlink다. hashline·MCP state와 검색 snapshot이 그 root를 O_NOFOLLOW descriptor로 열다 거절됐다. 실제 Mac 사용자에게도 생기는 제품 결함이다. lsp·review-record·compile-cache·launchd가 이미 쓰던 대로 system temp root 자체만 realpath로 정규화하고, root 안의 경로 containment는 그대로 둔다.
 - storage 6건: `restored session differs from its verified checkpoint`. verifier는 symlink를 포함한 모든 entry의 mode·uid·gid·ns mtime을 digest한다. 어느 metadata가 Darwin Restic restore에서 달라지는지 entry 단위로 보고하는 진단 시험 `native-darwin-restic-roundtrip`을 storage step에 추가했다.
+
+### SOURCE127 실제 결과와 SOURCE128
+
+SOURCE127 `dae5941b7fd`, Native42184803022. **Mac26 제품 경로 003 PASS**: 실제 Host가 PTY에서 새 Society를 열고, 자기 Broker child가 Store를 연 뒤 Ctrl-D로 Host·Broker·engine이 모두 정상 종료했다(temp root 정규화 수리 확인). 001·002·004도 PASS로 제품 경로 4/5다.
+- Restic round-trip 진단: 고정 Restic은 Darwin에서 symlink 자체의 mtime만 복원하지 않았다(파일·디렉터리·mode·소유자·내용·link target은 동일). snapshot은 그 시각을 정확히 가지고 있다(archive 검증의 PAX 대조). verifier를 약화하지 않고 Darwin restore 직후 snapshot의 `ls --json`에서 symlink 시각을 읽어 containment 아래 `utimensat(AT_SYMLINK_NOFOLLOW)`로 ns 정밀도로 적용하며, 이어지는 checkpoint digest가 결과를 검증한다. 진단 시험은 이 Restic 동작을 고정한다.
+- 제품 경로 005: Principal은 prompt 뒤 작업을 시작했으나 provider가 받은 요청이 0이었다. 화면이 spinner frame으로 채워져 원인이 보이지 않아, 시험이 spinner·control sequence를 걸러 알림만 남기고 Society Store 상태를 함께 보존한다.
+- Worker gate는 매 push마다 긴 gate job과 함께 취소되어 결과가 없었다. common-runtime job 안에 worker-bootstrap·worker-tools fixture를 바로 실행하는 짧은 step을 추가했다.

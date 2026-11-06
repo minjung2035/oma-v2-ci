@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 37,
-  "NOT_REVIEWED": 14366,
+  "CHANGED_WITHOUT_ORACLE": 38,
+  "NOT_REVIEWED": 14365,
   "REMOVED": 220
  },
  "lanes": {
@@ -611,8 +611,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runtime/invocation-codec.ts",
@@ -2304,8 +2303,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/git/src/canonical-directory.ts",
@@ -2924,7 +2922,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/native/src/private-parent.ts",
@@ -3444,7 +3443,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/process/src/run.ts",
@@ -4199,10 +4199,12 @@
   {
    "path": "packages/tool-files/src/index.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR62"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "1b04e5aac15bd5dd845ad952971677a055dcbd7ec833fdec5c2eea1ad41bed7d"
   },
   {
    "path": "packages/tool-files/src/private-state.ts",
@@ -4230,8 +4232,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE",
@@ -7955,8 +7956,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/tool-mcp/src/mcp-sdk-env.ts",
@@ -26443,8 +26443,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/tool-runtime/src/contained-tools.ts",

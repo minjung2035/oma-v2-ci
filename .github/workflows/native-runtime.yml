@@ -65,6 +65,19 @@ jobs:
           # Restic setup is qualified by its own step; a failure here is reported by product test 004.
           npm run setup:storage > .scratch/native-runtime/product-setup-storage.log 2>&1 || cat .scratch/native-runtime/product-setup-storage.log
           if ! node --test --test-timeout=900000 --test-reporter=./scripts/native-tap-reporter.mjs test/native-product-society.test.mjs > .scratch/native-runtime/product-society-tests.log 2>&1; then cat .scratch/native-runtime/product-society-tests.log; exit 1; fi
+      - name: Run the actual Darwin Worker probes before the long gate job
+        id: worker_probes
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
+        timeout-minutes: 10
+        run: |
+          failed=0
+          for name in worker-bootstrap worker-tools; do
+            workspace="$(cd "$(mktemp -d)" && pwd -P)"
+            if ! (cd "$workspace" && node "$GITHUB_WORKSPACE/test/fixtures/darwin-worker.mjs" "$name") > ".scratch/native-runtime/$name.log" 2>&1; then
+              cat ".scratch/native-runtime/$name.log"; failed=1
+            fi
+          done
+          exit "$failed"
       - name: Preserve Society creator crash reports
         if: ${{ always() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         run: |
@@ -105,6 +118,8 @@ jobs:
             .scratch/native-runtime/build.log
             .scratch/native-runtime/society-lease-tests.log
             .scratch/native-runtime/product-society-tests.log
+            .scratch/native-runtime/worker-bootstrap.log
+            .scratch/native-runtime/worker-tools.log
             .scratch/native-runtime/crash-reports
             .scratch/native-runtime/source-head.txt
             .scratch/native-runtime/environment.json

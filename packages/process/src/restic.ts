@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { withAsyncCleanup } from "@oma/native/cleanup";
 import { openRegularBeneath, withinDirectory } from "@oma/native/files";
+import { setLinkTimesAt } from "@oma/native/posix-files";
 import { startProcess } from "./async.js";
 import type { ProcessObservation } from "./command.js";
 import { SOCIETY_FENCE_ENV, SOCIETY_FENCE_FD } from "./fence.js";
@@ -130,7 +131,34 @@ export class ResticProcess {
   }
   async restore(snapshot: string, target: string): Promise<void> {
     await this.execute(["restore", snapshot, "--target", target, "--verify", "--sparse"]);
+    // The pinned Restic does not restore a symlink's own time on Darwin. The
+    // snapshot holds it exactly; apply it, then the caller's digest verifies.
+    if (process.platform === "darwin") for (const link of await this.links(snapshot))
+      withinDirectory(join(target, link.path), (parent, name) => setLinkTimesAt(parent, name, link.mtimeNs));
   }
+  private async links(snapshot: string): Promise<readonly { readonly path: string; readonly mtimeNs: bigint }[]> {
+    const file = join(this.options.stage, `snapshot-links-${randomUUID()}.jsonl`);
+    await this.execute(["ls", "--json", snapshot], { spool: file });
+    const links: { path: string; mtimeNs: bigint }[] = [];
+    for (const line of readFileSync(file, "utf8").split("\n")) {
+      if (line.length === 0) continue;
+      const node = JSON.parse(line) as Record<string, unknown>;
+      if (node.type !== "symlink") continue;
+      if (typeof node.path !== "string" || !node.path.startsWith("/") || node.path.split("/").some((part, index) => index > 0 && (part === "" || part === "." || part === "..")))
+        throw new StoreError("STORE_CORRUPT", "Restic listed a symlink outside its snapshot tree");
+      links.push({ path: node.path.slice(1), mtimeNs: rfc3339Nanoseconds(node.mtime) });
+    }
+    return links;
+  }
+}
+/** RFC 3339 with up to nanosecond precision and any offset, as exact nanoseconds. */
+function rfc3339Nanoseconds(value: unknown): bigint {
+  const match = typeof value === "string" ? /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)$/.exec(value) : null;
+  if (match === null) throw new StoreError("STORE_CORRUPT", "Restic listed an unreadable symlink time");
+  const [, year, month, day, hour, minute, second, fraction = "", zone] = match;
+  let seconds = BigInt(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) / 1000);
+  if (zone !== "Z") seconds -= BigInt((zone!.startsWith("-") ? -1 : 1) * (Number(zone!.slice(1, 3)) * 3600 + Number(zone!.slice(4, 6)) * 60));
+  return seconds * 1_000_000_000n + BigInt(fraction.padEnd(9, "0"));
 }
 /** Setup's post-install check of the held, verified installation (Darwin has no
  * descriptor exec): `restic version` through the same image-verified scope. */
