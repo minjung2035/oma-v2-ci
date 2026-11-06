@@ -230,3 +230,34 @@ test('008. The real Host restarts its Broker child after a SIGKILL and still end
  assert.equal(status,0,screen);assert.equal(terminal.ready,true,screen);assert.equal(terminal.code,0,screen);
  await until(()=>owned(base).length===0,60000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });
+
+test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broker publishes it through quarantine',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
+ const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
+ const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
+ const provider=await scriptedProvider(request=>{
+  if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and submit it.'},expectedRevision:null}));
+  const done=toolResults(request).length;
+  return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_send',{to:['principal'],subject:'fix',content:{kind:'text',value:'Submitted.'},attachments:[{commit:'HEAD'}]})):text('Submitted.');
+ });
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-submit-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);rmSync(base,{recursive:true,force:true,maxRetries:10,retryDelay:200});});
+ const agentDir=join(data,'engine');provider.configure(agentDir);
+ writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+ let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
+ const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
+ const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
+ const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
+ const workers=provider.seen.filter(seen=>worker(seen.body));
+ const results=workers.flatMap(seen=>toolResults(seen.body).map(result=>result.text));
+ assert.ok(results.some(result=>!/error|denied|EPERM/i.test(result)&&result.length>=0)&&workers.length>=2,`Worker requests ${workers.length}; results ${JSON.stringify(results).slice(0,3000)}`);
+ const submitted=results.find(result=>/"state"\s*:\s*"succeeded"/.test(result));
+ assert.ok(submitted,`no Worker submission receipt succeeded: ${JSON.stringify(results).slice(0,4000)}`);
+ await until(()=>owned(base).length===0,60000,()=>'no process remains: '+owned(base).join('\n'));
+});
