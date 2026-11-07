@@ -249,15 +249,15 @@ macOS 브랜치에서 기록한 Linux 인수검증과 후속 Mac 관측은 [병�
 | P6 | Society/Personal/TUI 전체 제품 경로 | 새 설치에서 VM/systemd 없이 두 OS의 named scenario 통과 |
 | P7 | 전체 회귀·복잡도·owner/spec/evidence 최종 대조 | 현재 source에 결박한 결과, 미완료/제한의 정확한 표시 |
 
-2026-11-06 현재 단계별 상태(근거는 [validation](implementation/validation.md)의 SOURCE108–130):
+2026-11-07 현재 단계별 상태(근거는 [validation](implementation/validation.md)의 SOURCE108–141):
 
 | 단계 | 현재 상태 |
 |---|---|
 | P2 | Mac 공통 suite의 파일 경쟁·publication·repair 시험 PASS(Mac26·Intel 466/466). Seatbelt Worker의 private state 결함(EPERM)과 macOS temp root symlink 결함을 수리했고 실제 Seatbelt Worker extension load 확인 |
 | P3 | Darwin execution journal·recovery·Society fence/scope 소유 세 Mac 12/12. 실제 Broker ready·SIGTERM drain 정리 결함 수리. populated scope 종료 1건은 원인 후보 수리 후 재확인 대기 |
-| P4 | 실제 Seatbelt Worker 시작·RPC·session 재개·developer tools·child 종료 PASS(Mac26·Intel). Worker 도구·금지 효과 probe와 goal→Worker 제품 경로는 판정 대기 |
+| P4 | 실제 Seatbelt Worker 시작·RPC·session 재개·developer tools·child 종료 PASS(Mac26·Intel). Worker 도구 probe(git·npm·record read·`cc`)와 private read·shared write 거절 세 Mac PASS. 제품 경로에서 goal로 깨어난 Worker가 Seatbelt 안에서 시작해 egress까지 도달(relay socket 경로·https origin·봉인 image 안 role extension 수리 후). Worker의 model 도달·submit·merge는 판정 대기 |
 | P5 | Darwin arm64에서 image 검증 job scope로 Restic 설치·실제 archive/restore 제품 경로 PASS. x64 고정 binary는 무서명이라 그 효과만 명시적으로 거절. storage 시험 16/19(나머지는 fixture 이식 후 대기). 독립 설치 0 FAIL(Intel) |
-| P6 | 새 Society→Broker ready·정상 종료, Personal 시작, 실제 Host PTY 실행·Ctrl-D 무잔존 종료, archive/restore PASS. Principal→Broker Mach 왕복은 판정 대기 |
+| P6 | 세 Mac에서 새 Society→Broker ready·정상 종료, Personal 시작, 실제 Host PTY 실행·Ctrl-D 무잔존 종료, archive/restore, scripted Principal→Broker Mach 왕복, Human CLI, Host가 SIGKILL된 Broker child를 재시작 PASS(제품 경로 001–005·007·008). goal→Worker→submit/merge(006·009·010)는 판정 대기 |
 | P7 | 미착수. 세 gate의 공식 판정과 최종 대조가 남음 |
 
 P1의 독립 후보는 필요한 순서로 검증하고, 이미 근거가 확보된 P2 작업은 진행할 수 있다. 다만 공통화·시험 개수가 늘어난 것을 핵심 gate 해결로 계산하지 않는다. 최종 인도는 모든 사용자 기능, affected caller/test/docs, clean cutover, 실제 실행 proof를 포함한다. work branch만 commit/push하며 merge·deploy하지 않는다.
