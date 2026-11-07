@@ -21,7 +21,7 @@ import { decodeInvocationBinding, invocationFreezeSha256, invocationFreezeMatche
   type InvocationBinding, type InvocationIdentity } from "./runtime/invocation-codec.js";
 import type { MutationMethod } from "@oma/contracts";
 import type { FreshBuild, RequestOptions } from "@oma/client/request-service";
-import { ensureOwnedDurableDirectory, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "@oma/storage/durable-fs";
+import { ensureOwnedDurableDirectoryBeneath, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "@oma/storage/durable-fs";
 import { openBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 
@@ -127,9 +127,10 @@ export class RequestCache {
   /** P0-8: `.local/state/oma` is the first component oma itself made inside
    * the caller's home -- `.local` and `.local/state` are the user's shared
    * XDG names, never repaired -- and a mode-000 cache directory beneath the
-   * boundary is repaired rather than wedged on. */
+   * boundary is repaired rather than wedged on. The home itself is its launch
+   * owner's, already durable; a confined engine cannot open what lies above. */
   private ensureDir(): void {
-    ensureOwnedDurableDirectory(this.dir(), join(this.homeDir, ".local", "state", "oma"), 0o700);
+    ensureOwnedDurableDirectoryBeneath(this.dir(), join(this.homeDir, ".local", "state", "oma"), this.homeDir, 0o700);
   }
   private path(key: RequestKey): string {
     if (!isValidRequestKey(key)) throw new CacheError("INVALID_REQUEST", "invalid request key");

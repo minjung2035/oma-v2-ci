@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `3b05dae6f5adf1568698d1f28c286d58f2a70d1859f489d28767febe138d41ba` (15951 files).
+verification input digest `1e91235e81b9c72c5c6572d8a8c8421a8c4e469d8b0997773597f84ab59d7ca8` (15951 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4826,3 +4826,7 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 ### SOURCE142 진단 결과: Worker는 relay로 모델에 도달함
 
 `80532fbeefd`의 Mac26 세션 기록에서 Seatbelt Worker가 relay를 거쳐 `groq/llama-3.1-8b-instant`에 요청하고 scripted 응답을 받은 것이 확인됐다. 006/009/010의 실패는 제품이 아니라 테스트 분류기 때문이었다. Worker 요청을 `Read /world/START.md`라는 옛 brief 문구로 찾았지만, 지금 brief는 인라인이 아니라 전달된 mail 파일(`/oma/mail/messages/…`)로 간다. 그래서 Worker 요청이 Principal 요청으로 분류되어 Principal 스크립트(`oma_goal`)를 받았다. 이제 분류기는 Worker 시스템 프롬프트의 첫 문장으로 Worker 요청을 찾고, 행위자는 시스템 프롬프트의 cwd `…/agents/<actor>/workspace`에서 읽는다.
+
+### SOURCE143 결과와 Seatbelt Worker의 요청 캐시 수리
+
+`b8761424622`의 Mac26 결과에서 제품 경로 001–008이 PASS였고, 006(goal→Seatbelt Worker→relay→모델)도 처음 통과했다. 009와 010에서는 Worker의 `oma_send`·`oma_merge`가 `request cache preparation failed: the directory /private cannot be observed now (EPERM)`로 ACCEPTANCE_UNKNOWN을 받았다. 요청 캐시와 output spool은 `.local/state/oma` 아래 디렉터리를 만든 뒤 `/`까지 모든 조상을 열어 fsync했는데, Seatbelt Worker는 HOME 위의 조상을 검색만 할 수 있고 열 수는 없다. HOME은 runner가 Worker 실행 전에 durable하게 만든 launch owner의 디렉터리다. 이제 두 경로(`ensureOwnedDurableDirectoryBeneath`)는 leaf부터 HOME까지의 모든 이름을 매 호출마다 flush한다. HOME이나 그 조상을 이번 호출이 직접 만들었을 때만 이전처럼 `/`까지 flush한다. 내구성 범위는 줄지 않는다. HOME 위의 이름은 이 호출이 만든 적이 없고, 그 barrier는 HOME을 만든 쪽이 이미 세웠다.

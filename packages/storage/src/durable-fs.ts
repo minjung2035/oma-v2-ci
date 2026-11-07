@@ -8,7 +8,7 @@ import {
   constants, closeSync, fstatSync, fsyncSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync, linkSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { StoreError } from "@oma/domain/errors";
 import { assertDirectory, ensureDirectory, ensureOwnedDirectory } from "./directory.js";
 import { openBeneath, openDirectory, openRegularBeneath, withinDirectory } from "@oma/native/files";
@@ -106,6 +106,28 @@ export function ensureOwnedDurableDirectory(directory: string, ownedFrom: string
   faults?: DurabilityObserver): readonly string[] {
   const created = ensureOwnedDirectory(directory, ownedFrom, mode);
   flushDirectoryChain(directory, faults);
+  return created;
+}
+
+/** `ensureOwnedDurableDirectory` beneath a directory whose own name its
+ * provisioner already made durable -- a launch owner's HOME. Every name from
+ * the leaf through `established` is flushed on every call, as above; the
+ * chain above it is the provisioner's barrier and is re-walked only when
+ * this call itself created `established` or one of its ancestors. A confined
+ * caller may search but not open those ancestors (notably Seatbelt). */
+export function ensureOwnedDurableDirectoryBeneath(directory: string, ownedFrom: string, established: string,
+  mode = 0o700, faults?: DurabilityObserver): readonly string[] {
+  const top = resolve(established), beneath = (path: string): boolean => {
+    const rest = relative(top, resolve(path));
+    return rest !== "" && !rest.startsWith("..") && !isAbsolute(rest);
+  };
+  if (!beneath(ownedFrom)) throw new StoreError("STORE_CORRUPT", "an established directory must contain the owned boundary");
+  const created = ensureOwnedDirectory(directory, ownedFrom, mode);
+  if (!created.every(beneath)) { flushDirectoryChain(directory, faults); return created; }
+  for (let path = resolve(directory); ; path = dirname(path)) {
+    fsyncDir(path, faults);
+    if (path === top) break;
+  }
   return created;
 }
 

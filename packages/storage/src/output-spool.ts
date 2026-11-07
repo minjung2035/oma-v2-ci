@@ -26,7 +26,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { sha256Hex } from "@oma/domain/canonical-json";
-import { ensureOwnedDurableDirectory, publishNoReplace } from "./durable-fs.js";
+import { ensureOwnedDurableDirectoryBeneath, publishNoReplace } from "./durable-fs.js";
 import { fileDigest } from "./file-digest.js";
 
 /** The directory one caller's spilled answers live in, next to the request
@@ -38,13 +38,14 @@ function spoolDirectory(home: string): { oma: string; directory: string } {
 }
 
 /** Write the complete answer and return the path it can be read back from.
- * `ensureOwnedDurableDirectory` repairs the OMA-owned part of the path, so a
+ * `ensureOwnedDurableDirectoryBeneath` repairs the OMA-owned part of the path, so a
  * mode-000 ancestor OMA made cannot wedge a later answer; the caller's own
- * `.local`/`state` are never touched. Any write failure is the caller's to
+ * `.local`/`state` are never touched, and the home's ancestors stay its launch
+ * owner's barrier. Any write failure is the caller's to
  * report -- nothing here hides it behind a truncated answer. */
 export function spoolOutput(home: string, bytes: Uint8Array): string {
   const { oma, directory } = spoolDirectory(home);
-  ensureOwnedDurableDirectory(directory, oma, 0o700);
+  ensureOwnedDurableDirectoryBeneath(directory, oma, home, 0o700);
   const digest = sha256Hex(bytes);
   const named = join(directory, `output-${digest}.txt`);
   if (publishNoReplace(named, bytes) === "created") return named;

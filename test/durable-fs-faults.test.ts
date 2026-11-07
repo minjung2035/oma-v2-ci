@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256Hex } from "@oma/domain/canonical-json";
 import { StoreError } from "@oma/domain/errors";
-import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, publishNoReplace, type DurabilityObserver } from "@oma/storage/durable-fs";
+import { replaceDerivedFile, fsyncTree, ensureDurableDirectory, ensureOwnedDurableDirectoryBeneath, publishNoReplace, type DurabilityObserver } from "@oma/storage/durable-fs";
 import { publishImmutableFile } from "@oma/storage/immutable-file";
 import { publishImmutableFile as mailPublish } from "@oma/storage/immutable-file";
 import { replaceDerivedFile as writeAtomic } from "@oma/storage/durable-fs";
@@ -205,4 +205,23 @@ test("012. A derived replacement that keeps losing its temporary refuses after t
     assert.equal(fs.readFileSync(target, "utf8"), "old", "a refused replacement keeps the old bytes");
     assert.deepEqual(fs.readdirSync(root).filter(name => name.endsWith(".tmp")), [], "no temporary residue");
   });
+});
+
+test("013. Beneath an established home every name through the home is flushed, never its ancestors, unless the call made the home", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), "oma-durable-beneath-")));
+  try {
+    const flushed = (home: string): string[] => {
+      const paths: string[] = [];
+      const observer: DurabilityObserver = fault => { if (fault.point === "directory-fsync" && fault.phase === "ambiguous") paths.push(fault.path); };
+      ensureOwnedDurableDirectoryBeneath(join(home, ".local", "state", "oma", "requests"), join(home, ".local", "state", "oma"), home, 0o700, observer);
+      return paths;
+    };
+    const home = join(root, "home"); fs.mkdirSync(home);
+    const chain = [join(home, ".local", "state", "oma", "requests"), join(home, ".local", "state", "oma"), join(home, ".local", "state"), join(home, ".local"), home];
+    assert.deepEqual(flushed(home), chain, "first creation flushes each new name and the home that holds it");
+    assert.deepEqual(flushed(home), chain, "a retry finding every name flushes the same chain again");
+    const made = join(root, "made", "home");
+    assert.equal(flushed(made).at(-1), "/", "a home this call created is not established; the whole chain is flushed");
+    assert.throws(() => ensureOwnedDurableDirectoryBeneath(join(root, "x"), root, home), isCorrupt);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
