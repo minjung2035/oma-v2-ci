@@ -254,9 +254,9 @@ macOS 브랜치에서 기록한 Linux 인수검증과 후속 Mac 관측은 [병�
 | 단계 | 현재 상태 |
 |---|---|
 | P2 | Mac 공통 suite의 파일 경쟁·publication·repair 시험 PASS(Mac26·Intel 466/466). Seatbelt Worker의 private state 결함(EPERM)과 macOS temp root symlink 결함을 수리했고 실제 Seatbelt Worker extension load 확인 |
-| P3 | Darwin execution journal·recovery·Society fence/scope 소유 세 Mac 12/12. 실제 Broker ready·SIGTERM drain 정리 결함 수리. populated scope 종료 1건은 원인 후보 수리 후 재확인 대기 |
+| P3 | Darwin execution journal·recovery·Society fence/scope 소유 세 Mac 12/12. 실제 Broker ready·SIGTERM drain 정리 결함 수리. populated scope 종료(006·009·010 포함) 12/12 재확인 PASS(Mac26, `80532fbeefd`) |
 | P4 | 실제 Seatbelt Worker 시작·RPC·session 재개·developer tools·child 종료 PASS(Mac26·Intel). Worker 도구 probe(git·npm·record read·`cc`)와 private read·shared write 거절 세 Mac PASS. 제품 경로에서 goal로 깨어난 Worker가 Seatbelt 안에서 시작해 egress까지 도달(relay socket 경로·https origin·봉인 image 안 role extension 수리 후). Worker의 model 도달·submit·merge는 판정 대기 |
-| P5 | Darwin arm64에서 image 검증 job scope로 Restic 설치·실제 archive/restore 제품 경로 PASS. x64 고정 binary는 무서명이라 그 효과만 명시적으로 거절. storage 시험 16/19(나머지는 fixture 이식 후 대기). 독립 설치 0 FAIL(Intel) |
+| P5 | Darwin arm64에서 image 검증 job scope로 Restic 설치·실제 archive/restore 제품 경로 PASS. x64 고정 binary는 무서명이라 그 효과만 명시적으로 거절. storage 시험 19/19 PASS(Mac26, `80532fbeefd`). 독립 설치 0 FAIL(Intel), packed 설치 격리 전 package PASS(Mac26) |
 | P6 | 세 Mac에서 새 Society→Broker ready·정상 종료, Personal 시작, 실제 Host PTY 실행·Ctrl-D 무잔존 종료, archive/restore, scripted Principal→Broker Mach 왕복, Human CLI, Host가 SIGKILL된 Broker child를 재시작 PASS(제품 경로 001–005·007·008). goal→Worker→submit/merge(006·009·010)는 판정 대기 |
 | P7 | 미착수. 세 gate의 공식 판정과 최종 대조가 남음 |
 
