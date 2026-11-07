@@ -41,7 +41,14 @@ function refused(text){
 /** Every Resident log the Broker kept under this root, newest bytes last: why a Worker run ended. */
 function residentLogs(base){
  const files=spawnSync('/usr/bin/find',[base,'-path','*/logs/resident/*','-type','f'],{encoding:'utf8'}).stdout.split('\n').filter(Boolean);
- return files.map(file=>{let bytes='';try{bytes=readFileSync(file,'utf8');}catch(error){bytes=String(error);}return `--- ${file}\n${bytes.slice(-3000)}`;}).join('\n').slice(-12000)||'no Resident log files';
+ const logs=files.map(file=>{let bytes='';try{bytes=readFileSync(file,'utf8');}catch(error){bytes=String(error);}return `--- ${file}\n${bytes.slice(-3000)}`;}).join('\n').slice(-12000)||'no Resident log files';
+ // A Worker that started and stayed silent: what its engine session recorded
+ // (the delivered prompt, a model or tool error) and which of its processes live.
+ const sessions=spawnSync('/usr/bin/find',[base,'-path','*/agents/worker-*/runner/sessions/*','-type','f'],{encoding:'utf8'}).stdout.split('\n').filter(Boolean)
+  .map(file=>{let bytes='';try{bytes=readFileSync(file,'utf8');}catch(error){bytes=String(error);}
+   return `--- ${file}\n${bytes.split('\n').filter(Boolean).map(line=>line.slice(0,600)).slice(-12).join('\n')}`;}).join('\n').slice(-12000)||'no Worker session files';
+ const processes=owned(base).filter(line=>/runner\.js|pi-coding-agent|oma-seatbelt/.test(line)).map(line=>line.slice(0,300)).join('\n')||'no Worker processes';
+ return `${logs}\nWorker sessions:\n${sessions}\nWorker processes:\n${processes}`;
 }
 /** A Worker's relay and egress sockets live under the run root and must fit
  * Darwin's 104-byte sun_path; a test run root sits as short as a user's /tmp. */
