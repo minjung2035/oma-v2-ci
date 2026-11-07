@@ -344,3 +344,45 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  assert.equal(git('show','refs/heads/main:fix.txt'),'fixed','the canonical main holds the integrated candidate');
  await until(()=>owned(base).length===0,60000,()=>'no process remains: '+owned(base).join('\n'));
 });
+
+test('011. A Seatbelt Worker engine killed mid-tool takes its detached descendants with it, and the Society still ends without residue',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const {scriptedProvider,tools,call,text,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
+ const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
+ const actor=request=>(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')).match(/\/agents\/(worker-[0-9]+)\/workspace/)??['',''])[1];
+ // A new session (detached) escapes any process-group kill; only the engine's whole scope can end it.
+ const escape=`node -e "const c=require('child_process').spawn(process.execPath,['-e','setInterval(()=>{},1e3)'],{detached:true,stdio:'ignore'});require('fs').writeFileSync('escaped.pid',String(c.pid));c.unref()" && exec node -e "setInterval(()=>{},2e3)"`;
+ let escaping=0;
+ const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
+  if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Start a long build.'},expectedRevision:null}));
+  if(actor(request)!=='worker-1'||escaping++>0)return text('Waiting.');
+  return tools(call('bash',{command:escape}));
+ });
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-escape-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
+ const agentDir=join(data,'engine');provider.configure(agentDir);
+ writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:5},{write:hex('set the goal'),wait:1},{write:hex('\r'),wait:480},{write:hex('\x04'),wait:30}]};
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:shortRunRoot(t),NODE_EXTRA_CA_CERTS:provider.caFile,TERM:'xterm-256color'}});
+ let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
+ const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
+ const ended=new Promise(resolve=>child.once('exit',code=>resolve(code)));
+ const table=()=>new Map(spawnSync('/bin/ps',['-axo','pid=,ppid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(Boolean)
+  .map(line=>line.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map(([,pid,ppid,command])=>[Number(pid),{ppid:Number(ppid),command}]));
+ const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){return error.code==='EPERM';}};
+ const pidFile=()=>spawnSync('/usr/bin/find',[data,'-path','*/agents/worker-1/workspace/escaped.pid'],{encoding:'utf8'}).stdout.split('\n').find(Boolean);
+ const escaped=await until(()=>{const file=pidFile();const pid=file?Number(readFileSync(file,'utf8')):0;return pid>0&&alive(pid)?pid:0;},420000,
+  ()=>`worker-1 never left a live detached descendant\nResident logs:\n${residentLogs(base)}`);
+ // The tool's blocking process, then its engine: the nearest ancestor running the confined Pi entry.
+ const engine=await until(()=>{const rows=table();const holder=[...rows].find(([,row])=>row.command.includes('setInterval(()=>{},2e3)'));
+  for(let pid=holder?.[1].ppid;pid>1&&rows.has(pid);pid=rows.get(pid).ppid)if(rows.get(pid).command.includes('--no-global-search-paths'))return pid;return 0;},60000,
+  ()=>'no confined engine above the blocking tool:\n'+[...table()].map(([pid,row])=>`${pid} ${row.ppid} ${row.command}`).filter(line=>line.includes(base)||line.includes('setInterval')).join('\n'));
+ process.kill(engine,'SIGKILL');
+ await until(()=>!alive(escaped),60000,()=>`the detached descendant ${escaped} outlived its SIGKILLed engine ${engine}:\n`+owned(base).join('\n'));
+ const status=await ended;clearTimeout(timer);
+ const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
+ await until(()=>owned(base).length===0&&!alive(escaped),60000,()=>'no process remains: '+owned(base).join('\n'));
+});
