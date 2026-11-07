@@ -380,8 +380,12 @@ test('011. A Seatbelt Worker engine killed mid-tool takes its detached descendan
  const engine=await until(()=>{const rows=table();const holder=[...rows].find(([,row])=>row.command.includes('setInterval(()=>{},2e3)'));
   for(let pid=holder?.[1].ppid;pid>1&&rows.has(pid);pid=rows.get(pid).ppid)if(rows.get(pid).command.includes('--no-global-search-paths'))return pid;return 0;},60000,
   ()=>'no confined engine above the blocking tool:\n'+[...table()].map(([pid,row])=>`${pid} ${row.ppid} ${row.command}`).filter(line=>line.includes(base)||line.includes('setInterval')).join('\n'));
+ const before=provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').length;
  process.kill(engine,'SIGKILL');
  await until(()=>!alive(escaped),60000,()=>`the detached descendant ${escaped} outlived its SIGKILLed engine ${engine}:\n`+owned(base).join('\n'));
+ // Only after that whole scope ended may its undelivered batch reach a new engine.
+ await until(()=>provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').length>before,300000,
+  ()=>`worker-1 was not redelivered after its scope ended\nResident logs:\n${residentLogs(base)}`);
  const status=await ended;clearTimeout(timer);
  const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
  await until(()=>owned(base).length===0&&!alive(escaped),60000,()=>'no process remains: '+owned(base).join('\n'));
