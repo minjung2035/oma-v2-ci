@@ -46,14 +46,21 @@ function residentLogs(base){
 /** A Worker's relay and egress sockets live under the run root and must fit
  * Darwin's 104-byte sun_path; a test run root sits as short as a user's /tmp. */
 function shortRunRoot(t){const root=realpathSync(mkdtempSync('/tmp/oma-run-'));t.after(()=>removeTree(root));return root;}
-// The Host's Principal engine gets only its fixed environment, never the
-// Human's NODE_EXTRA_CA_CERTS, while a Worker's relay accepts only an https
-// origin and trusts what its Broker trusts. One script answers both: the
-// Principal's `fake` provider in plain HTTP, the Workers' `groq` over TLS.
+// The Host's Principal engine gets only its fixed environment (a CA override
+// is a denied channel), while a Worker's relay accepts only an https origin and
+// trusts what its Broker trusts. Both follow the engine's default model, so the
+// Principal starts on `fake` in plain HTTP and, at its first request, the
+// default moves to `groq` over TLS: the session keeps its model, the Workers
+// that launch after the goal resolve the new default.
 async function principalAndWorkerProvider(scriptedProvider,script){
- const plain=await scriptedProvider(script),secure=await scriptedProvider(script,{tls:true});
+ const {CONFINED_MODEL}=await import('../dist/test/fixtures/scripted-provider.js');
+ let agentDir=null;
+ const moveDefault=()=>{if(agentDir===null)return;const path=join(agentDir,'settings.json'),settings=JSON.parse(readFileSync(path,'utf8'));
+  if(settings.defaultProvider===CONFINED_MODEL.provider)return;
+  writeFileSync(path,JSON.stringify({...settings,defaultProvider:CONFINED_MODEL.provider,defaultModel:CONFINED_MODEL.model}));};
+ const plain=await scriptedProvider((request,index)=>{moveDefault();return script(request,index);}),secure=await scriptedProvider(script,{tls:true});
  return {caFile:secure.caFile,get seen(){return [...plain.seen,...secure.seen];},
-  configure(agentDir){plain.configure(agentDir);const path=join(agentDir,'models.json'),models=JSON.parse(readFileSync(path,'utf8'));
+  configure(directory){agentDir=directory;plain.configure(directory);const path=join(directory,'models.json'),models=JSON.parse(readFileSync(path,'utf8'));
    models.providers.groq.baseUrl=secure.baseUrl;writeFileSync(path,JSON.stringify(models));},
   async close(){await Promise.all([plain.close(),secure.close()]);}};
 }
