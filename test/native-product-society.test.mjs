@@ -218,7 +218,7 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
 test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes and reaches the model through its relay',{timeout:900000},async t=>{
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
- const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
+ const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
  const provider=await principalAndWorkerProvider(scriptedProvider,(request)=>worker(request)?text('Worker acknowledged the goal.'):
   continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
@@ -284,7 +284,7 @@ test('008. The real Host restarts its Broker child after a SIGKILL and still end
 test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broker publishes it through quarantine',{timeout:900000},async t=>{
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
- const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
+ const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
  const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
  const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and submit it.'},expectedRevision:null}));
@@ -315,8 +315,8 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
 test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonical main moves to it',{timeout:900000},async t=>{
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
- const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
- const actor=request=>(JSON.stringify(request.messages.filter(message=>message.role==='system')).match(/\bworker-[0-9]+\b/)??[''])[0];
+ const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
+ const actor=request=>(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')).match(/\/agents\/(worker-[0-9]+)\/workspace/)??['',''])[1];
  const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
  const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and integrate it.'},expectedRevision:null}));

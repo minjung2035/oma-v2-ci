@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `492ffd13ea2b878820198feea7e18b88486bfd8bb2b1e76d0db552f19e13d3a5` (15951 files).
+verification input digest `a7112939961d1caa1b69ad243e3b074f561cf5f00d0a78d9b7a4440d39b912a7` (15951 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4822,3 +4822,7 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 - relay는 https provider만 받는다(유지). Principal 엔진은 고정 환경만 받아 CA override가 차단 채널이므로(유지), 시험은 Principal을 평문 provider로 시작하고 첫 요청 시 엔진 기본 모델을 Broker가 신뢰하는 TLS provider로 옮긴다.
 - `AUTH_FAILED: path is outside every root the confined engine has`: 역할이 기록한 확장(core 포함)은 설정된 설치 경로 아래인데 Darwin runner는 봉인된 private image만 Worker에 노출한다. 설치 경로 아래 확장을 image의 같은 파일로 옮기고 기록된 sha256은 spawn 직전에 그대로 재검사한다(`87ab083dde0`, Linux는 두 경로가 같아 무변경). 거절 메시지는 놓을 수 없던 경로를 포함한다.
 세 gate 관측은 양 Mac에서 120/120 EXECUTED·notRun0이고 판정은 여전히 OPEN이다(판정 근거표 참조). `87ab083dde0`의 실제 Mac 결과는 아직 NOT_RUN이다.
+
+### SOURCE142 진단 결과: Worker는 relay로 모델에 도달함
+
+`80532fbeefd`의 Mac26 세션 기록에서 Seatbelt Worker가 relay를 거쳐 `groq/llama-3.1-8b-instant`에 요청하고 scripted 응답을 받은 것이 확인됐다. 006/009/010의 실패는 제품이 아니라 테스트 분류기 때문이었다. Worker 요청을 `Read /world/START.md`라는 옛 brief 문구로 찾았지만, 지금 brief는 인라인이 아니라 전달된 mail 파일(`/oma/mail/messages/…`)로 간다. 그래서 Worker 요청이 Principal 요청으로 분류되어 Principal 스크립트(`oma_goal`)를 받았다. 이제 분류기는 Worker 시스템 프롬프트의 첫 문장으로 Worker 요청을 찾고, 행위자는 시스템 프롬프트의 cwd `…/agents/<actor>/workspace`에서 읽는다.
