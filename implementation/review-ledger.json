@@ -436,8 +436,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/runner.ts",
@@ -3898,20 +3897,20 @@
   {
    "path": "packages/storage/src/directory.ts",
    "primary": null,
+   "status": "NOT_REVIEWED",
+   "by": [],
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+  },
+  {
+   "path": "packages/storage/src/durable-fs.ts",
+   "primary": null,
    "status": "CHANGED_WITHOUT_ORACLE",
    "by": [
     "DR62"
    ],
    "oracles": [],
-   "sha256": "9fac9faecef62ad9fa0a7c2fe52ceb8f6e469d09c1caf3e130cd555330d3590b"
-  },
-  {
-   "path": "packages/storage/src/durable-fs.ts",
-   "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "861720c291289249d02c1aa6caf01759edadce3045ceacaaa9793825b1bcf946"
   },
   {
    "path": "packages/storage/src/execution-journal.ts",
@@ -4006,8 +4005,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "packages/storage/src/package-replacement.ts",

@@ -2128,7 +2128,7 @@
     },
     {
       "path": "packages/storage/src/directory.ts",
-      "sha256": "9fac9faecef62ad9fa0a7c2fe52ceb8f6e469d09c1caf3e130cd555330d3590b"
+      "sha256": "5abc8953ed43d21b8d310715c32a018df08ceb611641404c24bde6f77eecb052"
     },
     {
       "path": "packages/storage/src/durable-fs.ts",

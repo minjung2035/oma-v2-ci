@@ -229,19 +229,27 @@ export function ensureOwnedDirectory(path: string, ownedFrom: string, mode = 0o7
   // An existing boundary can be acquired in one kernel beneath/no-link walk.
   // Opening each ancestor for reading would require permission to list user
   // directories that this operation only needs to search (notably Seatbelt).
-  const boundaryPath = join(boundary.root, ...boundary.components);
-  let heldBoundary: number | undefined;
-  try { heldBoundary = openDirectory(boundaryPath); }
-  catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    // Missing/owner-unreadable boundaries still need the existing creation or
-    // held-inode repair walk. Never retry a containment rejection this way.
-    if (code !== "ENOENT" && code !== "EACCES") throw error;
+  // A missing or owner-unreadable boundary starts from its nearest existing
+  // ancestor, acquired the same way, so the creation/repair walk never opens
+  // the user's directories above it either. Only absence moves further up;
+  // any other answer above the boundary keeps the plain walk from the root.
+  let held: number | undefined, depth = boundary.components.length;
+  for (; depth > 0; depth--) {
+    try { held = openDirectory(join(root, ...components.slice(0, depth))); break; }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      // Never retry a containment rejection this way.
+      if (depth === boundary.components.length) { if (code !== "ENOENT" && code !== "EACCES") throw error; }
+      else if (code !== "ENOENT") { depth = 0; break; }
+    }
   }
-  let parent = heldBoundary ?? openDirectory(root);
+  let parent = held ?? openDirectory(root);
   try {
-    if (heldBoundary !== undefined) { current = boundaryPath; repairOwnerBits(parent); }
-    for (let index = heldBoundary === undefined ? 0 : boundary.components.length; index < components.length; index++) {
+    if (held !== undefined) {
+      current = join(root, ...components.slice(0, depth));
+      if (depth === boundary.components.length) repairOwnerBits(parent);
+    }
+    for (let index = held === undefined ? 0 : depth; index < components.length; index++) {
       const component = components[index]!;
       current = join(current, component);
       const owned = index >= boundary.components.length - 1;

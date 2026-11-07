@@ -208,3 +208,18 @@ test("008. An unused session tree holding owner-read-less directories still goes
     assert.equal(existsSync(session), false);
   } finally { sweep(f.root); }
 });
+
+test("009. A missing owned boundary is made from its nearest existing ancestor, never by opening the search-only directories above", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma-owned-nearest-"));
+  try {
+    // A confined engine (notably Seatbelt) may search, not list, what lies above its HOME.
+    const user = join(root, "user"), home = join(user, "home");
+    mkdirSync(home, { recursive: true });
+    chmodSync(user, 0o100);
+    const requests = join(home, ".local", "state", "oma", "requests");
+    const created = ensureOwnedDirectory(requests, join(home, ".local", "state", "oma"), 0o700);
+    assert.deepEqual(created, [join(home, ".local"), join(home, ".local", "state"), join(home, ".local", "state", "oma"), requests]);
+    assert.equal(statSync(requests).mode & 0o777, 0o700);
+    assert.deepEqual(ensureOwnedDirectory(requests, join(home, ".local", "state", "oma"), 0o700), [], "an existing boundary creates nothing");
+  } finally { sweep(root); rmSync(root, { recursive: true, force: true }); }
+});
