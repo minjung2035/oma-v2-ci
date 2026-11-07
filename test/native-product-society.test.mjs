@@ -104,7 +104,8 @@ test('003. The Host runs a fresh Society in a real terminal: its Broker child op
  t.after(()=>{spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const hex=text=>Buffer.from(text).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  // The Host's own Broker child must get through runtime generation, tools and Store before Ctrl-D.
- const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+ // A Host that never draws its banner is sampled, so a stall names its own stack.
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,sample:join(base,'host.sample.txt'),
   steps:[{wait:300},{write:hex('\x04'),wait:20}]};
  const session=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
   env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),PI_OFFLINE:'1',TERM:'xterm-256color'}});
@@ -116,8 +117,9 @@ test('003. The Host runs a fresh Society in a real terminal: its Broker child op
   await new Promise(resolve=>setTimeout(resolve,200));}})();
  const status=await ended;await watch;
  const terminal=JSON.parse(out||'{}'),screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'').slice(-3000);
- assert.deepEqual(status,{code:0,signal:null},err+screen);
- assert.equal(terminal.ready,true,screen);
+ const sampled='\nHost sample: '+JSON.stringify(terminal.sample??null).slice(0,20000);
+ assert.deepEqual(status,{code:0,signal:null},err+screen+sampled);
+ assert.equal(terminal.ready,true,screen+sampled);
  assert.doesNotMatch(screen,/no credential was granted|could not be attested|rejected the Principal session/,screen);
  assert.notEqual(store,null,'the Host-supervised Broker opened the Society Store: '+screen);
  assert.equal(readSessionBirth(store).surface,'collaboration-v1');
