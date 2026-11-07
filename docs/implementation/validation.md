@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `c7b7fd6d11f96ba5fda29b995f6112805bee2c878c3304a652052c4b11d86be7` (15953 files).
+verification input digest `8e50a3bb8b80233011e089ff7a9f792144ea9d8b6c5125f224314248ace46391` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4840,3 +4840,7 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 `74b1e1d47f5`의 Mac26에서는 요청 캐시 오류가 사라졌다. 대신 009와 010의 Worker 제출이 caller 준비 단계에서 `cannot resolve HEAD to a commit`으로 거절됐다. Worker의 bash `git commit` 자체는 성공했다. 실패한 것은 제출 준비 코드였다. 이 코드는 고정 경로 `/usr/bin/git`을 실행하는데, 이 파일은 macOS의 xcrun shim이다. shim은 DEVELOPER_DIR가 있으면 그 아래의 git을 고르고, 없으면 xcode-select 상태를 읽는다. 그런데 `GIT_ENV`가 DEVELOPER_DIR를 지우고, Seatbelt Worker는 xcode-select 상태를 읽을 수 없다. Worker launch는 Broker가 관찰한 developer tools로 DEVELOPER_DIR와 GIT_EXEC_PATH를 고정한다. 이제 caller 준비 경로(submit·merge·dirty 확인·code view·goal context)는 두 값이 모두 있을 때 같은 닫힌 developer-tools 문법(`describeMacDeveloperTools`)으로 검증한다. 그런 다음 shim이 골랐을 그 git을 직접 실행한다. 둘 중 하나라도 없거나 Linux이면 `/usr/bin/git`을 그대로 쓴다. 문법 밖의 경로는 UNSUPPORTED_PROFILE로 거절한다(`caller-git` 001–003).
 
 `cb644cf212f`의 Mac26에서도 009/010의 Worker 제출은 계속 `cannot resolve HEAD to a commit`으로 거절됐다(001–008 PASS). 원인은 Worker 도구의 client 환경(`clientEnvironment`)이었다. 이 환경은 고정 허용 목록이라 launch가 고정한 DEVELOPER_DIR와 GIT_EXEC_PATH가 빠져 있었고, 그래서 caller git이 여전히 shim을 골랐다. 이제 두 값도 엔진 환경에서 client 환경으로 그대로 넘긴다(`caller-git` 004). 다음 진단을 위해 `resolveOid`는 git stderr의 첫 줄을 거절 메시지에 붙인다. 제품 시험 009/010의 commit 단계도 `pwd`·`command -v git`·`git rev-parse HEAD`를 함께 출력한다.
+
+### SOURCE145 결과: Mac26 제품 경로 001–010 전체 PASS
+
+`2865ac9da60`의 Mac26에서 제품 시험 10/10이 PASS했고 `common-runtime (macos-26)` job 전체가 success였다. goal을 받은 Seatbelt Worker가 commit을 만들고 제출했으며, Broker가 quarantine을 거쳐 공개했다(009). worker-1의 LOW 후보는 통합되어 canonical main이 이동했다(010). Intel과 macOS 15는 같은 source로 재확인 중이다.
