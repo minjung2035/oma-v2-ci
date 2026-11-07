@@ -188,7 +188,7 @@ export function residentPathView(host: MountedInstallation, dirs: ResidentDirect
       if (hostPath === root) return inside;
       if (hostPath.startsWith(`${root}/`)) return `${inside}${hostPath.slice(root.length)}`;
     }
-    throw new StoreError("AUTH_FAILED", "path is outside every root the confined engine has");
+    throw new StoreError("AUTH_FAILED", `path is outside every root the confined engine has: ${hostPath}`);
   };
   const sessions = map(directories.sessions.replace(/\/$/, ""));
   return Object.freeze({ map, sessionPathToHost: (path: string) => hostSessionPath(directories, path, sessions) });

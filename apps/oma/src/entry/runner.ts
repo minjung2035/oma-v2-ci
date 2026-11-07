@@ -1,7 +1,7 @@
 // RUN-001/UNIT-003: one bound runner identity with trusted Pi RPC delivery.
 // The broker supplies explicit launch identity and profile; this process never reads SQLite.
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { assertNativeRuntime } from "../runtime/native-support.js";
 import { RunnerModule } from "../runner.js";
 import { loadConfiguration } from "@oma/config";
@@ -88,8 +88,20 @@ const toolSurfaceHex = process.env.OMA_TOOL_SURFACE_HEX ?? "";
 if (!/^(?:[0-9a-f]{2})+$/.test(toolSurfaceHex)) { console.error(`runner: missing or malformed broker-rendered tool surface for ${agent}`); process.exit(4); }
 const toolSurface = Buffer.from(toolSurfaceHex, "hex").toString("utf8");
 if (Buffer.from(toolSurface, "utf8").toString("hex") !== toolSurfaceHex) { console.error(`runner: malformed broker-rendered tool surface for ${agent}`); process.exit(4); }
+// A role records its extensions under the configured installation. On Darwin
+// the Worker sees only the private image that installation was sealed into,
+// so a recorded path under it names the same file in the image; its recorded
+// digest is still checked at the spawn site. Other paths stay as recorded.
+const imageExtension = (path: string): string => {
+  if (runtimeInstallation === cfg.installation) return path;
+  for (const source of new Set([cfg.installation.libdir, realpathSync(cfg.installation.libdir)].map(root => root.replace(/\/$/, ""))))
+    if (path.startsWith(`${source}/`)) return join(runtimeInstallation.libdir, relative(source, path));
+  return path;
+};
+const role = configuration.roles[profileName];
 const profile = Object.freeze({ name: profileName, modelProfile: modelName, model: Object.freeze({ ...cfg.modelProfiles[modelName]! }),
-  ...(configuration.roles[profileName] ? { settings: configuration.roles[profileName] } : {}),
+  ...(role ? { settings: Object.freeze({ ...role, extensions: Object.freeze(role.extensions.map(extension =>
+    Object.freeze({ path: imageExtension(extension.path), sha256: extension.sha256 }))) }) } : {}),
   // D23/TSP-005: the deployment renders the run's surface plan into this
   // launch environment as hex, beside the accepted profile and model reference; this entry
   // is the boundary that reads it once and makes it declared profile data.

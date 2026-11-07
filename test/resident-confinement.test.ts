@@ -301,7 +301,7 @@ test("008. A Resident's sandbox mounts the installed packages read-only, and its
     assert.ok(!plan.args.some(value => value.includes(f.paths.piAgentDir!)), "the engine home was mounted");
     // With no package store declared, a package's file is under no mount: refused, not handed over.
     assert.throws(() => new PiAdapter(residentEngineEffects, { actor: "alice", society: "s", limits: LIMITS, profile, paths: adapterPaths,
-      confinement: f.confinement }).spawnPlan(), { code: "AUTH_FAILED", message: "path is outside every root the confined engine has" });
+      confinement: f.confinement }).spawnPlan(), { code: "AUTH_FAILED", message: /^path is outside every root the confined engine has: \// });
   } finally { rmSync(f.root, { recursive: true, force: true }); }
 });
 
