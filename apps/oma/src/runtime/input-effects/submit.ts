@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import type { PublicMethods } from "@oma/contracts";
 import { StoreError } from "@oma/domain/errors";
 import { exportRefForRequestKey } from "@oma/domain/derived";
-import { runGitText } from "@oma/process/policies";
+import { runCallerGit } from "../caller-git.js";
 import { fail } from "@oma/client/errors";
 import { currentContext } from "@oma/client/context";
 import { readBounded } from "../input-effects.js";
 import { bundleBytes as cliBundleBytes } from "@oma/client/settings";
 
 function git(cwd: string, args: string[]): string {
-  const result = runGitText(args, { cwd });
+  const result = runCallerGit(args, { cwd });
   if (result.status !== 0) fail(`git ${args[0] ?? "?"}: ${result.stderr.slice(0, 200)}`, 2);
   return result.stdout.trim();
 }
@@ -20,11 +20,11 @@ function git(cwd: string, args: string[]): string {
 function submitPrerequisites(cwd: string, candidate: string, known: readonly string[]): string[] {
   for (const oid of new Set(known)) {
     if (oid === candidate || oid.length !== candidate.length) continue;
-    const local = runGitText(["rev-parse", "--verify", "--quiet", `${oid}^{commit}`], { cwd });
+    const local = runCallerGit(["rev-parse", "--verify", "--quiet", `${oid}^{commit}`], { cwd });
     if (local.status === 1) continue;
     if (local.status !== 0 || local.stdout.trim() !== oid)
       throw new StoreError("INVALID_OID", "cannot observe advertised prerequisite locally");
-    const ancestry = runGitText(["merge-base", "--is-ancestor", oid, candidate], { cwd });
+    const ancestry = runCallerGit(["merge-base", "--is-ancestor", oid, candidate], { cwd });
     if (ancestry.status === 0) return [oid];
     if (ancestry.status !== 1)
       throw new StoreError("REF_STATE_UNKNOWN", "cannot observe candidate ancestry");
@@ -38,7 +38,7 @@ function submitBundle(cwd: string, exportRef: string, prerequisites: readonly st
   const directory = mkdtempSync(join(realpathSync(tmpdir()), "oma-submit-"));
   try {
     const path = join(directory, "candidate.bundle");
-    const result = runGitText(
+    const result = runCallerGit(
       ["bundle", "create", path, exportRef, ...prerequisites.map((oid) => `^${oid}`)],
       { cwd },
     );
@@ -80,7 +80,7 @@ export function prepareSubmitEffects(
   const cwd = currentContext().cwd;
   const exportRef = exportRefForRequestKey(key);
   if (!known.hasCandidate) {
-    const local = runGitText(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], { cwd });
+    const local = runCallerGit(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], { cwd });
     if (local.status === 1)
       throw new StoreError("INVALID_REQUEST", "SOURCE_UNREADABLE: the candidate is not an available local commit");
     if (local.status !== 0 || local.stdout.trim() !== candidate)

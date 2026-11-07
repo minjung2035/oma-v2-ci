@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { FULL_OID_RE } from "@oma/domain/identifiers";
 import { isValidFullOid } from "@oma/domain/identifiers";
 import { StoreError } from "@oma/domain/errors";
-import { GIT_ENV, requireTextExit, runGitText } from "@oma/process/policies";
+import { GIT_ENV, requireTextExit } from "@oma/process/policies";
+import { callerGit, runCallerGit } from "./caller-git.js";
 import { runProcessSync } from "@oma/process/run";
 import { fail } from "@oma/client/errors";
 import { currentContext } from "@oma/client/context";
@@ -77,7 +78,7 @@ export function readBounded(fd: number, limit: number, whole: boolean, refuse: (
 /** The workspace clone's recorded upstream base (`clone --single-branch main`
  * leaves refs/remotes/origin/main), or null when it is absent. */
 export function recordedBase(): string | null {
-  const result = runGitText(["rev-parse", "--verify", "--quiet", "--end-of-options", "refs/remotes/origin/main^{commit}"],
+  const result = runCallerGit(["rev-parse", "--verify", "--quiet", "--end-of-options", "refs/remotes/origin/main^{commit}"],
     { cwd: currentContext().cwd });
   const oid = result.status === 0 ? result.stdout.trim() : "";
   return isValidFullOid(oid) ? oid : null;
@@ -123,8 +124,9 @@ function workspaceClaimPresent(dir: string): boolean {
  * mis-set core.bare, a cwd inside the gitdir) may hide unobserved work and
  * propagate. */
 export function workspaceDirty(): boolean {
-  const result = runProcessSync({ executable: "/usr/bin/git", argv: ["status", "--porcelain"],
-    env: GIT_ENV, cwd: currentContext().cwd, timeoutMs: 30000, stdoutBytes: 256 * 1024, stderrBytes: 256 * 1024 });
+  const git = callerGit();
+  const result = runProcessSync({ executable: git.executable, argv: ["status", "--porcelain"],
+    env: { ...GIT_ENV, ...git.env }, cwd: currentContext().cwd, timeoutMs: 30000, stdoutBytes: 256 * 1024, stderrBytes: 256 * 1024 });
   if (result.stdout.length > 0) return true;
   const status = requireTextExit(result, "git");
   if (status.status !== 0 &&
@@ -140,7 +142,7 @@ export function resolveOid(revision: string): string {
   // INV09: the revision is a value, and Git would read a leading `-` as an option.
   // No revision needs one, and `--end-of-options` says so to Git as well.
   if (revision.startsWith("-")) fail(`invalid revision ${revision}`, 2);
-  const result = runGitText(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: currentContext().cwd });
+  const result = runCallerGit(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: currentContext().cwd });
   const oid = result.stdout.trim();
   if (result.status !== 0 || !FULL_OID_RE.test(oid)) fail(`cannot resolve ${revision} to a commit`, 2);
   return oid;

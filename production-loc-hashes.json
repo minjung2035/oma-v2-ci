@@ -1,6 +1,6 @@
 {
   "kind": "oma-production-source-digests-v1",
-  "manifest": "5f13dac6655cb643e5265eee35034a6b985ba42cf2bf5f902458b7ad38ebd6ed",
+  "manifest": "57ce8a2bb313c1e1dc0f8e660535dbcff05bc0463d3e5b3ff99dab3d3b5467a6",
   "files": [
     {
       "path": "apps/oma/package.json",
@@ -247,6 +247,10 @@
       "sha256": "712a9e9980527bab78c4b5c44adbc3a182f573982295d1d067919bd7e5bc4e02"
     },
     {
+      "path": "apps/oma/src/runtime/caller-git.ts",
+      "sha256": "5ff6a127943b9bd8afafb562bb8cf696732f60478c837d49193d04e3d53e79b7"
+    },
+    {
       "path": "apps/oma/src/runtime/candidate-checks.ts",
       "sha256": "c1a937e36c5d3c57901f231ae12ac32ab9a63dc39e87ac88e5e44d40e6825279"
     },
@@ -304,11 +308,11 @@
     },
     {
       "path": "apps/oma/src/runtime/input-effects.ts",
-      "sha256": "4f1ec36e71e6fec1422021d79ebf0413fbc1bb76ce03fbef25151e1553e76dc4"
+      "sha256": "59814f37b0473330b38c1abb0e2408e599bba69b3fe6e97cc62bbf2065d817ec"
     },
     {
       "path": "apps/oma/src/runtime/input-effects/code.ts",
-      "sha256": "769ae698f33d71b801c6303f124279feb5965a2f902271419d56614494f0ef0a"
+      "sha256": "e615955aa555506207a993f312e5285c167d7d8ee0011bb3dbbbaee0634c8e1a"
     },
     {
       "path": "apps/oma/src/runtime/input-effects/context.ts",
@@ -316,7 +320,7 @@
     },
     {
       "path": "apps/oma/src/runtime/input-effects/goal.ts",
-      "sha256": "63bcbe249428f5eacfd5fd77669bd88ae9af35e603c6c911f0a942a054dfac47"
+      "sha256": "4b48d7efbd1516085ca1e8d49bc2af9a1a45e0314c089147def073d356767aa9"
     },
     {
       "path": "apps/oma/src/runtime/input-effects/mail.ts",
@@ -324,7 +328,7 @@
     },
     {
       "path": "apps/oma/src/runtime/input-effects/submit.ts",
-      "sha256": "fa4d8eb433de3c663cda71f4d25abf86b56bb611d82c307dfd28514eea20565f"
+      "sha256": "b11cd1f3fb719d19fd3739bb61f5cc100ddd8894b7e4b95ee175c094968c3ee3"
     },
     {
       "path": "apps/oma/src/runtime/invocation-codec.ts",
@@ -1840,7 +1844,7 @@
     },
     {
       "path": "packages/process/src/policies.ts",
-      "sha256": "e088fe6f7f6eebbf124ca29e8d2dc5d861a4976f7faaf5db7639bca7e640ece1"
+      "sha256": "4d71143a519da28fea9226effde3be0871fdd2dacb9ee84334b7d874c3cf5ba6"
     },
     {
       "path": "packages/process/src/preparation-lifetime.ts",

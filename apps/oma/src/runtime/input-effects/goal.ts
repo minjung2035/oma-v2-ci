@@ -2,7 +2,7 @@
  * documents come from the exact expected revision, never a moving current. */
 import { isAbsolute } from "node:path";
 import { contextFileCheck, contextPathsCheck } from "@oma/domain/context-policy";
-import { runGitText } from "@oma/process/policies";
+import { runCallerGit } from "../caller-git.js";
 import { contextBytes as cliContextBytes } from "@oma/client/settings";
 import { currentContext } from "@oma/client/context";
 import { sha256Hex } from "../input-effects.js";
@@ -17,7 +17,7 @@ export function prepareGoalEffects(body: string, expected: string | null): Prepa
     const repo = currentContext().env.OMA_CONTEXT_GIT;
     if (!repo || !isAbsolute(repo)) fail("no canonical context repository was provided", 2);
     const read = (args: string[], maxBuffer: number) => {
-      const result = runGitText(["--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", ...args],
+      const result = runCallerGit(["--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", ...args],
         { gitDir: repo, maxBuffer });
       if (result.status !== 0) fail("cannot read the expected context revision", 2);
       return result.stdout;

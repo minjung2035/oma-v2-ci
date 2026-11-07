@@ -59,6 +59,7 @@ apps/oma/src/runner.ts
 apps/oma/src/runtime/assets.ts
 apps/oma/src/runtime/broker-channel.ts
 apps/oma/src/runtime/broker-supervisor.ts
+apps/oma/src/runtime/caller-git.ts
 apps/oma/src/runtime/candidate-checks.ts
 apps/oma/src/runtime/client-preload.ts
 apps/oma/src/runtime/client-runtime.ts

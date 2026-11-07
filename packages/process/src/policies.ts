@@ -22,12 +22,14 @@ export function requireTextExit(result: ProcessObservation, command: string): Te
 export interface GitTextOptions {
   readonly gitDir?: string; readonly cwd?: string; readonly input?: string;
   readonly env?: Readonly<NodeJS.ProcessEnv>; readonly timeout?: number; readonly maxBuffer?: number;
+  /** A fixed trusted git binary other than /usr/bin/git (a Mac Worker's developer git). */
+  readonly executable?: string;
   /** Descriptors the child keeps, from 3 on: a preparation lease (R6-04). */
   readonly inheritedFds?: readonly number[];
 }
 export function runGitText(argv: readonly string[], options: GitTextOptions = {}): TextExit {
   const budget = options.maxBuffer ?? 32 * 1024 * 1024;
-  return requireTextExit(runProcessSync({ executable: "/usr/bin/git",
+  return requireTextExit(runProcessSync({ executable: options.executable ?? "/usr/bin/git",
     argv: [...(options.gitDir ? ["--git-dir", options.gitDir] : []), ...argv],
     ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
     ...(options.input === undefined ? {} : { input: options.input }),

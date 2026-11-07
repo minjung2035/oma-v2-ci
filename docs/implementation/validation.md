@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `65a2d1291264731ff6f276e65fb8ae70249fde9e9bbf30c2aa7b6a9ee01d2e3d` (15951 files).
+verification input digest `b8474b5f8f474fa9423a32fdaf98facb35c0e31b57729afcea97c3054ee9ba5d` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4834,3 +4834,7 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 오류 문구(`the directory /private cannot be observed now`)를 다시 확인한 결과, 첫 실패 지점은 flush가 아니라 `ensureOwnedDirectory`였다. 이 함수는 소유 경계 `.local/state/oma`가 아직 없으면 `/`부터 한 단계씩 디렉터리를 열며 내려갔다. 이제는 경계가 없거나 owner가 읽을 수 없을 때 가장 가까운 기존 조상을 같은 한 번의 beneath/no-link 커널 walk로 잡고, 거기서부터 만들거나 수리한다. 위로 올라가는 이유는 부재(ENOENT)뿐이고, 경계 위의 다른 응답은 이전과 같은 root walk로 남긴다. 회귀 테스트 `owned-directory 009`는 검색 권한만 있는 상위 디렉터리로 이 조건을 Linux에서 재현한다. 수정 전 코드에서는 실패하고, 수정 후에는 통과한다.
 
 로컬 Linux 전체 실행 결과(`74b1e1d47f5`, bwrap·cloc 미설치 개발 호스트)는 4890개 중 4653 pass, 167 fail이다. 이 중 134건은 `/usr/bin/bwrap` 부재로 namespace launcher가 시작하지 못한 실패다. 나머지 33건 가운데 요청 캐시 경로와 관련될 수 있는 9개 파일은 이번 storage/request-cache 변경 전 코드(`b8761424622`)로 되돌려도 똑같이 28 fail이었다. 이번 변경이 만든 회귀는 없다. 판정은 bwrap과 pinned 도구를 갖춘 CI Ubuntu job 결과를 기준으로 한다.
+
+### SOURCE144 결과와 Seatbelt Worker의 caller git 수리
+
+`74b1e1d47f5`의 Mac26에서는 요청 캐시 오류가 사라졌다. 대신 009와 010의 Worker 제출이 caller 준비 단계에서 `cannot resolve HEAD to a commit`으로 거절됐다. Worker의 bash `git commit` 자체는 성공했다. 실패한 것은 제출 준비 코드였다. 이 코드는 고정 경로 `/usr/bin/git`을 실행하는데, 이 파일은 macOS의 xcrun shim이다. shim은 DEVELOPER_DIR가 있으면 그 아래의 git을 고르고, 없으면 xcode-select 상태를 읽는다. 그런데 `GIT_ENV`가 DEVELOPER_DIR를 지우고, Seatbelt Worker는 xcode-select 상태를 읽을 수 없다. Worker launch는 Broker가 관찰한 developer tools로 DEVELOPER_DIR와 GIT_EXEC_PATH를 고정한다. 이제 caller 준비 경로(submit·merge·dirty 확인·code view·goal context)는 두 값이 모두 있을 때 같은 닫힌 developer-tools 문법(`describeMacDeveloperTools`)으로 검증한다. 그런 다음 shim이 골랐을 그 git을 직접 실행한다. 둘 중 하나라도 없거나 Linux이면 `/usr/bin/git`을 그대로 쓴다. 문법 밖의 경로는 UNSUPPORTED_PROFILE로 거절한다(`caller-git` 001–003).

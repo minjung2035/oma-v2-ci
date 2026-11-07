@@ -60,6 +60,7 @@
   "apps/oma/src/runtime/assets.ts",
   "apps/oma/src/runtime/broker-channel.ts",
   "apps/oma/src/runtime/broker-supervisor.ts",
+  "apps/oma/src/runtime/caller-git.ts",
   "apps/oma/src/runtime/candidate-checks.ts",
   "apps/oma/src/runtime/client-preload.ts",
   "apps/oma/src/runtime/client-runtime.ts",
@@ -2898,7 +2899,7 @@
     "packages/platform-linux/src/sandbox.ts",
     "apps/oma/src/platform/"
    ],
-   "files": 170
+   "files": 171
   },
   {
    "index": 5,
@@ -2919,8 +2920,8 @@
    "files": 73
   }
  ],
- "files": 580,
- "runtimeEdges": 2405,
+ "files": 581,
+ "runtimeEdges": 2410,
  "typeOnlyEdges": 1000,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 665,
@@ -2928,10 +2929,10 @@
   "L2-facts -> L2-facts": 7,
   "L3-workflow -> L1-kernel": 421,
   "L3-workflow -> L3-workflow": 99,
-  "L4-orchestration -> L1-kernel": 546,
+  "L4-orchestration -> L1-kernel": 547,
   "L4-orchestration -> L2-facts": 3,
   "L4-orchestration -> L3-workflow": 29,
-  "L4-orchestration -> L4-orchestration": 218,
+  "L4-orchestration -> L4-orchestration": 222,
   "L5-entry -> L1-kernel": 157,
   "L5-entry -> L2-facts": 22,
   "L5-entry -> L3-workflow": 9,

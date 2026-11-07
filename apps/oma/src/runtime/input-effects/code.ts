@@ -8,7 +8,8 @@ import { GitObserver } from "@oma/git/observe";
 import { observed } from "@oma/domain/git-facts";
 import { CANONICAL_PROCESS_LIMITS, CANONICAL_SAFE_ARGS } from "@oma/git/canonical-command";
 import { mergeDiffText } from "@oma/domain/git-facts";
-import { GIT_ENV, runGitText } from "@oma/process/policies";
+import { GIT_ENV } from "@oma/process/policies";
+import { callerGit, runCallerGit } from "../caller-git.js";
 import { runProcessSync } from "@oma/process/run";
 import { bundleBytes } from "@oma/client/settings";
 
@@ -39,8 +40,9 @@ export function readCode(repository: string, input: CodeView): { revision: strin
     throw new StoreError("INVALID_REQUEST", "only a diff view requires a base revision");
   if (input.action === "show" && input.path === undefined)
     throw new StoreError("INVALID_REQUEST", "a show view requires a file path");
+  const git = callerGit();
   const observer = new GitObserver(args => {
-    const result = runProcessSync({ executable: "/usr/bin/git", argv: [...SAFE, ...args], env: GIT_ENV,
+    const result = runProcessSync({ executable: git.executable, argv: [...SAFE, ...args], env: { ...GIT_ENV, ...git.env },
       timeoutMs: 30_000, stdoutBytes: CANONICAL_PROCESS_LIMITS.maxBuffer, stderrBytes: 8192 });
     return { status: result.kind === "exited" ? result.exitCode : null, signal: null, stdout: result.stdout, stderr: result.stderr };
   });
@@ -81,8 +83,8 @@ export function readCode(repository: string, input: CodeView): { revision: strin
     // cap would refuse a diff that could still integrate, and a looser one
     // would pretend a diff that can never ride a notice can. The refusal is
     // therefore exactly the protocol's, and --path narrows below it.
-    const result = runProcessSync({ executable: "/usr/bin/git",
-      argv: [...SAFE, "--git-dir", repository, ...args], env: { ...GIT_ENV, GIT_LITERAL_PATHSPECS: "1" },
+    const result = runProcessSync({ executable: git.executable,
+      argv: [...SAFE, "--git-dir", repository, ...args], env: { ...GIT_ENV, ...git.env, GIT_LITERAL_PATHSPECS: "1" },
       timeoutMs: 30_000, stdoutBytes: bundleBytes() + 1, stderrBytes: 8192 });
     if (result.kind === "output-limited") throw new StoreError("LIMIT_EXCEEDED", "merge diff exceeds its view bound");
     if (result.kind === "timed-out") throw new StoreError("DEADLINE_EXCEEDED", "merge diff timed out");
@@ -91,7 +93,7 @@ export function readCode(repository: string, input: CodeView): { revision: strin
         `code view could not be read: ${result.stderr.toString("utf8").trim().slice(0, 200)}`);
     return { revision: target, ...(base === undefined ? {} : { base }), text: mergeDiffText(result.stdout) };
   }
-  const result = runGitText([...SAFE, ...args], { gitDir: repository, maxBuffer: MAXIMUM, env: { GIT_LITERAL_PATHSPECS: "1" } });
+  const result = runCallerGit([...SAFE, ...args], { gitDir: repository, maxBuffer: MAXIMUM, env: { GIT_LITERAL_PATHSPECS: "1" } });
   if (result.status !== 0 && !(input.action === "grep" && result.status === 1 && result.stderr === ""))
     throw new StoreError("INVALID_REQUEST", `code view could not be read: ${result.stderr.trim().slice(0, 200)}`);
   return { revision: target, ...(base === undefined ? {} : { base }), text: result.stdout };
