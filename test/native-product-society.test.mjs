@@ -46,6 +46,17 @@ function residentLogs(base){
 /** A Worker's relay and egress sockets live under the run root and must fit
  * Darwin's 104-byte sun_path; a test run root sits as short as a user's /tmp. */
 function shortRunRoot(t){const root=realpathSync(mkdtempSync('/tmp/oma-run-'));t.after(()=>removeTree(root));return root;}
+// The Host's Principal engine gets only its fixed environment, never the
+// Human's NODE_EXTRA_CA_CERTS, while a Worker's relay accepts only an https
+// origin and trusts what its Broker trusts. One script answers both: the
+// Principal's `fake` provider in plain HTTP, the Workers' `groq` over TLS.
+async function principalAndWorkerProvider(scriptedProvider,script){
+ const plain=await scriptedProvider(script),secure=await scriptedProvider(script,{tls:true});
+ return {caFile:secure.caFile,get seen(){return [...plain.seen,...secure.seen];},
+  configure(agentDir){plain.configure(agentDir);const path=join(agentDir,'models.json'),models=JSON.parse(readFileSync(path,'utf8'));
+   models.providers.groq.baseUrl=secure.baseUrl;writeFileSync(path,JSON.stringify(models));},
+  async close(){await Promise.all([plain.close(),secure.close()]);}};
+}
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
 
 test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
@@ -192,8 +203,8 @@ test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
- const provider=await scriptedProvider((request)=>worker(request)?text('Worker acknowledged the goal.'):
-  continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})),{tls:true});
+ const provider=await principalAndWorkerProvider(scriptedProvider,(request)=>worker(request)?text('Worker acknowledged the goal.'):
+  continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Write HELLO.md with one line.'},expectedRevision:null})));
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-goal-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
@@ -259,11 +270,11 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
  const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
- const provider=await scriptedProvider(request=>{
+ const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and submit it.'},expectedRevision:null}));
   const done=toolResults(request).length;
   return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_send',{to:['principal'],subject:'fix',content:{kind:'text',value:'Submitted.'},attachments:[{commit:'HEAD'}]})):text('Submitted.');
- },{tls:true});
+ });
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-submit-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
@@ -291,12 +302,12 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const worker=request=>/Read \/world\/START\.md/.test(JSON.stringify(request.messages));
  const actor=request=>(JSON.stringify(request.messages.filter(message=>message.role==='system')).match(/\bworker-[0-9]+\b/)??[''])[0];
  const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
- const provider=await scriptedProvider(request=>{
+ const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and integrate it.'},expectedRevision:null}));
   if(actor(request)!=='worker-1')return text('Leaving this to worker-1.');
   const done=toolResults(request).length;
   return done===0?tools(call('bash',{command:commit})):done===1?tools(call('oma_merge',{change:{candidate:'HEAD'},tier:'LOW',title:'fix',reason:'fix'})):text('Integrated.');
- },{tls:true});
+ });
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-merge-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  t.after(async()=>{await provider.close();removeTree(base);});
  const agentDir=join(data,'engine');provider.configure(agentDir);
