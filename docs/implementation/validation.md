@@ -10,7 +10,7 @@ SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD c
 
 | 남은 제품 작업 | 닫히지 않은 범위 |
 |---|---|
-| Worker 실제 작업 | 닫힘(Mac26·Intel `2865ac9da60`): Worker 도구 probe의 compiler 링크·private read/shared write 거절 PASS, 제품 경로 GOAL→Seatbelt Worker→relay model·submit→quarantine·LOW 통합(006·009·010) PASS. macOS 15 재확인 중 |
+| Worker 실제 작업 | 닫힘(Mac26·Intel `2865ac9da60`): Worker 도구 probe의 compiler 링크·private read/shared write 거절 PASS, 제품 경로 GOAL→Seatbelt Worker→relay model·submit→quarantine·LOW 통합(006·009·010) PASS. 세 Mac PASS |
 | G-FILES | 전체 제품 경로의 StateRoot capture·private work/source fetch·남은 외부 writer/진단 결박과 수명 인수 |
 | G-PROCESS | populated-scope termination은 Mac26 12/12 재확인 PASS. 실제 Worker/Pi scope의 kill 인수는 제품 시험 011(엔진 SIGKILL 뒤 detached 후손 종료)로 추가, 판정 대기. restart 인수 남음 |
 | G-AUTH/복구 | restart/sleep 상황의 current capability, release 서명 Keychain/SIP 검증 |
@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `41d798785bcbd309af782211335d7ef1e8575e0f99e2bfe437dfd7f128edcea3` (15953 files).
+verification input digest `9b98ffd8b97bb8a75e93c37a962d38f385436f3b49af574700376abc1581c8c3` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4843,4 +4843,4 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 
 ### SOURCE145 결과: Mac26 제품 경로 001–010 전체 PASS
 
-`2865ac9da60`의 Mac26에서 제품 시험 10/10이 PASS했고 `common-runtime (macos-26)` job 전체가 success였다. goal을 받은 Seatbelt Worker가 commit을 만들고 제출했으며, Broker가 quarantine을 거쳐 공개했다(009). worker-1의 LOW 후보는 통합되어 canonical main이 이동했다(010). Intel과 macOS 15는 같은 source로 재확인 중이다.
+`2865ac9da60`의 Mac26에서 제품 시험 10/10이 PASS했고 `common-runtime (macos-26)` job 전체가 success였다. goal을 받은 Seatbelt Worker가 commit을 만들고 제출했으며, Broker가 quarantine을 거쳐 공개했다(009). worker-1의 LOW 후보는 통합되어 canonical main이 이동했다(010). 같은 source로 Intel(macos-26-intel)과 macOS 15도 제품 시험 10/10 PASS, `common-runtime` job success다. 세 Mac 모두 제품 경로 001–010 PASS.
