@@ -25,7 +25,10 @@ export function clientEnvironment(home: string, socket: string, archive: string)
   };
   for (const name of ["OMA_MAIL_ADDRESSES", "OMA_FRAME_BYTES", "OMA_CONTEXT_BYTES", "OMA_BUNDLE_BYTES", "OMA_ACTOR",
       "OMA_PROJECT_GIT", "OMA_CONTEXT_GIT", "OMA_WORKER_ARCHIVE", "OMA_SOCIETY", "OMA_RECORD_ROOT",
-      "OMA_SUBJECT_BYTES", "OMA_BODY_BYTES", "OMA_WORLD_ROOT"]) {
+      "OMA_SUBJECT_BYTES", "OMA_BODY_BYTES", "OMA_WORLD_ROOT",
+      // A Mac Worker launch fixes its broker-observed developer git here; the
+      // caller's git preparation checks both against the closed grammar.
+      "DEVELOPER_DIR", "GIT_EXEC_PATH"]) {
     const value = process.env[name];
     if (value !== undefined && value.length > 0) environment[name] = value;
   }

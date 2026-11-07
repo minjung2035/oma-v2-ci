@@ -144,6 +144,7 @@ export function resolveOid(revision: string): string {
   if (revision.startsWith("-")) fail(`invalid revision ${revision}`, 2);
   const result = runCallerGit(["rev-parse", "--verify", "--end-of-options", `${revision}^{commit}`], { cwd: currentContext().cwd });
   const oid = result.stdout.trim();
-  if (result.status !== 0 || !FULL_OID_RE.test(oid)) fail(`cannot resolve ${revision} to a commit`, 2);
+  if (result.status !== 0 || !FULL_OID_RE.test(oid))
+    fail(`cannot resolve ${revision} to a commit${result.stderr.trim() === "" ? "" : `: ${result.stderr.trim().split("\n", 1)[0]!.slice(0, 200)}`}`, 2);
   return oid;
 }

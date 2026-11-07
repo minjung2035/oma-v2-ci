@@ -285,7 +285,7 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
- const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
+ const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix && pwd && command -v git && git rev-parse HEAD';
  const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and submit it.'},expectedRevision:null}));
   const done=toolResults(request).length;
@@ -317,7 +317,7 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
  const actor=request=>(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')).match(/\/agents\/(worker-[0-9]+)\/workspace/)??['',''])[1];
- const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix';
+ const commit='echo fixed > fix.txt && git add fix.txt && git -c user.name=worker -c user.email=w@example.invalid commit -qm fix && pwd && command -v git && git rev-parse HEAD';
  const provider=await principalAndWorkerProvider(scriptedProvider,request=>{
   if(!worker(request))return continuesTurn(request)?text('Goal published.'):tools(call('oma_goal',{content:{kind:'text',value:'Create fix.txt and integrate it.'},expectedRevision:null}));
   if(actor(request)!=='worker-1')return text('Leaving this to worker-1.');
