@@ -1,4 +1,4 @@
-# 현재 검증 상태 — 2026-11-06 KST
+# 현재 검증 상태 — 2026-11-07 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**이다. DR74로 macOS 진입 일괄 차단과 fresh Society 거절을 제거했다. macOS 제품 경로의 실제 실행 결과는 아래 SOURCE110 이후 기록을 따른다.
 SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD close·실행 owner 사망 결합은 ARM·Intel 각10/10 PASS다. SOURCE107 explicit fence까지 ARM11/11 PASS다. Intel11개 본문은 PASS지만002 cleanup의 중복 stream write로 suite가 실패했고 SOURCE108은 이 hook만 수리한다. 이전 실패 원시는 보존한다. full identity/collision·실제 상속 FD 인식·Host/creator 사망 거절·정상 반환/즉시 재취득·변조 거절을 확인했다.
@@ -10,9 +10,9 @@ SOURCE106의 Society 기본 소유권·scope/recovery·private Host 감독·FD c
 
 | 남은 제품 작업 | 닫히지 않은 범위 |
 |---|---|
-| Worker 실제 작업 | Seatbelt Worker의 compiler 링크(SDKROOT 수리 판정 대기)·금지 효과 반례, GOAL→seed Worker→relay model 제품 경로(006) |
+| Worker 실제 작업 | 닫힘(Mac26·Intel `2865ac9da60`): Worker 도구 probe의 compiler 링크·private read/shared write 거절 PASS, 제품 경로 GOAL→Seatbelt Worker→relay model·submit→quarantine·LOW 통합(006·009·010) PASS. macOS 15 재확인 중 |
 | G-FILES | 전체 제품 경로의 StateRoot capture·private work/source fetch·남은 외부 writer/진단 결박과 수명 인수 |
-| G-PROCESS | Mac15 populated-scope termination 1건(원인 후보 수리 후 재확인)·실제 Worker/Pi scope의 kill/restart 인수 |
+| G-PROCESS | populated-scope termination은 Mac26 12/12 재확인 PASS. 실제 Worker/Pi scope의 kill 인수는 제품 시험 011(엔진 SIGKILL 뒤 detached 후손 종료)로 추가, 판정 대기. restart 인수 남음 |
 | G-AUTH/복구 | restart/sleep 상황의 current capability, release 서명 Keychain/SIP 검증 |
 | 플랫폼 범위 | macOS x64의 고정 Restic은 무서명이라 archive만 거절(호환성 대상). macOS 15 결과는 매 실행 끝에 취소되어 판정이 적음 |
 | 최종 인수 | 세 gate 공식 판정, 전체 Linux 회귀(Ubuntu job을 먼저 실행하도록 변경)·새 설치 시나리오 |
