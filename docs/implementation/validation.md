@@ -4813,3 +4813,12 @@ SOURCE133 `885bfed390b`, Native42218179357. Ubuntu SUCCESS. Mac26 제품 경로 
 SOURCE134 `200237cb98d`, Native42225429924. Ubuntu SUCCESS. **Mac26 제품 경로 7/9**(005 정리 수리 확인). 006의 cause 사슬이 근본 원인을 보였다: GOAL 게시 뒤 mail fanout이 `reopenPinned`에서 실패해 `mail fanout is not fully materialized`였다.
 Darwin pin은 권한 독립 O_PATH가 없어 O_EVTONLY(event-only) descriptor이고, 기존 Darwin reopen은 `/dev/fd/N`을 열었다. Darwin의 `/dev/fd`는 같은 open description을 복제할 뿐이라 event-only pin에서 read/write 접근을 얻지 못한다(§6.1의 duplicate 반례와 같은 성질). 따라서 기존 inode에 append하는 owned file(mail fanout·journal·log 등)의 Darwin 경로가 동작하지 않았다.
 SOURCE135는 Darwin에서 pin이 가리키는 inode의 현재 경로를 `fcntl(F_GETPATH)`로 얻어 요청 flag와 `O_NOFOLLOW_ANY`로 다시 열고, 결과가 pin과 같은 dev/ino일 때만 반환한다. 다른 inode면 STORE_CORRUPT로 닫는다. Linux `/proc/self/fd` reopen은 그대로다. `native-darwin-reopen`001이 append·독립 read cursor·이름 변경 뒤 같은 inode 도달을 고정한다. 009(Worker submit)는 006의 GOAL 게시에 종속된다. status view 게시 실패는 하위 원인 전체를 기록하도록 했다.
+
+### SOURCE136–141 실제 결과와 Worker 경로 수리 — `35f87752c76`…`b01fe578086`
+
+Native42278291064·42299906781·42316088628·42329595190. Ubuntu 매 실행 SUCCESS. **세 Mac(Mac26·Mac15·Intel) 제품 경로 001–005·007·008 PASS**: Mac15 001의 Broker drain 실패(`native preparation became uncertain during shutdown`)는 settle이 scope 사망을 증명한 중단 준비를 미증명 후손으로 분류하던 것이었고, 그 경우만 "준비 상태 재확인 필요"로 바꿨다(`preparation-port`004, 기본 경로는 그대로 엄격). Intel 003은 간헐 정지 1회 뒤 재현되지 않았고 정지 시 Host stack sample을 남긴다.
+Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, runner stderr의 오류 코드)으로 순서대로 다음 원인을 드러냈다.
+- relay socket 경로가 Linux 기준 107 byte 검사에 걸렸다 → 플랫폼별 sun_path(Darwin 103) 검사, 시험 run root는 짧은 `/tmp` 아래.
+- relay는 https provider만 받는다(유지). Principal 엔진은 고정 환경만 받아 CA override가 차단 채널이므로(유지), 시험은 Principal을 평문 provider로 시작하고 첫 요청 시 엔진 기본 모델을 Broker가 신뢰하는 TLS provider로 옮긴다.
+- `AUTH_FAILED: path is outside every root the confined engine has`: 역할이 기록한 확장(core 포함)은 설정된 설치 경로 아래인데 Darwin runner는 봉인된 private image만 Worker에 노출한다. 설치 경로 아래 확장을 image의 같은 파일로 옮기고 기록된 sha256은 spawn 직전에 그대로 재검사한다(`87ab083dde0`, Linux는 두 경로가 같아 무변경). 거절 메시지는 놓을 수 없던 경로를 포함한다.
+세 gate 관측은 양 Mac에서 120/120 EXECUTED·notRun0이고 판정은 여전히 OPEN이다(판정 근거표 참조). `87ab083dde0`의 실제 Mac 결과는 아직 NOT_RUN이다.
