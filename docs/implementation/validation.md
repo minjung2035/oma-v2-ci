@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `9b98ffd8b97bb8a75e93c37a962d38f385436f3b49af574700376abc1581c8c3` (15953 files).
+verification input digest `15a78c85376263733cc701daf9e1d6e8fb65c8ccd298315daeb3c8350e77b59a` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4844,3 +4844,12 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 ### SOURCE145 결과: Mac26 제품 경로 001–010 전체 PASS
 
 `2865ac9da60`의 Mac26에서 제품 시험 10/10이 PASS했고 `common-runtime (macos-26)` job 전체가 success였다. goal을 받은 Seatbelt Worker가 commit을 만들고 제출했으며, Broker가 quarantine을 거쳐 공개했다(009). worker-1의 LOW 후보는 통합되어 canonical main이 이동했다(010). 같은 source로 Intel(macos-26-intel)과 macOS 15도 제품 시험 10/10 PASS, `common-runtime` job success다. 세 Mac 모두 제품 경로 001–010 PASS.
+
+### SOURCE146 결과와 Darwin job 종료 경쟁 수리
+
+`b808e266254`의 Mac26에서 제품 시험 11/11 PASS였다. 새로 넣은 011도 통과했다. Worker 엔진을 SIGKILL하면 detached 후손까지 끝났고, 받지 못한 batch는 scope 종료가 확인된 뒤 새 엔진으로 다시 전달됐다. macOS 15도 제품 시험 11/11 PASS였다. 같은 run에서 실패한 세 단계는 다음과 같다.
+- Ubuntu의 `status-responsiveness` 001: event loop 지연 226ms. 로컬에서 3회 연속 PASS였고, 공용 코드 변경을 모두 포함한 직전 두 run의 Ubuntu도 success였다.
+- macOS 15의 storage 003: Restic job close에서 `job resources are still live`. 직전 run은 19/19였다.
+- Intel의 009: Broker가 제출을 `UNSUPPORTED_PROFILE`로 거절. 직전 run은 PASS였다.
+
+storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이의 경쟁이었다. helper가 끝나는 즉시 scope를 닫힘으로 표시했기 때문에, 그 직후 `close()`가 아직 populated인 coalition을 보고 거절할 수 있었다. 이제 helper가 끝난 뒤 populated이면 최대 5초 동안 empty가 되기를 기다린다. unknown이거나 그 뒤에도 populated이면 이전처럼 live로 남아 `close()`가 거절한다. Intel 009는 Broker의 거절 원인이 결과에 남지 않았다. 그래서 009/010이 실패하면 Host 화면에 찍힌 Broker 운영 출력도 함께 기록하도록 했다.

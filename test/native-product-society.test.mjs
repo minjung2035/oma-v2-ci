@@ -304,11 +304,13 @@ test('009. A seeded Seatbelt Worker commits and submits its candidate; the Broke
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
  const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
+ // The Host prints its Broker's operational stderr; a refused submission names its cause there.
+ const screen='\nHost screen:\n'+Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').split(/\r?\n/).filter(line=>/broker|refus|UNSUPPORTED|error/i.test(line)).join('\n').slice(-6000);
  const workers=provider.seen.filter(seen=>worker(seen.body));
  const results=workers.flatMap(seen=>toolResults(seen.body).map(result=>result.text));
  assert.ok(results.some(result=>!refused(result))&&workers.length>=2,`Worker requests ${workers.length}; results ${JSON.stringify(results).slice(0,3000)}\nResident logs:\n${residentLogs(base)}`);
  const submitted=results.find(result=>/"state"\s*:\s*"succeeded"/.test(result));
- assert.ok(submitted,`no Worker submission receipt succeeded: ${JSON.stringify(results).slice(0,4000)}\nResident logs:\n${residentLogs(base)}`);
+ assert.ok(submitted,`no Worker submission receipt succeeded: ${JSON.stringify(results).slice(0,4000)}\nResident logs:\n${residentLogs(base)}${screen}`);
  await until(()=>owned(base).length===0,60000,()=>'no process remains: '+owned(base).join('\n'));
 });
 
@@ -337,8 +339,10 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
  const status=await new Promise(resolve=>child.once('exit',code=>resolve(code)));clearTimeout(timer);
  assert.equal(status,0,stderr);
+ const terminal=JSON.parse(stdout||'{}');
+ const screen='\nHost screen:\n'+Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').split(/\r?\n/).filter(line=>/broker|refus|UNSUPPORTED|error/i.test(line)).join('\n').slice(-6000);
  const merges=provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').flatMap(seen=>toolResults(seen.body).map(result=>result.text));
- assert.ok(merges.some(result=>/"state"\s*:\s*"succeeded"/.test(result)),`worker-1 integration did not succeed: ${JSON.stringify(merges).slice(0,4000)}\nResident logs:\n${residentLogs(base)}`);
+ assert.ok(merges.some(result=>/"state"\s*:\s*"succeeded"/.test(result)),`worker-1 integration did not succeed: ${JSON.stringify(merges).slice(0,4000)}\nResident logs:\n${residentLogs(base)}${screen}`);
  const society=readdirSync(data).find(name=>!name.startsWith('.')&&existsSync(join(data,name,'repos','project.git')));
  const git=(...args)=>spawnSync('/usr/bin/git',['--git-dir',join(data,society,'repos','project.git'),...args],{encoding:'utf8'}).stdout.trim();
  assert.equal(git('show','refs/heads/main:fix.txt'),'fixed','the canonical main holds the integrated candidate');
