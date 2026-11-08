@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `a4dc9cbe3eb76b1d7220e651c99c6982959859eaf0e2ae75083b58118cac7217` (15953 files).
+verification input digest `63a1d4eee77ff860c7cb322d4ccd701cf96f1e9ef753c56a93d7cddd1e53452d` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4861,3 +4861,7 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 ### SOURCE148 결과
 
 `7797b334d63`에서 Mac26·Intel·Ubuntu는 job 전체 success였다. Intel의 generation OOM은 재발하지 않았다. macOS 15는 storage 단계에서 실패했는데, 시험이 시작되기 전에 고정 Restic을 GitHub에서 내려받다가 `NGHTTP2_REFUSED_STREAM`으로 연결이 거절된 것이다. 제품 시험은 PASS였다. `scripts/install-restic.mjs`는 이제 transport 오류와 5xx 응답을 최대 4회까지 간격을 두고 재시도한다. 4xx는 즉시 실패한다. 어느 시도에서 받은 bytes든 고정 archive·binary digest를 그대로 통과해야 한다(`restic-setup` 8/8).
+
+### SOURCE149 결과와 generation 시험 OOM 원인 정정
+
+`18d5e3f712b`에서 Mac26·macOS 15·Ubuntu는 job 전체 success였다. macOS 15 storage도 PASS였다. Intel은 `native-runtime-generation`이 다시 heap 2GB OOM으로 실패했다. 이 코드에는 job control poll 변경이 없으므로, SOURCE147에서 OOM을 그 변경 탓으로 본 추정은 틀렸다. 원인은 시험 자체의 계측이었다. 시험은 설치본 전체를 복사하는 동안 `fs.readSync`·`writeSync` 등을 `t.mock.method`로 감쌌고, mock은 호출마다 인자와 결과(복사한 Buffer)를 보관한다. arm64에서는 한도 안이었지만 x64에서는 이 누적이 heap 한도를 넘었다. 이제 계측은 원래 함수를 직접 감싸 횟수·시간·바이트만 센다. 제품 코드는 바뀌지 않았다. Restic 경로의 settle은 그대로 유지한다.

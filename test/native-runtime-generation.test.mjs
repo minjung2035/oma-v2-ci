@@ -76,19 +76,21 @@ console.log(JSON.stringify({pid:process.pid,sealedEntries:paths.length,globalFal
     return withProtectedMacNode(installation.node,root,preparationOwner,preparationSignal,()=>{},
       async node=>{
         phase('protected-node-preparation');
-        const started=performance.now(),calls={};
+        const started=performance.now(),calls={},originals={};
+        // Counters only: t.mock.method would retain every call's arguments
+        // and results -- each copied Buffer of the whole installation.
         for(const name of ['fstatSync','readSync','writeSync','fsyncSync','fchmodSync']){
-          const original=fs[name],row=calls[name]={count:0,elapsedMs:0,bytes:0};
-          t.mock.method(fs,name,function(...args){
+          const original=originals[name]=fs[name],row=calls[name]={count:0,elapsedMs:0,bytes:0};
+          fs[name]=function(...args){
             const before=performance.now();let value;
             try{return value=Reflect.apply(original,this,args);}
             finally{row.count++;row.elapsedMs+=performance.now()-before;if((name==='readSync'||name==='writeSync')&&Number.isSafeInteger(value)&&value>0)row.bytes+=value;}
-          });
+          };
         }
         syncBuiltinESMExports();
         try{return await prepareMacRuntimeGeneration(installation,root,preparationSignal,node);}
         finally{
-          t.mock.restoreAll();syncBuiltinESMExports();
+          Object.assign(fs,originals);syncBuiltinESMExports();
           t.diagnostic(JSON.stringify({phase:'generation-copy-observations',elapsedMs:performance.now()-started,calls}));
         }
       });
