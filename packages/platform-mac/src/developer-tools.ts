@@ -50,6 +50,10 @@ export async function observeMacDeveloperTools(temporary: string,
     // and race collection of its HOME/TMPDIR. There is no unowned fallback.
     const result = await execute({ executable, argv, cwd: temporary,
       env: { ...GIT_ENV, HOME: temporary, TMPDIR: temporary }, timeoutMs: 10000, stdoutBytes: 8192, stderrBytes: 8192 });
+    // A deadline is an unanswered observation, not evidence of an unsupported
+    // installation: it must not become a permanent never-retry refusal.
+    if (result.kind === "timed-out" || result.kind === "stalled")
+      throw new StoreError("DEADLINE_EXCEEDED", `Mac developer tool observation ${result.kind}: ${executable}`);
     if (result.kind !== "exited" || result.exitCode !== 0 || result.stdoutTruncated || result.stderrTruncated)
       refuse({ executable, argv: [...argv], kind: result.kind, exitCode: result.exitCode, signal: result.signal,
         errorCode: result.errorCode, elapsedMs: result.elapsedMs, stdoutTruncated: result.stdoutTruncated, stderrTruncated: result.stderrTruncated,

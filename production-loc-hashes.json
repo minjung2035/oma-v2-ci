@@ -1704,7 +1704,7 @@
     },
     {
       "path": "packages/platform-mac/src/developer-tools.ts",
-      "sha256": "e7d815cfb8e9bba05cd70eb13f9146bf9afa250e4f2bb8b9f05b296c3891cebd"
+      "sha256": "8f5210b8c1a554d9e9093636cd40bce7601bda6cb338cde427e220988d170abc"
     },
     {
       "path": "packages/platform-mac/src/git-sandbox.ts",

@@ -34,3 +34,13 @@ test('001. Actual Darwin owned scopes select Git inside the observed developer i
  assert.equal(runtime.confirmDead('preparation'),true);assert.deepEqual(ExecutionJournal.inspect(root),[]);
  t.diagnostic(JSON.stringify({tools,xcrun:{...xcrun,stdout:xcrun.stdout.toString(),stderr:xcrun.stderr.toString()},completeScopeReturned:true}));
 });
+
+test('002. An observation that reached its deadline is an unanswered DEADLINE_EXCEEDED, never a permanent unsupported refusal',async t=>{
+ if(process.platform!=='darwin')return;
+ const root=realpathSync(mkdtempSync(join(tmpdir(),'oma-developer-deadline-')));t.after(()=>rmSync(root,{recursive:true}));
+ for(const kind of ['timed-out','stalled'])
+  await assert.rejects(observeMacDeveloperTools(root,async()=>({kind,exitCode:null,signal:'SIGKILL',stdout:Buffer.alloc(0),stderr:Buffer.alloc(0),
+   stdoutTruncated:false,stderrTruncated:false,elapsedMs:10000})),{code:'DEADLINE_EXCEEDED'});
+ await assert.rejects(observeMacDeveloperTools(root,async()=>({kind:'exited',exitCode:2,signal:null,stdout:Buffer.alloc(0),stderr:Buffer.from('no developer directory'),
+  stdoutTruncated:false,stderrTruncated:false,elapsedMs:5})),{code:'UNSUPPORTED_PROFILE'});
+});
