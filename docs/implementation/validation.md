@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `63a1d4eee77ff860c7cb322d4ccd701cf96f1e9ef753c56a93d7cddd1e53452d` (15953 files).
+verification input digest `7aae4ced6a837042cd7be62bffe1b05bfe017598cf6f94294bfd450244b360e4` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4865,3 +4865,7 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 ### SOURCE149 결과와 generation 시험 OOM 원인 정정
 
 `18d5e3f712b`에서 Mac26·macOS 15·Ubuntu는 job 전체 success였다. macOS 15 storage도 PASS였다. Intel은 `native-runtime-generation`이 다시 heap 2GB OOM으로 실패했다. 이 코드에는 job control poll 변경이 없으므로, SOURCE147에서 OOM을 그 변경 탓으로 본 추정은 틀렸다. 원인은 시험 자체의 계측이었다. 시험은 설치본 전체를 복사하는 동안 `fs.readSync`·`writeSync` 등을 `t.mock.method`로 감쌌고, mock은 호출마다 인자와 결과(복사한 Buffer)를 보관한다. arm64에서는 한도 안이었지만 x64에서는 이 누적이 heap 한도를 넘었다. 이제 계측은 원래 함수를 직접 감싸 횟수·시간·바이트만 센다. 제품 코드는 바뀌지 않았다. Restic 경로의 settle은 그대로 유지한다.
+
+### SOURCE150 결과: 네 runtime job 전체 success
+
+`f2e466b7c23`의 Native [42484637825](https://github.com/minjung2035/oma-v2-ci/actions/runs/42484637825)에서 `common-runtime`의 Mac26·Intel(macos-26-intel)·macOS 15·Ubuntu 네 job이 모두 success였다. 같은 source로 처음 전부 통과한 run이다. 여기에는 제품 경로 001–011, Society 소유권, 공통 suite, installed generation, 독립 설치, Restic storage, Linux native 회귀가 포함된다. darwin-gates는 세 gate 판정이 OPEN이어서 설계상 BLOCKED이다.
