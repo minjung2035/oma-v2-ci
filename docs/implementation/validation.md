@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7c2946897ebc2cff7c93b0d455708376cb26727c519a7fd7951ba7436374404e` (15953 files).
+verification input digest `38a41fe7c46d4d90aeb9ded8cd463e5f631f5d731b8681d35018a3720dafe585` (15953 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4853,3 +4853,7 @@ Worker(006/009/010)는 runner 진단(`resident.ended`·`resident.launch` cause, 
 - Intel의 009: Broker가 제출을 `UNSUPPORTED_PROFILE`로 거절. 직전 run은 PASS였다.
 
 storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이의 경쟁이었다. helper가 끝나는 즉시 scope를 닫힘으로 표시했기 때문에, 그 직후 `close()`가 아직 populated인 coalition을 보고 거절할 수 있었다. 이제 helper가 끝난 뒤 populated이면 최대 5초 동안 empty가 되기를 기다린다. unknown이거나 그 뒤에도 populated이면 이전처럼 live로 남아 `close()`가 거절한다. Intel 009는 Broker의 거절 원인이 결과에 남지 않았다. 그래서 009/010이 실패하면 Host 화면에 찍힌 Broker 운영 출력도 함께 기록하도록 했다.
+
+### SOURCE147 결과와 settle 위치 수정
+
+`a65c7e8b24f`에서 Mac26·macOS 15·Ubuntu는 job success였다. Mac26과 macOS 15는 제품 시험 11/11, storage 19/19였다. Intel은 제품 시험 11/11 PASS였지만 `native-runtime-generation`이 JavaScript heap 2GB OOM(SIGABRT)으로 실패했다. 이 시험은 직전 두 run에서 PASS였고, 그 사이 바뀐 실행 코드는 job control poll의 settle뿐이다. settle이 4ms poll 경로에서 helper 종료 뒤 최대 5초 동안 coalition 조회를 반복했기 때문에, 이것이 회귀 원인일 가능성이 크다. 정확한 할당 경로는 아직 확정하지 못했다. 그래서 poll 변경을 되돌리고, 경쟁이 실제로 난 Restic 경로에 공용 execution owner와 같은 방식의 settle을 넣었다. close 전에 10ms 비동기 간격으로 최대 5초 동안 empty를 기다리고, unknown이거나 그 뒤에도 populated이면 이전처럼 `close()`가 거절한다. 함께 넣은 수정으로, 개발 도구 관측이 deadline에 걸리면 이제 `DEADLINE_EXCEEDED`가 된다. 영구 `UNSUPPORTED_PROFILE`이 아니다(`native-mac-developer-tools` 002).

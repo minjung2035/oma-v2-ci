@@ -3019,7 +3019,7 @@
   "node:stream": 14,
   "node:stream/promises": 2,
   "node:string_decoder": 1,
-  "node:timers/promises": 11,
+  "node:timers/promises": 12,
   "node:url": 19,
   "node:util": 14,
   "node:zlib": 1,

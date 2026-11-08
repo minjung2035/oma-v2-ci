@@ -87,8 +87,6 @@ async function image(pin: DarwinProcessPin, hashes: readonly string[], retry = t
 /** Borrows all input FDs during acquisition, then owns fileport copies until
  * READY. No channel or pathname grants workload/actor authority. The returned
  * identity is transient until a qualified journal producer accepts it. */
-/** Bounded wait for coalition accounting after the helper's own exit. */
-const HELPER_EXIT_SETTLE_MS = 5000;
 export async function startDarwinJobControl(source: CommandSpec, files: readonly DarwinJobFile[],
   images: readonly string[], invoke: DarwinSetupProcess, signal?: AbortSignal, peerSource?: DarwinJobPeer, directoryFd?: number, imageDigests?: DarwinJobImageDigests): Promise<DarwinJobControl> {
   let attempted = false;
@@ -160,7 +158,6 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     let pending: { id: number; yes(message: Data): void; no(error: unknown): void } | undefined;
     let problem: Error | undefined, prepared: Promise<void> | undefined, ready = false, released = false, returned = false, stopping = false, ownerStopped = false;
     let terminalDone = false, rootDone = false, allReturned = false, closeFailure: unknown;
-    let helperExitedAt: number | undefined;
     const inputReturns: Promise<void>[] = [];
     let finish!: (value: DarwinJobTerminal) => void, failTerminal!: (error: unknown) => void, finishRoot!: () => void;
     const terminal = new Promise<DarwinJobTerminal>((yes, no) => { finish = yes; failTerminal = no; });
@@ -217,14 +214,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
         }
         const state = controller.state();
         if (state === "changed" || state === "unknown") failed(unknown("job helper generation became unobserved"));
-        // The helper's exit precedes the kernel's own task accounting of the
-        // members it joined: a populated scope right after that exit is given
-        // a bounded settle before closing, never read as empty. Unknown or a
-        // scope still populated after it stays live for close() to refuse.
-        const population = rootDone ? "empty" : observeDarwinCoalitionPopulation(identity);
-        if (state === "exited") helperExitedAt ??= performance.now();
-        if (!rootDone && (population === "empty" || helperExitedAt !== undefined &&
-            (population !== "populated" || performance.now() - helperExitedAt >= HELPER_EXIT_SETTLE_MS))) {
+        if (!rootDone && (state === "exited" || observeDarwinCoalitionPopulation(identity) === "empty")) {
           rootDone = true;
           if (!terminalDone && ownerStopped) {
             terminalDone = true; finish({ kind: "stopped" });

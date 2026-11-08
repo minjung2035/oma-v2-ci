@@ -1,6 +1,7 @@
 /** Restic argv and child/FD lifetime. Storage supplies stream validation;
  * this module cannot interpret checkpoints, tree digests or archive metadata. */
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { closeSync, constants, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { StoreError } from "@oma/domain/errors";
@@ -15,6 +16,15 @@ import { bundledJobHelper } from "@oma/native/darwin-job-launch";
 import { resticReleaseFor } from "@oma/domain/deployment";
 import { launchDarwinJobScope } from "./darwin-execution.js";
 import { ExecutionNotStarted, type CommandSpec } from "@oma/domain/process-command";
+
+
+/** The helper's exit can precede the kernel's accounting of the members it
+ * joined. Like the shared execution owner, wait a bounded time for the whole
+ * scope to read empty; unknown or still populated is left for close() to refuse. */
+async function settled(scope: { population(): "populated" | "empty" | "unknown" }): Promise<void> {
+  for (const deadline = performance.now() + 5000; scope.population() === "populated" && performance.now() < deadline;)
+    await delay(10);
+}
 
 export function requireResticSuccess(result: ProcessObservation): string {
   if (result.kind !== "exited" || result.exitCode !== 0)
@@ -51,9 +61,10 @@ async function runDarwinRestic(executable: string, command: Omit<CommandSpec, "e
       scope.release();
       const result = await scope.result;
       await scope.closed;
+      await settled(scope);
       return result;
     } catch (error) {
-      try { scope.terminate(); await scope.closed; } catch { /* the original failure is reported */ }
+      try { scope.terminate(); await scope.closed; await settled(scope); } catch { /* the original failure is reported */ }
       throw error;
     } finally { scope.close(); }
   }, () => closeSync(directory));
