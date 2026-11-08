@@ -26,9 +26,19 @@ try { executable = withinDirectory(target, (parent, name) => openRegularBeneath(
 catch (error) { if (error.code !== "ENOENT") throw error; }
 if (executable === undefined) {
   const url = `https://github.com/restic/restic/releases/download/v${RESTIC_RELEASE.version}/${pin.archive}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Restic download failed: ${response.status}`);
-  const packed = Buffer.from(await response.arrayBuffer());
+  // Transport failures and 5xx answers are retried a bounded number of
+  // times; every attempt's bytes still have to match the pinned digest below.
+  let packed;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) { packed = Buffer.from(await response.arrayBuffer()); break; }
+      if (response.status < 500 || attempt === 4) throw new Error(`Restic download failed: ${response.status}`);
+    } catch (error) {
+      if (attempt === 4 || error?.message?.startsWith("Restic download failed")) throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+  }
   if (sha256(packed) !== pin.archiveSha256) throw new Error("Restic archive checksum mismatch");
   const unpacked = spawnSync("/usr/bin/bzip2", ["--decompress", "--stdout"], { input: packed, maxBuffer: 64 * 1024 * 1024 });
   if (unpacked.error || unpacked.signal || unpacked.status !== 0 || sha256(unpacked.stdout) !== pin.binarySha256)
