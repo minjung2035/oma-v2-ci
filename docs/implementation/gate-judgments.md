@@ -35,8 +35,8 @@ G-FILES 판정: **OPEN**. 남은 항목은 독립 cursor의 호출자별 capabil
 | 살아 있는 그 process, PID 재사용 | gate `mach-token-control`: pidversion이 다르면 ESRCH, genuine token만 신호한다. `mach-stream-stale`: 송신자가 죽은 뒤 받은 메시지의 audit binding을 거절한다 | 닫힘 |
 | 인계·전달 반례 | gate `mach-stream-handoff`: 다른 process로 넘어간 endpoint의 bytes 0, audit binding 거절. `mach-audit-async`: 취소된 binding 거절, 선택한 image 불일치는 unavailable | 닫힘 |
 | 기대한 Broker(Host→Broker) | Society 소유권 012: Host는 자기 Broker child를 private child identity로 Mach에 연결하고, non-child나 반환된 identity를 거절한다. 제품 005: Principal engine→Broker Mach 인증 호출(세 Mac) | 닫힘 |
-| 현재 run 소속과 현재 권한 | 제품 008: Broker SIGKILL 뒤 재시작한 generation에서 계속 동작한다. 011: 엔진 사망 뒤 scope 종료가 확인돼야 재전달한다. 상속 FD는 명시 채널만 남는다(gate `seatbelt-kept-fds`) | 부분: validation이 남긴 restart/sleep 뒤 current capability 반례가 없다 |
-| 서명 Keychain | 명세 9절: scripted credential은 signed Keychain·잠김/TCC 검증이 아니다 | 열림: release 서명 Keychain·SIP 검증이 없다 |
+| 현재 run 소속과 현재 권한 | 제품 008: Broker SIGKILL 뒤 재시작한 generation에서 계속 동작한다. 011: 엔진 사망 뒤 scope 종료가 확인돼야 재전달한다. 상속 FD는 명시 채널만 남는다(gate `seatbelt-kept-fds`) | 부분: Broker 재시작 뒤 같은 Principal이 새 generation에 현재 권한으로 닿는 제품 시험 013 추가(판정 대기). 실제 sleep/wake는 [NATIVE-006](../macos-platform.md)상 CI 밖 미검증 범위다 |
+| 서명 Keychain | 명세 9절: scripted credential은 signed Keychain·잠김/TCC 검증이 아니다 | 열림: release 서명 Keychain·SIP 검증이 없다. NATIVE-006은 서명 Keychain·TCC를 CI의 scripted credential과 다른 별도 미검증 범위로 둔다. 실제 서명 release와 물리 Mac이 필요하다 |
 
 G-AUTH 판정: **OPEN**. 남은 항목은 sleep을 포함한 restart 뒤 current capability 반례와 release 서명 Keychain·SIP 검증이다.
 

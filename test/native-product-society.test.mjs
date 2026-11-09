@@ -215,6 +215,42 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  await until(()=>owned(base).length===0,30000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });
 
+test('013. After its Broker is SIGKILLed and restarted, the same Principal reaches the new Broker generation with current authority',{timeout:900000},async t=>{
+ if(!darwin(t))return;
+ const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
+ const provider=await scriptedProvider(request=>continuesTurn(request)?text('No such Worker.'):
+  tools(call('oma_send',{to:['nobody'],subject:'no such Worker',content:{kind:'text',value:'x'}})));
+ const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-generation-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
+ t.after(async()=>{await provider.close();spawnSync('/bin/chmod',['-R','u+w',base]);removeTree(base);});
+ const agentDir=join(data,'engine');provider.configure(agentDir);
+ writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
+ const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
+ const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
+  steps:[{wait:5},{write:hex('send it to nobody'),wait:1},{write:hex('\r'),wait:300},{write:hex('send it again'),wait:1},{write:hex('\r'),wait:200},{write:hex('\x04'),wait:20}]};
+ const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
+  env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
+ let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
+ const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
+ const ended=new Promise(resolve=>child.once('exit',code=>resolve(code)));
+ const brokers=()=>owned(base).filter(line=>line.includes(entry('broker'))).map(line=>Number(line.trim().split(/\s+/)[0]));
+ const answers=()=>provider.seen.flatMap(seen=>toolResults(seen.body).map(result=>result.text));
+ // The first answer comes from the first Broker generation.
+ await until(()=>answers().some(answer=>/ADDRESS_NOT_FOUND/.test(answer)),280000,()=>'no first Broker answer: '+JSON.stringify(answers()).slice(0,2000));
+ const first=brokers()[0];assert.ok(first,'first Broker generation: '+owned(base).join('\n'));
+ const before=answers().length;
+ process.kill(first,'SIGKILL');
+ await until(()=>brokers().find(pid=>pid!==first),240000,()=>'no replacement Broker after SIGKILL: '+owned(base).join('\n'));
+ const status=await ended;clearTimeout(timer);
+ const terminal=JSON.parse(stdout||'{}');
+ const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').slice(-4000);
+ assert.equal(status,0,stderr+screen);assert.equal(terminal.ready,true,screen);
+ const later=answers().slice(before);
+ assert.ok(later.length>=1,`the Principal made no call after the Broker restart: ${JSON.stringify(answers()).slice(0,3000)}\n${screen}`);
+ assert.match(later.at(-1),/ADDRESS_NOT_FOUND/,`the restarted generation did not answer with current authority: ${JSON.stringify(later).slice(0,3000)}\n${screen}`);
+ assert.doesNotMatch(later.at(-1),/BROKER_UNAVAILABLE|AUTH_FAILED/,later.at(-1));
+ await until(()=>owned(base).length===0,60000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
+});
+
 test('006. A scripted Principal publishes a goal; a seeded Seatbelt Worker wakes and reaches the model through its relay',{timeout:900000},async t=>{
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');

@@ -61,7 +61,7 @@ jobs:
       - name: Run the actual product Society and Broker on Darwin
         id: product_society
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
-        timeout-minutes: 90
+        timeout-minutes: 120
         run: |
           # Restic setup is qualified by its own step; a failure here is reported by product test 004.
           npm run setup:storage > .scratch/native-runtime/product-setup-storage.log 2>&1 || cat .scratch/native-runtime/product-setup-storage.log
