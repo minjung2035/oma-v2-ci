@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `ba0c4857359b485f041434761c468ecd85d98026073ee620ba506c725632256d` (15954 files).
+verification input digest `3ee982d39caeb5e8dc0d153bffa56e40d3ba3d38f23c8260892badec8b26feba` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4881,3 +4881,5 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `47be9ce35fe`의 macOS 15에서 새 013이 실패했다: Broker SIGKILL·재시작 뒤 같은 Principal의 두 번째 호출이 `ADDRESS_NOT_FOUND`를 받지 못했다. 나머지 12개는 PASS였다. 실패 메시지는 대화 기록에 반복되는 첫 결과로 잘려서 두 번째 답을 담지 못했다. 이제 013은 마지막 답 전체와 Host 화면의 Broker·거절 줄을 출력한다. Host는 Broker readiness마다 Principal을 다시 등록하고 그때 Broker identity를 다시 attest한다(`society-runtime.ts`의 `register`).
 
 `58b52fda5d7`의 macOS 15에서 013의 실제 답을 확인했다. Broker SIGKILL·재시작 뒤 같은 Principal의 `oma_send`가 `BROKER_UNAVAILABLE`(ACCEPTANCE_UNKNOWN)을 받았다. Host 화면에는 이전 generation이 죽을 때의 `[Mail] Delivery error: Mach destination is no longer observed available`과 `broker restarted`가 남았다. 이것은 재시작 뒤 현재 권한이 회복되지 않는 실제 제품 결함 후보다. Host의 `hostChannel`과 엔진의 `dialAttestedMachChannel`은 둘 다 호출마다 현재 generation이나 이름을 새로 조회한다. 그래서 남은 후보는 재등록 경로(`register`: record 준비 실패 시 credential 없이 반환)다. 그 알림은 Broker라는 단어를 포함하지 않아 이전 화면 필터에서 빠졌다. 이제 013은 Host 화면의 모든 고유 알림을 순서대로 출력한다.
+
+`a1a4872accf`의 Mac26 화면 전체를 보면, 재등록 실패 알림("records could not be refreshed", "rejected", "could not be attested")은 하나도 없었다. 두 번째 호출은 0.5초 만에 실패했다. 실패 형식 `{"code":"BROKER_UNAVAILABLE","message":"BROKER_UNAVAILABLE","retry":"same-key"}`은 Broker의 공개 오류 frame이다. 따라서 요청은 재시작한 Broker에 도달했고, 그 Broker가 원인을 숨긴 채 BROKER_UNAVAILABLE로 답했다. Broker는 지금까지 INTERNAL_ERROR의 원인만 자기 stderr에 남겼다. 이제 BROKER_UNAVAILABLE의 원인도 남긴다. 호출자가 받는 응답은 바뀌지 않는다.
