@@ -607,3 +607,41 @@ test("032. Malformed LSP edits cannot become corrupted replacement text", () => 
     }
     assert.equal(applyTextEdits("abc", [edit]), "Xbc");
 });
+
+
+test("033. Oversized notifications and unrelated numeric IDs do not reject a pending request", async t => {
+    for (const scenario of ["oversized-nested-id", "oversized-quoted-id", "oversized-fractional-id", "oversized-exponent-id", "oversized-server-request"]) {
+        await t.test(scenario, async t => {
+            const root = tmp(t), adapter = hostileAdapter(scenario);
+            const client = new LspClient(adapter, adapter.defaultCommand, root, 3_000);
+            try {
+                await client.start();
+                await client.initialize(root);
+                const uri = pathToFileURL(join(root, "note.tfix")).href;
+                client.didOpen(uri, "hello\n", "tfix");
+                for (let request = 0; request < 2; request += 1) {
+                    const diagnostics = await client.diagnostics(uri);
+                    assert.deepEqual(diagnostics.map(entry => entry.message), ["answer after oversized frame"]);
+                }
+            } finally {
+                await client.shutdown();
+            }
+        });
+    }
+});
+
+test("034. A top-level oversized response ID remains identifiable after nested metadata", async t => {
+    const root = tmp(t), adapter = hostileAdapter("oversized-late-response-id");
+    const client = new LspClient(adapter, adapter.defaultCommand, root, 3_000);
+    try {
+        await client.start();
+        await client.initialize(root);
+        const uri = pathToFileURL(join(root, "note.tfix")).href;
+        client.didOpen(uri, "hello\n", "tfix");
+        await assert.rejects(client.diagnostics(uri), /response frame declared.*request was refused/);
+        const diagnostics = await client.diagnostics(uri);
+        assert.deepEqual(diagnostics.map(entry => entry.message), ["answer after oversized frame"]);
+    } finally {
+        await client.shutdown();
+    }
+});

@@ -29,13 +29,13 @@
 | 요청 freeze → 캐시 read | 자신의 metadata 한도를 넘긴 요청도 저장 성공을 반환한 뒤 곧바로 손상으로 읽었다. body·metadata 출판 전에 크기를 검사한다. | `test/request-cache.test.ts` |
 | 검사 pipeline → 출력 소유자 | 두 번째 출력 획득 실패, step-end/finish의 첫 출력 flush 실패가 형제 출력 FD를 남겼다. 획득 실패를 반환하고 모든 출력의 종료를 시도한다. | `test/architecture-boundaries.test.mjs` |
 | Mail → mailbox 정리 → 복구 | 정리 오류가 `STORE_CORRUPT`를 덮거나 결합 오류 속 손상이 일시 오류로 삼켜졌다. 원인과 정리 실패를 함께 보존하고 기존 오류 분류기를 사용한다. | `packages/mail/test/materializer-failures.test.mjs` |
-| Review 알림 → 모델 도구 | 현재 발행하는 리뷰 안내에 제거된 status/diff/respond 도구 이름이 남아 있었다. 현재 기록 경로와 `oma_review` 호출로 안내한다. | `packages/domain/test/review-instructions.test.mjs` |
+| Review 알림 → 모델 도구 | 현재 발행하는 리뷰 안내에 제거된 status/diff/respond 도구 이름이 남아 있었다. 현재 기록 경로와 `oma_review` 호출로 안내하며, 준비 오류의 `oma_challenge_open`도 현재 `oma_challenge`로 바꿨다. | `packages/domain/test/review-instructions.test.mjs` |
 | LSP → 경로 containment | `..note` 같은 정상 이름을 상위 경로 탈출로 오판했다. `..` 경로 요소만 거절한다. | `packages/tool-lsp/test/lsp-upstream.test.mjs` |
 | LSP 응답 → 파일 편집 | 음수·분수·역순 범위나 누락된 newText가 중복 텍스트 또는 `undefined`를 만들었다. 실제 쓰기 전에 편집 구조와 위치를 거절한다. | 같은 파일 |
+| LSP 큰 응답 → 요청 수명 | 큰 알림의 중첩 id, 문자열 또는 소수·지수형 ID를 현재 요청 번호로 오인해 정상 요청을 거절했다. 크기가 제한된 prefix에서 최상위 응답 필드와 온전한 정수 ID를 확인한다. 식별되지 않은 frame은 다른 요청을 취소하지 않는다. | `packages/tool-lsp/test/lsp-upstream.test.mjs` |
 | 웹 저장 내용 → 검색 발췌 | Unicode 소문자 변환으로 길이가 달라지면 원문과 다른 위치를 발췌했다. 원문에서 직접 대소문자 무시 검색을 한다. | `packages/tool-web/test/content-find.test.mjs` |
 | 프록시 → HTTP 응답 | curl이 전송 실패와 HTTP metadata를 함께 내면 잘린 본문이 성공으로 반환됐다. 비정상 종료를 실패로 보존한다. HEAD도 실제 HEAD로 전달한다. | `packages/tool-web/test/proxy-transport.test.mjs` |
 | Gemini → HTTP redirect | 다른 origin으로 redirect될 때 사용자 정의 API key 헤더가 따라갔다. 기존 provider redirect 도우미로 같은 origin에서만 인증 헤더를 유지한다. | `packages/tool-web/test/gemini-redirect.test.mjs` |
-
 | 질문 TUI → 붙여넣기 | bracketed paste의 ESC 시작을 취소 키로 오인해 붙여넣기를 버렸다. 완성된 paste 프레임은 입력으로 전달한다. | `test/ask-user-question.test.ts` |
 | Git 관측 → spool 한도 | Unicode 문자열의 문자 수를 byte 한도와 비교해 정상 관측을 너무 일찍 거절했다. UTF-8 byte 수로 계산한다. | `packages/git/test/observation-boundary.test.mjs` |
 | hashline → 변경 감지 | 표시용 anchor의 앞 500byte/공백 정규화를 stale 검사에도 사용해 뒤쪽 수정이나 공백 변경을 덮어썼다. 변경 감지는 전체 원문으로 계산한다. | `packages/tool-hashline/test/bundle.test.mjs` |
@@ -90,6 +90,8 @@ Codex의 [승인과 보안 안내](https://learn.chatgpt.com/docs/agent-approval
 | 관측 기록의 신선도 | 파일을 읽었다고 refresh·ACK가 된 것은 아니며 파일 존재가 최신 상태를 뜻하지 않는다. | `apps/oma/src/views/collaboration-*.ts`. 관측 시각·health·현재성 표시 통합. |
 | 리뷰의 가시성 | Principal에게 공개되지 않는 Worker roster/log/material이 있고 리뷰도 역할별로 보이는 범위가 다르다. | `apps/oma/src/views/collaboration-review*.ts`. 거절과 기록 부재를 구별하고 공개 가능한 요약 검토. |
 | 모호한 제출과 복구 | 원본 freeze/cache가 손상되면 새 요청으로 자동 재구성하지 않는다. 반복 재시도도 막힐 수 있다. | `apps/oma/src/request-cache.ts`, `client/src/request-service.ts`. 중복 효과 방지 근거는 유지하되 사용자가 실행할 수 있는 복구 절차 필요. |
+| 실행 journal 복구 | 복구 계획을 만든 뒤 같은 커널 boot에서 적용하면 거절되어 실제 호스트 재부팅이 필요하다. | `storage/src/execution-recovery.ts`, `execution-journal.ts`. 이전 실행 범위와 분리한다는 근거와 재부팅 전후 절차를 명확히 안내. |
+| 공유 모델 설정 | Principal과 modelProfile을 공유하는 Worker는 모델 선택자에서 모델 변경 자체가 거절된다. | `domain/src/settings-policy.ts`. 공유 프로필의 영향과 독립 프로필로 분리하는 경로를 함께 표시. |
 | 큰 receipt | 전송을 여러 frame으로 나눠도 재조립 전체에는 64MiB 한도가 있다. | `protocol/src/receipt-chunks.ts`. 저장 참조·stream 관측으로 대체할지 검토. |
 | 질문 형태 | 1~4개 질문, 각각 2~4개 선택지가 필요해 단순 자유서술 질문에도 선택지를 붙여야 한다. | `domain/src/ask-user-question/questionnaire.ts`. 자유서술 전용 질문과 UI 부재시 대화 fallback 검토. |
 | 입력과 화면 크기 | prompt/paste 및 transcript에 별도 byte·행 한도가 있다. | `domain/src/surface-bounds.ts`. 초과 시 남은 내용을 잃지 않는 파일 입력·이어보기 경로 필요. |
@@ -104,7 +106,6 @@ Codex의 [승인과 보안 안내](https://learn.chatgpt.com/docs/agent-approval
 | 웹 캐시 | 가져온 내용은 기본 1시간 TTL과 128개/128MiB 캐시 한도에 영향을 받는다. 이력의 responseId가 남아 있어도 본문이 만료될 수 있다. | vendored `storage.js`. 영속 저장 선택과 만료 전 안내 필요. |
 | 웹 source_check | 자동 진위 판정이 아니며 현재 관련 구절 추출의 토큰화는 영어·숫자 중심이다. 한글 질의의 구절 추출 품질에 제약이 있다. | vendored `source-check.js`. Unicode 토큰화와 다국어 문장 경계를 별도 검증할 필요. |
 | archive·이행 | 특수 파일·메타데이터를 복원하지 못하거나 이전 형식의 상태를 거절하는 경로가 있다. | `storage/src/restic-tar.ts`, `session-storage.ts`, Review 검증. 보존된 hot 상태·암호·원본의 위치와 지원 이행 경로를 설명. |
-
 | MCP UI 도구 | UI resource를 광고하는 도구는 텍스트 결과만 받고 싶어도 호출 자체가 거절된다. | `tool-mcp/src/index.ts`의 ui-session permit 부재와 runtime `proxy-modes.js`. UI가 선택적인 서버의 텍스트 fallback을 따로 설계할 필요. |
 | MCP 인증 저장소 | OS keyring을 풀어도 OMA의 keyring 거절은 바뀌지 않는다. Jev·bearer 저장 경로의 안내는 OS 저장소를 고치라고 할 수 있다. | runtime `secure-keyring.js`, OMA authStore 정책. 지원되는 encrypted-file/명시적 인증 경로를 안내해야 함. |
 | MCP 출력 최소 한도 | outputGuard를 64byte/1행처럼 작게 설정해도 파일 위치 안내가 약 200byte/3행으로 반환된다. | runtime `mcp-output-guard.js`. 최소값 검증 또는 별도 metadata 안내 계약 필요. 보통 크기의 한도는 지켜짐을 확인. |
@@ -138,8 +139,7 @@ Codex의 [승인과 보안 안내](https://learn.chatgpt.com/docs/agent-approval
 | `runtime/input-effects.ts` | stream 전체 누적 후 다시 Buffer 결합 | freeze·재시도 가능한 원본을 보존하는 spool 인터페이스 필요 |
 | `application/local-packages.ts` | gzip 전체 staging 뒤 tar 검사 | 압축 해제 중 한도·취소·부분 write를 다루는 통합 stream 경계 검토 |
 | vendored 웹 `storage.js` | 캐시 prune 반복 합산, 검색 결과와 본문의 메모리 보존 | quota·세션 복원·본문 참조 수명 통합 필요 |
-
-| Review attestation | 같은 사실·target을 반복 decode/scan | revision과 권한이 결박된 snapshot index 필요 |
+| Review 단건 조회·검증 | 개별 호출에서 같은 사실·target을 반복 decode/scan | 목록·sweep·중복 판정의 기존 projection 재사용을 유지하면서 revision과 권한이 결박된 조회 snapshot 검토 |
 | Store transaction 대기 | busy timeout과 재시도가 동기식 이벤트 루프를 오래 점유할 수 있음 | 재시도·취소·트랜잭션 소유권을 함께 설계해야 함 |
 | Mail header 일괄 검증 | 메시지별 전체 agent 목록을 반복 조회 | 동일 Store snapshot에서 재사용할 수 있는 검증 문맥 필요 |
 | MCP 설정 preview | unified diff가 줄 수의 곱에 비례하는 LCS 행렬을 생성 | 큰 설정에서 메모리 한도 또는 제한 diff 알고리즘 검토 |
@@ -147,7 +147,5 @@ Codex의 [승인과 보안 안내](https://learn.chatgpt.com/docs/agent-approval
 | 검증·MCP 명령·Git context | compliance에서 clause마다 전체 source hash, header-command 종료 감시의 반복 전체 ps 조회, 파일별 Git subprocess | snapshot 재사용·프로세스 추적·batch 처리의 수명 계약 검토 |
 | 검증·vendor 생성 | 테스트 이름 배열을 수동 동기화하며 작은 변경도 전체 vendor emit·hash·packaging을 반복 | 검증 계약을 보존하는 생성·incremental provenance 설계 필요 |
 | 웹 provider 설정 | 여러 provider가 같은 JSON·오류·캐시 로직을 따로 소유 | reload 시점과 형식별 호환성을 유지하는 공통 설정 계층 필요 |
-
-추가 확인 대상으로 LSP oversized frame에서 top-level이 아닌 `id`를 요청 ID로 오인할 가능성을 남긴다. 아직 재현하지 않았으므로 수정·검증 완료 항목에 포함하지 않는다.
 
 검토에서 발견한 제약을 완화하는 작업과 이번 결함 수리는 구분한다. 큰 설계 변경을 작은 버그 수정에 섞어 권한·복구 계약을 바꾸지 않았다.

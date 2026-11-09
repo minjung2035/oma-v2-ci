@@ -33,6 +33,72 @@ const OMA_MAX_DIAGNOSTIC_URIS = 4096;
 // sinks with the serving client's adapter -- the per-call progress
 // signal the adapter's stall window resets on, replacing the fixed
 // aggregate deadline that could abort a still-working call.
+// Inspect only the bounded prefix. A nested/string id is not a response id;
+// incomplete or ambiguous metadata must never reject an unrelated request.
+function omaOversizedResponseId(prefix) {
+    let cursor = 0;
+    let pendingId;
+    let responseSeen = false;
+    let idSeen = false;
+    const skipWhitespace = () => {
+        while (cursor < prefix.length && /[ \t\r\n]/.test(prefix[cursor])) cursor += 1;
+    };
+    const stringEnd = start => {
+        for (let index = start + 1; index < prefix.length; index += 1) {
+            if (prefix[index] === "\\") index += 1;
+            else if (prefix[index] === '"') return index + 1;
+        }
+        return undefined;
+    };
+    const valueEnd = start => {
+        const stack = [];
+        for (let index = start; index < prefix.length; index += 1) {
+            const character = prefix[index];
+            if (character === '"') {
+                const end = stringEnd(index);
+                if (end === undefined) return undefined;
+                index = end - 1;
+            }
+            else if (character === "{" || character === "[") stack.push(character);
+            else if (character === "}" || character === "]") {
+                if (stack.length === 0) return character === "}" ? index : undefined;
+                if (stack.pop() !== (character === "}" ? "{" : "[")) return undefined;
+            }
+            else if (character === "," && stack.length === 0) return index;
+        }
+        return undefined;
+    };
+    skipWhitespace();
+    if (prefix[cursor++] !== "{") return undefined;
+    while (cursor < prefix.length) {
+        skipWhitespace();
+        if (prefix[cursor] !== '"') return undefined;
+        const end = stringEnd(cursor);
+        if (end === undefined) return undefined;
+        let key;
+        try { key = JSON.parse(prefix.slice(cursor, end)); }
+        catch { return undefined; }
+        cursor = end;
+        skipWhitespace();
+        if (prefix[cursor++] !== ":") return undefined;
+        skipWhitespace();
+        if (key === "method" || (key === "id" && idSeen)) return undefined;
+        if (key === "result" || key === "error") responseSeen = true;
+        const finish = valueEnd(cursor);
+        if (finish === undefined) return responseSeen ? pendingId : undefined;
+        let value;
+        try { value = JSON.parse(prefix.slice(cursor, finish)); }
+        catch { return undefined; }
+        if (key === "id") {
+            if (typeof value !== "number" || !Number.isSafeInteger(value)) return undefined;
+            idSeen = true;
+            pendingId = value;
+        }
+        cursor = finish;
+        if (prefix[cursor++] === "}") return responseSeen ? pendingId : undefined;
+    }
+    return responseSeen ? pendingId : undefined;
+}
 const omaInboundSinks = new Set();
 export function omaOnInboundFrame(sink) {
     omaInboundSinks.add(sink);
@@ -677,15 +743,14 @@ export class LspClient {
         return this.#adapter.initialization?.[section] ?? {};
     }
     // OMA divergence: refuse the request an oversized frame answers --
-    // never the server, and never a guess: only a sniffed body id that
-    // actually names a pending request refuses it. An unidentified frame
+    // never the server, and never a guess: only a complete top-level id
+    // with response metadata names a pending request. An unidentified frame
     // (a notification, or an id past the sniffed prefix) is dropped and
     // counted so the drop rides later error tails -- blaming the sole
     // pending request for a frame that was not answering it was a
     // misattributed kill.
     #refuseOversizedFrame(bodyLength, bodyPrefix) {
-        const sniffed = /"id"\s*:\s*(\d+)/.exec(bodyPrefix)?.[1];
-        const pendingId = sniffed === undefined ? undefined : Number(sniffed);
+        const pendingId = omaOversizedResponseId(bodyPrefix);
         const pending = pendingId === undefined ? undefined : this.#pending.get(pendingId);
         if (pending === undefined) {
             this.#droppedInboundFrames += 1;

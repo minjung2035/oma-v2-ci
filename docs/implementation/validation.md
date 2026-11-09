@@ -1,3 +1,50 @@
+# 프로젝트 감사 검증 — 2026-11-09 KST
+
+macOS 전용 구현·분기는 이번 감사에서 변경하지 않았다. 모듈 내부·경계 검토 범위와 수정·남은 제약은
+[프로젝트 코드 감사](project-audit-2026-11-09.md), 직접 읽은 838개 파일은
+[파일별 검토 목록](project-audit-2026-11-09-files.tsv)에 기록한다. 이 절은 아래 기존 macOS 검증 기록을 대체하지 않는다.
+
+감사 수정은 `work/project-audit-20261109`의 `cc3aa120dce`에 보존되었고, 후속 작업 디렉터리는
+`/home/dev/oma-project-audit-20261109`다. 별도 작업에서 작성한 `owned-execution.ts`의 정리 오류 요약도
+검증 snapshot과 같은 내용으로 보존했다. 원래 checkout은 병행 macOS 작업의 브랜치 전환을 따라가며 수정하지 않는다.
+
+Linux·Node 26.0.0에서 최종 vendor 수정까지 build 성공, 집중 회귀 **79 PASS / 0 FAIL / 0 SKIP**,
+전체 architecture·transaction·durable boundary·document·spec inventory **PASS**를 확인했다.
+추가로 큰 LSP frame의 중첩 ID가 정상 요청을 거절하는 문제를 실제 child 프로세스로 재현해 수정했다.
+생성기·runtime·manifest를 함께 갱신한 뒤 해당 LSP 테스트 파일 전체는 **40 PASS / 0 FAIL / 0 SKIP**다.
+이전에 수행한 다른 집중 실행과 중복되는 테스트는 합산하지 않는다. 구조 검사 통과는 runtime 전체 성공을 뜻하지 않는다.
+
+첫 전체 실행은 `/home/dev/oma-audit-validation-20261109-MV9JKV`의 고정 입력에서
+`TMPDIR=/var/tmp node scripts/test-local.mjs`로 641개 파일을 대상으로 시작했다.
+serial 단계는 **39 PASS / 0 FAIL / 5 SKIP**이며, parallel 진행 중 `/usr/bin/bwrap` 부재에 따른
+실행 실패·후속 assertion 실패와 검증 문서의 오래된 입력 digest 1건을 확인했다.
+사용자의 bubblewrap 추가 요청에 따라 환경이 실행 도중 섞이지 않도록 해당 실행을 SIGINT로 중단했다.
+이 실행은 **INTERRUPTED / NOT A PASS**이며, 완료된 전체 회귀로 계산하지 않는다.
+원시 TAP·로그와 입력별 hash는 `/home/dev/oma-audit-artifacts/project-audit-2026-11-09/`에 보존했다.
+
+첫 설치 시도는 sudo 관리자 인증이 필요해 중단됐지만, 재개 시 Debian 13 호스트의
+`/usr/bin/bwrap` **0.12.0** 설치를 확인했다. 제품의 runner-scope와 같은 user/PID namespace·
+mount 옵션으로 `/bin/true`를 실행해 **exit 0**을 확인했다. 새 worktree build와 전체 구조 검사는
+통과했고, 문서 입력 digest 갱신 뒤 production inventory 회귀도 **15 PASS / 0 FAIL / 0 SKIP**다.
+설치 후 전체 641파일 실행은 **5,120 tests / 5,109 PASS / 10 FAIL / 1 SKIP**, exit 1로 끝났다.
+serial은 44/44 PASS, parallel은 5,065 PASS·10 FAIL·1 SKIP이다. 전체 실행 전후 입력 15,981파일의
+digest `e08944ee65c5edc9a7d733c6a694a486dbcd140187006d9ded808c1ef8431515`가 동일함을 확인했다.
+원시는 `after-bwrap-full.log`, 두 phase TAP, `after-bwrap-result.json`, `after-bwrap-inputs.json`이다.
+
+실패 8건은 generation cleanup 테스트 VM의 canonical-json 의존성 누락, 2건은 지연 복구 테스트
+fixture가 start/stop 이후의 실행·사망 상태를 갱신하지 않은 문제로 분석했다. 두 테스트 보조 코드를
+수정했고 후속 build는 성공했지만, **사용자의 중단·푸시 요청에 따라 수정 후 테스트는 실행하지 않았다.**
+SKIP 1건은 cpu·memory·pids controller를 제공하는 delegated cgroup 부모가 없어 실제 자원 제한을
+검증하지 못한 경우다. 추가 환경 설정과 전체 재검증도 중단했다. 이 결과를 전체 PASS로 계산하지 않는다.
+아래 구조 입력 digest의 갱신은 위 실행 결과를 새 입력에 재승인하는 의미가 아니다.
+macOS 실제 실행은 이번 Linux 감사의 검증 범위에 포함하지 않는다.
+
+`evidence:refresh`는 기존 review notes의 `implementation/contracts.ts`가 현재 production 목록과 맞지 않아
+실패했다. dependency graph와 source digest 생성은 별도로 완료했지만, 이 기록을 현재 리뷰 승인으로
+바꾸거나 review ledger의 거절을 삭제하지 않았다. 원시는 `strict-evidence-refresh-failure.log`다.
+
+---
+
 # 현재 검증 상태 — 2026-11-07 KST
 
 제품 전체는 **미완료**, G-PROCESS/G-FILES/G-AUTH는 **OPEN**이다. DR74로 macOS 진입 일괄 차단과 fresh Society 거절을 제거했다. macOS 제품 경로의 실제 실행 결과는 아래 SOURCE110 이후 기록을 따른다.
@@ -2886,7 +2933,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `eed1aff865d33a85e08f68cb9fa0ccad6b2c06f05c335a5f8287e698f62d457c` (15981 files).
+verification input digest `22da995ce5ba72f9067b11fee742b8c1f797e6ca98f854ac207a8bc3b5216a3d` (15981 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 

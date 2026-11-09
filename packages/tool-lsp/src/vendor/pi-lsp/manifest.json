@@ -91,8 +91,8 @@
     },
     {
       "path": "runtime/lsp-client.js",
-      "bytes": 35981,
-      "sha256": "7e8b83fb89023aee7e4591f48750c6b06a1d660f6e07e2d6f55788404721a4ae"
+      "bytes": 38659,
+      "sha256": "16afd72950a033e0c9144194892c3992d1bb97b5817897d3d027425b59dc1852"
     },
     {
       "path": "runtime/routes.d.ts",
@@ -285,5 +285,5 @@
       "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
     }
   ],
-  "bundleSha256": "6bfa8ab2ce7cbc6827852c77d62af693fb9f6e735e47cdc30b4b1db88404712c"
+  "bundleSha256": "e40715182e680aa02041ba0357d4d6b04a28622556c85bc4a17749c161e0b4d5"
 }

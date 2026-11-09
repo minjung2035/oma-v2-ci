@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as errors from '@oma/domain/errors';
+import * as canonicalJson from '@oma/domain/canonical-json';
 import * as fileDigest from '@oma/storage/file-digest';
 import * as directory from '@oma/storage/directory';
 import * as cleanup from '@oma/native/cleanup';
@@ -44,6 +45,7 @@ for (const effectFails of [false, true]) for (const failures of [[], ['roles'], 
         if (effectFails) throw primary; return durable.writeExclusiveFsyncedEntry(...args);
       } },
       'node:crypto': crypto, 'node:path': path, '@oma/domain/errors': errors,
+      '@oma/domain/canonical-json': canonicalJson,
       '@oma/storage/file-digest': fileDigest, '@oma/storage/directory': directory, '@oma/native/cleanup': cleanup,
       './index.js': config, './operations.js': operations, './state-format.js': stateFormat,
     };

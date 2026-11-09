@@ -4252,7 +4252,7 @@
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/manifest.json",
-      "sha256": "278a5ca263be48596fdf3528a64358de1f5da336b0ef94653ba731051c8ac3a3"
+      "sha256": "07e10b21e07ce8907a0791afbe295dc438e1dcb5634079ec57737ebdd0d74cca"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -4284,7 +4284,7 @@
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/lsp-client.js",
-      "sha256": "7e8b83fb89023aee7e4591f48750c6b06a1d660f6e07e2d6f55788404721a4ae"
+      "sha256": "16afd72950a033e0c9144194892c3992d1bb97b5817897d3d027425b59dc1852"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/routes.d.ts",
@@ -15052,7 +15052,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/manifest.json",
-      "sha256": "8b49aa2fa4cfaa852c496d4b9a3245636a6e981e6f79475f942b97878e022dca"
+      "sha256": "bdcdbaaa807e7871bb16a44eb0e8de481cc2f131a3d5591c331c5e53fbda4507"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/node_modules/.package-lock.json",
@@ -56232,7 +56232,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-page.js",
-      "sha256": "57c91d0ecef6954efa4e383c54c16f87f044dcd814b4dabda35fb7ee473ae845"
+      "sha256": "ca731abcc3e9934bb4d816fc6ee8dade0be3a2aa990d788da59db4fe42e43498"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-run.d.ts",
@@ -56700,7 +56700,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/utils.js",
-      "sha256": "a5b7f363a97560410bdb091e436be5307d9fafd1f131b660c5b8808045507983"
+      "sha256": "775716b00354bc16855fb2a7531976368e231c70ebc818813d88ea9cc3269675"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/valyu.d.ts",

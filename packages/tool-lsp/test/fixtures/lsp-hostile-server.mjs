@@ -116,7 +116,7 @@ function diagnostic(message, line = 0) {
   };
 }
 
-const PULL_SCENARIOS = new Set(["stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "oversized-notification", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages", "pull-uri-flood", "push-uri-flood", "push-flood-uri-flood", "partial-answers", "slow-drain", "stdin-stall", "marker-context"]);
+const PULL_SCENARIOS = new Set(["oversized-nested-id", "oversized-quoted-id", "oversized-fractional-id", "oversized-exponent-id", "oversized-server-request", "oversized-late-response-id", "stderr-flood", "stderr-flood-exit", "pull-flood", "pull-big-message", "actions-flood", "edits-flood", "edits-documentchanges-flood", "edit-bytes-flood", "edits-at-bound", "oversized-frame", "oversized-then-serve", "oversized-notification", "frame-drip", "env-echo", "env-probe", "pid-echo", "slow-stages", "pull-uri-flood", "push-uri-flood", "push-flood-uri-flood", "partial-answers", "slow-drain", "stdin-stall", "marker-context"]);
 /** Each slow-stages stage delay. Below the client's 1000ms request floor,
  * so no single request times out; three of them put the whole call well
  * past a ~1s observation window, which is what proves the window resets
@@ -287,6 +287,36 @@ function handle(message) {
       // so the client's error tail reports the counted drop.
       if (diagnosticsAsked === 1)
         send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("answer after the dropped notification")] } });
+      return;
+    }
+    if (["oversized-nested-id", "oversized-quoted-id", "oversized-fractional-id", "oversized-exponent-id", "oversized-server-request", "oversized-late-response-id"].includes(scenario)) {
+      if (!oversizedServed) {
+        oversizedServed = true;
+        const padding = "p".repeat(5 * 1024 * 1024);
+        let frame;
+        if (scenario === "oversized-nested-id" || scenario === "oversized-quoted-id") {
+          const data = scenario === "oversized-nested-id" ? { id: message.id }
+            : { quoted: `a string containing "id":${message.id}, braces { } and escaped \\"quotes\\"` };
+          // Put method AFTER the large params so the prefix cannot identify a
+          // notification merely by noticing method before a nested id.
+          frame = { jsonrpc: "2.0", params: { uri: message.params.textDocument.uri,
+            diagnostics: [{ ...diagnostic("notification only"), data: { ...data, padding } }] },
+            method: "textDocument/publishDiagnostics" };
+        } else if (scenario === "oversized-server-request") {
+          frame = { jsonrpc: "2.0", id: message.id, params: { padding }, method: "workspace/configuration" };
+        } else if (scenario === "oversized-late-response-id") {
+          frame = { jsonrpc: "2.0", metadata: { id: message.id + 100, quoted: '"id":123' },
+            id: message.id, result: { items: [diagnostic(padding)] } };
+        } else {
+          frame = { jsonrpc: "2.0", id: scenario === "oversized-fractional-id" ? message.id + 0.5 : message.id,
+            result: { items: [diagnostic(padding)] } };
+        }
+        let body = JSON.stringify(frame);
+        if (scenario === "oversized-exponent-id") body = body.replace(`"id":${message.id},`, `"id":${message.id}e9,`);
+        process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+        if (scenario === "oversized-late-response-id") return;
+      }
+      send({ jsonrpc: "2.0", id: message.id, result: { items: [diagnostic("answer after oversized frame")] } });
       return;
     }
     if (scenario === "oversized-frame") {

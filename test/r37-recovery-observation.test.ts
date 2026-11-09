@@ -34,8 +34,17 @@ class ObservedUnits extends PolicyExecution {
   override async observeAsync(): Promise<ExecutionObservation> { this.entered.resolve(); await this.release.promise; return this.result; }
   override observe(): ExecutionObservation { return this.result; }
   override confirmDead(): boolean { return this.deathConfirmed; }
-  override start(_actor: string, _repair: boolean, authorize?: () => void): void { authorize?.(); this.starts++; }
-  override stop(): ExecutionObservation { this.stops++; return idle; }
+  override start(_actor: string, _repair: boolean, authorize?: () => void): void {
+    authorize?.(); this.starts++;
+    // A queued recovery observation sees the effect completed by this pass.
+    this.result = { ...idle, activeState: "active", subState: "running", invocationId: "policy-run" };
+    this.deathConfirmed = false;
+  }
+  override stop(): ExecutionObservation {
+    this.stops++;
+    this.result = idle; this.deathConfirmed = true;
+    return this.result;
+  }
 }
 
 for (const change of ["none", "stop", "incarnation", "shutdown", "unknown", "death-unknown"] as const) {

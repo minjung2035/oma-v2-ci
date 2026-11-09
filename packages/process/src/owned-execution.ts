@@ -42,6 +42,12 @@ export interface ExecutionTicket<Witness> {
 /** A launcher can publish its init before that init forks the trusted child.
  * Only a positively observed not-yet-created child is retried; unreadable
  * process data is never turned into absence. The scope owner survives refusal. */
+/** Bounded names of what failed, so a refused cleanup says why in its own message. */
+function failureSummary(failures: readonly unknown[]): string {
+  const text = (error: unknown): string => error instanceof AggregateError
+    ? `${error.message}: ${error.errors.map(text).join("; ")}` : error instanceof Error ? error.message : String(error);
+  return failures.map(text).join("; ").slice(0, 1024);
+}
 export async function acquireExecutionChild<Pin extends { close(): void }>(ticket: Pick<ExecutionTicket<unknown>, "population">,
   observe: () => { readonly kind: "waiting" } | { readonly kind: "ready"; readonly pin: Pin },
   signal: AbortSignal, timeoutMs: number): Promise<Pin> {
@@ -199,7 +205,7 @@ export class ExecutionCoordinator<Witness> {
         if (this.active.get(request.slot) === owner) try { await this.settle(request.slot, owner); } catch (error) { failures.push(error); }
       }
       if (failures.length) throw new StoreError([...(primary === null ? [] : [primary.error]), ...failures].some(error =>
-        error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", "execution or scope cleanup is unconfirmed",
+        error instanceof StoreError && error.code === "STORE_CORRUPT") ? "STORE_CORRUPT" : "RUN_TERMINATION_UNKNOWN", `execution or scope cleanup is unconfirmed (${failureSummary(failures)})`,
         { cause: new AggregateError(primary === null ? failures : [primary.error, ...failures], "owned execution failures") });
       if (primary !== null) throw primary.error;
       if (observation === undefined) throw new StoreError("REF_STATE_UNKNOWN", "execution returned no observation");
