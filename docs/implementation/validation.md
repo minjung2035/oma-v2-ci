@@ -4875,3 +4875,5 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `0cd1849aeab`에서 제품 시험 001–012가 세 Mac 모두 PASS였다. 새 012도 통과했다. runner를 SIGKILL하면 그 엔진 scope와 detached 후손이 끝나고, 그 뒤에만 batch가 새 엔진으로 다시 전달됐다. Intel·macOS 15·Ubuntu는 job 전체 success였다. Mac26은 공통 suite의 `native-sync-directory` 002 하나가 `execution or scope cleanup is unconfirmed`로 실패했다. 이 시험은 이전 run들에서 PASS였다. 오류 메시지에 원인이 남지 않았으므로, 공용 execution owner가 정리 실패의 원인 요약을 메시지에 함께 남기도록 했다.
 
 `7c58aa18517`의 Native [42627628732](https://github.com/minjung2035/oma-v2-ci/actions/runs/42627628732)에서 네 runtime job(Mac26·Intel·macOS 15·Ubuntu)이 모두 success였다. 제품 시험 001–012를 포함하며, Mac26의 `native-sync-directory` 002 실패는 재현되지 않았다.
+
+`7c58aa18517`의 Architecture verification baseline은 Linux 시간 기준 시험 두 개로 실패했다: `status-responsiveness` 001(변경 요청과 섞인 status 처리 중 event loop 183ms, 기준 100ms. SOURCE146에서도 226ms로 한 번 실패)과 `powercut-lane` 009(복구 child timing 시뮬레이션). 둘 다 이번 macOS 작업이 바꾸지 않은 Linux 경로이고 이전 run에서는 PASS였다. 변경 요청의 동기 fsync가 CI 공유 디스크에서 느려질 때의 변동으로 보며, Linux 기준값은 바꾸지 않는다. `47be9ce35fe`의 Mac26 job은 실패한 단계 없이 runner 쪽에서 취소됐다.
