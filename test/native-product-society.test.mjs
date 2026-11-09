@@ -242,7 +242,7 @@ test('013. After its Broker is SIGKILLed and restarted, the same Principal reach
  await until(()=>brokers().find(pid=>pid!==first),240000,()=>'no replacement Broker after SIGKILL: '+owned(base).join('\n'));
  const status=await ended;clearTimeout(timer);
  const terminal=JSON.parse(stdout||'{}');
- const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').split(/\r?\n/).filter(line=>/broker|refus|UNSUPPORTED|AUTH|UNAVAILABLE|error/i.test(line)).join('\n').slice(-6000);
+ const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').split(/\r?\n/).map(line=>line.replace(/[│╭╮╰╯─]+/g,' ').trim()).filter((line,index,all)=>line.length>2&&all.indexOf(line)===index&&!/^[░▓⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\s\[\]%·0-9.]*$/.test(line)).join('\n').slice(-8000);
  assert.equal(status,0,stderr+screen);assert.equal(terminal.ready,true,screen);
  const later=answers().slice(before);
  assert.ok(later.length>=1,`the Principal made no call after the Broker restart: ${JSON.stringify(answers()).slice(0,3000)}\n${screen}`);
