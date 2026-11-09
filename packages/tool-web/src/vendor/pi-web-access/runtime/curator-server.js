@@ -13,7 +13,7 @@ function sendJson(res, status, payload) {
 }
 function parseJSONBody(req) {
     return new Promise((resolve, reject) => {
-        let body = "";
+        const chunks = [];
         let size = 0;
         req.on("data", (chunk) => {
             size += chunk.length;
@@ -22,11 +22,11 @@ function parseJSONBody(req) {
                 reject(new Error("Request body too large"));
                 return;
             }
-            body += chunk.toString();
+            chunks.push(chunk);
         });
         req.on("end", () => {
             try {
-                resolve(JSON.parse(body));
+                resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
             }
             catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
@@ -38,7 +38,10 @@ function parseJSONBody(req) {
 }
 async function parseBodyOrSend(req, res) {
     try {
-        return await parseJSONBody(req);
+        const body = await parseJSONBody(req);
+        if (!body || typeof body !== "object" || Array.isArray(body))
+            throw new Error("Invalid body");
+        return body;
     }
     catch (err) {
         const message = err instanceof Error ? err.message : "Invalid body";
@@ -242,6 +245,8 @@ export function startCuratorServer(options, callbacks) {
             return availableProviders.brightdata;
         if (provider === "serpbase")
             return availableProviders.serpbase;
+        if (provider === "serpapi")
+            return availableProviders.serpapi;
         if (provider === "serper")
             return availableProviders.serper;
         if (provider === "serply")

@@ -184,7 +184,7 @@ const RUNTIME_ASSETS = Object.freeze([
 const OMA_DIVERGENCES = Object.freeze({
   "utils.js": {
     reason:
-      "The OMA boundary seam itself. omaInstallMcpPolicy is called by " +
+      ("The OMA boundary seam itself. omaInstallMcpPolicy is called by " +
       "apps/oma/src/extension/mcp-tools.ts before upstream's factory runs; without an " +
       "installed policy every helper degrades to upstream's own behavior " +
       "(globalThis.fetch, process.env, tmpdir, the keyring store selector), " +
@@ -215,7 +215,7 @@ const OMA_DIVERGENCES = Object.freeze({
       "recovery spawn; omaUiSessionsRefused is the same closed-by-default " +
       "predicate for the interactive-UI permit the ui-session/glimpse " +
       "gates consult; omaPolicyActive lets a spliced site distinguish " +
-      "'no OMA policy' from 'policy installed'.",
+      "'no OMA policy' from 'policy installed'.") + " Containment checks reject parent path components while accepting legitimate child names beginning with two dots.",
     edits: [
       {
         find: `import { spawnSync } from "node:child_process";
@@ -360,7 +360,11 @@ export function omaCaFetch(caFetch) {
         find: `export function resolveBearerToken(definition, environment = process.env) {`,
         replace: `export function resolveBearerToken(definition, environment = omaAmbientEnv()) {`,
       },
-    ],
+{
+  "find": "!rel.startsWith(\"..\")",
+  "replace": "rel !== \"..\" && !rel.startsWith(`..${sep}`)"
+}
+],
   },
   "utils.d.ts": {
     reason:
@@ -470,7 +474,7 @@ import { omaAgentDir, omaAmbientEnv } from "./utils.js";`,
   },
   "server-manager.js": {
     reason:
-      "Stdio child env scrub and HTTP egress pin. resolveEnv inherits " +
+      ((("Stdio child env scrub and HTTP egress pin. resolveEnv inherits " +
       "process.env verbatim upstream — under OMA it inherits only " +
       "omaChildEnv's allowlisted subset (the child's env entries still " +
       "override per upstream order). createCaFetch's leaf gains the pinned " +
@@ -479,7 +483,7 @@ import { omaAgentDir, omaAmbientEnv } from "./utils.js";`,
       "globalThis.fetch defaults and the SSE path's `requestFetch ?? " +
       "globalThis.fetch` fall to omaPinnedFetch so no composition step can " +
       "leak past the pin. Under OMA, request budgets beyond the pinned SDK's " +
-      "native timer range are refused before a connection or request is started.",
+      "native timer range are refused before a connection or request is started.") + " Detect repeated catalog pagination cursors so malformed servers cannot create endless metadata discovery or refresh loops.") + " Configured static HTTP headers and bearer credentials remain origin-bound when OAuth is disabled. Both Streamable HTTP and SSE request defaults must refuse redirects instead of forwarding arbitrary credential header names to another origin.") + " Static service headers and bearer credentials must remain origin-bound when OAuth is disabled. Route them through the same protected fetch wrapper for both Streamable HTTP and SSE; SDK requestInit forwards headers but its redirect policy is ignored by the initial SSE GET.",
     edits: [
       {
         find: `import { interpolateEnvVars, expandHomePath, providerAuthUrlError, resolveBearerToken, resolveCommandSecretsRecord, resolveConfigPath, resolveServerUrl, } from "./utils.js";`,
@@ -544,14 +548,213 @@ import { omaCaFetch, omaChildEnv, omaChildEnvFinish, omaPinnedFetch, omaPolicyAc
         find: `                            return await (requestFetch ?? globalThis.fetch)(input, init);`,
         replace: `                            return await (requestFetch ?? omaPinnedFetch)(input, init);`,
       },
-    ],
+{
+  "find": `    async fetchAllTools(client, requestOptions) {
+        const allTools = [];
+        let cursor;
+        let hints;
+        let firstPage = true;
+        do {
+            const result = await client.listTools(cursor ? { cursor } : undefined, requestOptions);
+            if (firstPage) {
+                const ttlMs = typeof result.ttlMs === "number" && Number.isSafeInteger(result.ttlMs) && result.ttlMs >= 0
+                    ? result.ttlMs
+                    : undefined;
+                const cacheScope = result.cacheScope === "public" || result.cacheScope === "private"
+                    ? result.cacheScope
+                    : undefined;
+                if (ttlMs !== undefined || cacheScope !== undefined) {
+                    hints = {
+                        ...(ttlMs !== undefined ? { ttlMs } : {}),
+                        ...(cacheScope !== undefined ? { cacheScope } : {}),
+                    };
+                }
+                firstPage = false;
+            }
+            allTools.push(...(result.tools ?? []));
+            cursor = result.nextCursor;
+        } while (cursor);
+        return { tools: allTools, ...(hints !== undefined ? { hints } : {}) };
+    }
+`,
+  "replace": `    async fetchAllTools(client, requestOptions) {
+        const allTools = [];
+        let cursor;
+        const seenCursors = new Set();
+        let hints;
+        let firstPage = true;
+        do {
+            const result = await client.listTools(cursor ? { cursor } : undefined, requestOptions);
+            if (firstPage) {
+                const ttlMs = typeof result.ttlMs === "number" && Number.isSafeInteger(result.ttlMs) && result.ttlMs >= 0
+                    ? result.ttlMs
+                    : undefined;
+                const cacheScope = result.cacheScope === "public" || result.cacheScope === "private"
+                    ? result.cacheScope
+                    : undefined;
+                if (ttlMs !== undefined || cacheScope !== undefined) {
+                    hints = {
+                        ...(ttlMs !== undefined ? { ttlMs } : {}),
+                        ...(cacheScope !== undefined ? { cacheScope } : {}),
+                    };
+                }
+                firstPage = false;
+            }
+            allTools.push(...(result.tools ?? []));
+            cursor = result.nextCursor;
+            if (cursor && seenCursors.has(cursor))
+                throw new Error("MCP catalog repeated a pagination cursor");
+            if (cursor) seenCursors.add(cursor);
+        } while (cursor);
+        return { tools: allTools, ...(hints !== undefined ? { hints } : {}) };
+    }
+`
+},
+{
+  "find": `    async fetchAllPrompts(client, requestOptions) {
+        const capabilities = client.getServerCapabilities?.();
+        if (!capabilities?.prompts)
+            return { prompts: [], failed: false };
+        try {
+            const prompts = [];
+            let cursor;
+            do {
+                const result = await client.listPrompts(cursor ? { cursor } : undefined, requestOptions);
+                prompts.push(...(result.prompts ?? []));
+                cursor = result.nextCursor;
+            } while (cursor);
+            return { prompts, failed: false };
+        }
+        catch (error) {
+            if (requestOptions?.signal?.aborted)
+                throwIfAborted(requestOptions.signal);
+            if (isUnauthorizedHttpError(error))
+                throw error;
+            const message = error instanceof Error ? error.message : String(error);
+            logger.debug(\`MCP: prompts/list failed: \${message}\`);
+            return { prompts: [], failed: true };
+        }
+    }
+`,
+  "replace": `    async fetchAllPrompts(client, requestOptions) {
+        const capabilities = client.getServerCapabilities?.();
+        if (!capabilities?.prompts)
+            return { prompts: [], failed: false };
+        try {
+            const prompts = [];
+            let cursor;
+            const seenCursors = new Set();
+            do {
+                const result = await client.listPrompts(cursor ? { cursor } : undefined, requestOptions);
+                prompts.push(...(result.prompts ?? []));
+                cursor = result.nextCursor;
+                if (cursor && seenCursors.has(cursor))
+                    throw new Error("MCP catalog repeated a pagination cursor");
+                if (cursor) seenCursors.add(cursor);
+            } while (cursor);
+            return { prompts, failed: false };
+        }
+        catch (error) {
+            if (requestOptions?.signal?.aborted)
+                throwIfAborted(requestOptions.signal);
+            if (isUnauthorizedHttpError(error))
+                throw error;
+            const message = error instanceof Error ? error.message : String(error);
+            logger.debug(\`MCP: prompts/list failed: \${message}\`);
+            return { prompts: [], failed: true };
+        }
+    }
+`
+},
+{
+  "find": `    async fetchAllResources(client, requestOptions, strict = false) {
+        const capabilities = client.getServerCapabilities?.();
+        if (!capabilities?.resources)
+            return { resources: [], failed: false };
+        try {
+            const allResources = [];
+            let cursor;
+            do {
+                const result = await client.listResources(cursor ? { cursor } : undefined, requestOptions);
+                allResources.push(...(result.resources ?? []));
+                cursor = result.nextCursor;
+            } while (cursor);
+            return { resources: allResources, failed: false };
+        }
+        catch (error) {
+            if (requestOptions?.signal?.aborted) {
+                throwIfAborted(requestOptions.signal);
+            }
+            if (isUnauthorizedHttpError(error))
+                throw error;
+            if (strict)
+                throw error;
+            // The server advertises resources but the listing failed
+            return { resources: [], failed: true };
+        }
+    }
+`,
+  "replace": `    async fetchAllResources(client, requestOptions, strict = false) {
+        const capabilities = client.getServerCapabilities?.();
+        if (!capabilities?.resources)
+            return { resources: [], failed: false };
+        try {
+            const allResources = [];
+            let cursor;
+            const seenCursors = new Set();
+            do {
+                const result = await client.listResources(cursor ? { cursor } : undefined, requestOptions);
+                allResources.push(...(result.resources ?? []));
+                cursor = result.nextCursor;
+                if (cursor && seenCursors.has(cursor))
+                    throw new Error("MCP catalog repeated a pagination cursor");
+                if (cursor) seenCursors.add(cursor);
+            } while (cursor);
+            return { resources: allResources, failed: false };
+        }
+        catch (error) {
+            if (requestOptions?.signal?.aborted) {
+                throwIfAborted(requestOptions.signal);
+            }
+            if (isUnauthorizedHttpError(error))
+                throw error;
+            if (strict)
+                throw error;
+            // The server advertises resources but the listing failed
+            return { resources: [], failed: true };
+        }
+    }
+`
+},
+{
+  "find": `        // Do not give origin-bound headers to SDK requestInit: it reuses those
+        // defaults for discovered OAuth endpoints, including other origins.
+        const requestInit = !oauthEnabled && Object.keys(headers).length > 0 ? { headers } : undefined;
+        const serviceHeaders = oauthEnabled ? new Headers(headers) : new Headers();`,
+  "replace": `        // Keep service credentials in the origin-aware fetch wrapper for both
+        // OAuth and explicit non-OAuth servers. SDK requestInit is reused on
+        // other URLs, and its redirect policy is ignored by the initial SSE GET.
+        const serviceHeaders = new Headers(headers);`
+},
+{
+  "find": `            const requestFetch = oauthEnabled
+`,
+  "replace": `            const requestFetch = oauthEnabled || Object.keys(headers).length > 0
+`
+},
+{
+  "find": `                    ...(requestInit !== undefined ? { requestInit } : {}),
+`,
+  "replace": ""
+}
+],
   },
   "mcp-auth-fetch.js": {
     reason:
-      "OAuth/auth HTTP through the pinned leaf: the OAuth fetch wrapper's " +
+      ("OAuth/auth HTTP through the pinned leaf: the OAuth fetch wrapper's " +
       "absent-delegate fallback becomes omaPinnedFetch, so authorization- " +
       "server metadata, token and revocation requests ride the same egress " +
-      "policy as the MCP stream they protect.",
+      "policy as the MCP stream they protect.") + " OAuth token exchanges contain refresh tokens, client secrets, codes, or PKCE verifiers in form bodies even when no service headers are configured. Refuse their redirects so 307/308 responses cannot forward these credentials.",
     edits: [
       {
         find: `import { combineAbortSignals } from "./runtime-owner.js";
@@ -573,7 +776,14 @@ import { interpolateEnvRecord, resolveCommandSecretsRecord, omaAmbientEnv, omaPi
         find: `    const parsed = Number(process.env.PI_MCP_OAUTH_REQUEST_TIMEOUT_MS);`,
         replace: `    const parsed = Number(omaAmbientEnv().PI_MCP_OAUTH_REQUEST_TIMEOUT_MS);`,
       },
-    ],
+{
+  "find": "        const protectedRequest = [...serviceHeaders].length > 0;",
+  "replace": `        const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+        const contentType = headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+        const protectedRequest = [...serviceHeaders].length > 0
+            || (method !== "GET" && method !== "HEAD" && contentType === "application/x-www-form-urlencoded");`
+}
+],
   },
   "mcp-probe.js": {
     reason:
@@ -1129,7 +1339,7 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
   },
   "mcp-callback-server.js": {
     reason:
-      "Bare-builtin specifier normalization: 'http' becomes 'node:http' " +
+      ("Bare-builtin specifier normalization: 'http' becomes 'node:http' " +
       "(identical module, the spelling OMA's package audit recognizes). " +
       "Post-listen 'error' absorption: upstream's startup once-listener is " +
       "never removed after a successful listen, so the first post-listen " +
@@ -1140,7 +1350,7 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
       "and keeps the OAuth loopback socket bound for the kernel to retry, " +
       "and the startup once-listener is removed the moment the listen " +
       "succeeds so there is no swallowed-then-uncovered transition — the " +
-      "startup rejection contract is unchanged.",
+      "startup rejection contract is unchanged.") + " Malformed HTTP Host headers or absolute request targets must not throw out of the OAuth callback listener and terminate the engine. Parse against the fixed loopback base and reject invalid targets with HTTP400.",
     edits: [
       {
         find: `import { createServer } from "http";`,
@@ -1181,7 +1391,19 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
                 resolve();
             });`,
       },
-    ],
+{
+  "find": "    const url = new URL(req.url || \"/\", `http://${req.headers.host}`);",
+  "replace": `    let url;
+    try {
+        url = new URL(req.url || "/", \`http://\${DEFAULT_OAUTH_CALLBACK_HOST}\`);
+    }
+    catch {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("Invalid callback request URL");
+        return;
+    }`
+}
+],
   },
   "agent-plugin-loader.js": {
     reason:
@@ -1208,8 +1430,8 @@ import { omaAmbientEnv } from "./utils.js";`,
   },
   "claude-plugin-loader.js": {
     reason:
-      "Plugin-path `~` expansion reads omaAmbientEnv().HOME — same " +
-      "unreachable-under-OMA defense as agent-plugin-loader.js.",
+      ("Plugin-path `~` expansion reads omaAmbientEnv().HOME — same " +
+      "unreachable-under-OMA defense as agent-plugin-loader.js.") + " Containment checks reject parent path components while accepting legitimate child names beginning with two dots.",
     edits: [
       {
         find: `import { parseJsonWithComments } from "./utils.js";`,
@@ -1226,7 +1448,11 @@ import { omaAmbientEnv } from "./utils.js";`,
     if (path.startsWith("~/"))
         return resolve(omaAmbientEnv().HOME ?? "", path.slice(2));`,
       },
-    ],
+{
+  "find": "!rel.startsWith(\"..\")",
+  "replace": "rel !== \"..\" && !rel.startsWith(`..${sep}`)"
+}
+],
   },
   "npx-resolver.js": {
     reason:
@@ -1275,12 +1501,12 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
   },
   "request-headers-command.js": {
     reason:
-      "The per-request `!command` header sink is refused under OMA before " +
+      ("The per-request `!command` header sink is refused under OMA before " +
       "the spawned header command runs — same credential-command permit — " +
       "and the command's own env spread inherits the omaChildEnv-scrubbed " +
       "ambient set instead of process.env verbatim, so even a path that " +
       "reached it could not inherit the engine's environment. The " +
-      "PI_MCP_ADAPTER_TEST_FAIL_PS selector reads omaAmbientEnv.",
+      "PI_MCP_ADAPTER_TEST_FAIL_PS selector reads omaAmbientEnv.") + " Headers derived by a credential command are scoped to the exact signed request. Refuse redirects rather than forwarding custom credential headers or replaying the signature at another URL.",
     edits: [
       {
         find: `import { interpolateEnvVars } from "./utils.js";`,
@@ -1309,7 +1535,11 @@ import { omaAmbientEnv, omaRequirePermit } from "./utils.js";`,
             ...Object.fromEntries(Object.entries(config.env ?? {}).map(([key, value]) => [key, interpolateEnvVars(value)])),
         },`,
       },
-    ],
+{
+  "find": "            redirect: request.redirect,",
+  "replace": "            redirect: [...derived].length > 0 ? \"error\" : request.redirect,"
+}
+],
   },
   "mcp-auth-flow.js": {
     reason:
@@ -1373,6 +1603,40 @@ import { omaAmbientEnv, omaTmpdir } from "./utils.js";`,
       },
     ],
   },
+
+"lifecycle.js": {
+  "reason": "Shutdown must close connections even when an in-flight convergence fails; preserve both operation and cleanup failures and keep shutdown idempotent.",
+  "edits": [
+    {
+      "find": `        await this.activeHealthCheck;
+        this.activeHealthCheck = undefined;
+        await this.activeConvergence;
+        this.activeConvergence = undefined;`,
+      "replace": `        const settled = await Promise.allSettled([this.activeHealthCheck, this.activeConvergence]);
+        const errors = settled.filter(result => result.status === "rejected").map(result => result.reason);
+        this.activeHealthCheck = undefined;
+        this.activeConvergence = undefined;`
+    },
+    {
+      "find": `        if (typeof this.manager.closeAll === "function") {
+            await this.manager.closeAll();
+        }`,
+      "replace": `        if (typeof this.manager.closeAll === "function") {
+            try {
+                await this.manager.closeAll();
+            }
+            catch (error) {
+                errors.push(error);
+            }
+        }
+        const uniqueErrors = [...new Set(errors)];
+        if (uniqueErrors.length === 1)
+            throw uniqueErrors[0];
+        if (uniqueErrors.length > 1)
+            throw new AggregateError(uniqueErrors, "MCP shutdown failed");`
+    }
+  ]
+},
 });
 
 /** Every upstream .ts module the runtime emits — upstream's whole flat

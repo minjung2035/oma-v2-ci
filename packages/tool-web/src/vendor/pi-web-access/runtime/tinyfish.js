@@ -4,7 +4,7 @@ import { normalizeDomain } from "./domain-filter-normalization.js";
 import { formatSearchResultsAsAnswer } from "./search-answer-formatting.js";
 import { normalizeSearchResultCount } from "./search-result-count-normalization.js";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
-import { getWebSearchConfigPath } from "./utils.js";
+import { fetchWithCredentialRedirects, getWebSearchConfigPath } from "./utils.js";
 const TINYFISH_SEARCH_URL = "https://api.search.tinyfish.ai";
 const TINYFISH_FETCH_URL = "https://api.fetch.tinyfish.ai";
 const CONFIG_PATH = getWebSearchConfigPath();
@@ -26,7 +26,7 @@ function loadConfig() {
         return cachedConfig;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
 }
@@ -103,7 +103,7 @@ function buildSearchUrl(query, options, page) {
 async function tinyFishJsonRequest(label, url, apiKey, init, timeoutMs, signal) {
     let response;
     try {
-        response = await fetch(url, {
+        response = await fetchWithCredentialRedirects(url, {
             ...init,
             headers: {
                 "X-API-Key": apiKey,
@@ -111,7 +111,7 @@ async function tinyFishJsonRequest(label, url, apiKey, init, timeoutMs, signal) 
                 ...init.headers,
             },
             signal: requestSignal(signal, timeoutMs),
-        });
+        }, ["X-API-Key"]);
     }
     catch (err) {
         const message = errorMessage(err);

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { activityMonitor } from "./activity.js";
 import { normalizeDomain } from "./domain-filter-normalization.js";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
-import { getWebSearchConfigPath } from "./utils.js";
+import { fetchWithCredentialRedirects, getWebSearchConfigPath } from "./utils.js";
 // xAI's Agent Tools API: hosted `web_search` and opt-in `x_search` tools on an
 // OpenAI-compatible Responses endpoint. The search runs inside xAI's own inference, so — unlike
 // every keyed backend here — it is paid for by whatever credential answers for
@@ -44,7 +44,7 @@ function loadConfig() {
         return cachedConfig;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
 }
@@ -313,7 +313,7 @@ export async function searchWithXai(query, options = {}, ctx) {
     }
     const activityId = activityMonitor.logStart({ type: "api", query });
     try {
-        const response = await fetch(XAI_RESPONSES_URL, {
+        const response = await fetchWithCredentialRedirects(XAI_RESPONSES_URL, {
             method: "POST",
             headers: {
                 ...toRequestHeaders(auth.headers),
@@ -328,7 +328,7 @@ export async function searchWithXai(query, options = {}, ctx) {
             signal: options.signal
                 ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal])
                 : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-        });
+        }, ["Authorization", ...Object.keys(auth.headers)]);
         if (!response.ok) {
             activityMonitor.logError(activityId, `HTTP ${response.status}`);
             const errorText = redactCredential(await response.text(), auth.apiKey);

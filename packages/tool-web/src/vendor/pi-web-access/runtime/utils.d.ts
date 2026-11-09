@@ -35,10 +35,10 @@ export declare function mapFfmpegError(err: unknown): string;
  * vendored extension factory runs. */
 export interface OmaWebPolicy {
     /** The deployment's egress pin (the loopback CONNECT forwarder URL),
-     * or null when no proxy value is permitted at all. */
+     * or null when no environment proxy is pinned. */
     readonly egressPinned: string | null;
-    /** Deny-by-default ambient-discovery permits; all unset under
-     * Society's install. */
+    /** Deny-by-default capability permits. The adapter explicitly
+     * enables gh/git, native media and workflows. */
     readonly credentialCommands?: boolean;
     readonly browserCookies?: boolean;
     readonly ghCli?: boolean;

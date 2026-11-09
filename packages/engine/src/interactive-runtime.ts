@@ -58,24 +58,27 @@ export async function startInteractiveRuntime(input: {
                 },
             }
         });
-        const reload = services.resourceLoader.reload.bind(services.resourceLoader);
-        services.resourceLoader.reload = async (options) => {
-            modules!.refresh(extensions);
-            await reload(options);
-        };
-        // Skills are discovered and their commands come with them: the engine's
-        // persisted settings file carries no suppression (preparePiInteractive
-        // scrubs the old pin), so no override is needed here.
-        const modelName = argv.includes("--model") ? flag("--model") : undefined;
-        const split = modelName?.indexOf("/") ?? -1;
-        const model = modelName === undefined ? undefined
-            : services.modelRuntime.getModel(modelName.slice(0, split), modelName.slice(split + 1));
-        if (modelName !== undefined && !model)
-            throw new Error(`configured model is unavailable: ${modelName}`);
-        const thinking = argv.includes("--thinking") ? EFFORT_LEVELS.find(level => level === flag("--thinking")) : undefined;
-        if (argv.includes("--thinking") && thinking === undefined)
-            throw new Error(`configured thinking level is unavailable: ${flag("--thinking")}`);
+        // Service creation has already loaded extensions. Every subsequent
+        // startup refusal must release that runtime, including invalid model
+        // and effort selections before the session itself is constructed.
         try {
+            const reload = services.resourceLoader.reload.bind(services.resourceLoader);
+            services.resourceLoader.reload = async (options) => {
+                modules!.refresh(extensions);
+                await reload(options);
+            };
+            // Skills are discovered and their commands come with them: the engine's
+            // persisted settings file carries no suppression (preparePiInteractive
+            // scrubs the old pin), so no override is needed here.
+            const modelName = argv.includes("--model") ? flag("--model") : undefined;
+            const split = modelName?.indexOf("/") ?? -1;
+            const model = modelName === undefined ? undefined
+                : services.modelRuntime.getModel(modelName.slice(0, split), modelName.slice(split + 1));
+            if (modelName !== undefined && !model)
+                throw new Error(`configured model is unavailable: ${modelName}`);
+            const thinking = argv.includes("--thinking") ? EFFORT_LEVELS.find(level => level === flag("--thinking")) : undefined;
+            if (argv.includes("--thinking") && thinking === undefined)
+                throw new Error(`configured thinking level is unavailable: ${flag("--thinking")}`);
             const created = await createAgentSessionFromServices({
                 services, sessionManager: options.sessionManager, ...(model ? {
                     model

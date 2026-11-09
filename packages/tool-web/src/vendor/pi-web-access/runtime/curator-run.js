@@ -1,9 +1,8 @@
 import { omaPermits } from "./utils.js";
 export function resolveWebSearchWorkflow(input, hasUI) {
-    // OMA divergence: the curator workflows are a model-completion and
-    // browser surface OMA does not expose. Deny-by-default: no request
-    // value, config default or curator state resolves to anything but
-    // "none" under OMA.
+    // OMA divergence: the installed policy permits upstream curator
+    // workflows. Without that permit, requests/config/curator state
+    // cannot activate the model-completion and browser workflow.
     if (!omaPermits("workflows"))
         return "none";
     const normalized = typeof input === "string" ? input.trim().toLowerCase() : "";

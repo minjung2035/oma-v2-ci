@@ -100,6 +100,9 @@ export class TuiApp {
    */
   refresh(): void {
     if (this.closed) return;
+    // A failed observation is retryable. Cache immutable message contents,
+    // but do not keep a transient read failure across source refreshes.
+    if (this.mailBody?.body === null) this.mailBody = null;
     const mailbox = this.ports.mail();
     this.data = Object.freeze({
       dashboard: this.ports.dashboard(),
@@ -319,6 +322,11 @@ export class TuiApp {
           return assertNever(effect);
       }
     } catch (error) {
+      if (effect.kind === "submit-prompt") {
+        this.state = { ...this.state, prompt: returnedPrompt(effect.text) };
+        this.notice = { kind: "text", text: `Delivery unconfirmed; input remains in the draft: ${exceptionText(error)}` };
+        return;
+      }
       if (effect.kind === "submit-control") {
         this.controlNotice = { kind: "text", text: `The Human control outcome was not observed: ${exceptionText(error)}. Preserve the original command/key in the separate control draft; do not invent a replacement.` };
         return;

@@ -66,7 +66,7 @@ function loadVideoConfig() {
         raw = JSON.parse(rawText);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     const v = raw.video ?? {};

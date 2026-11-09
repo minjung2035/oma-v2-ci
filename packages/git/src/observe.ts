@@ -95,11 +95,12 @@ export function parseGitlinksZ(bytes: Uint8Array): Parsed<readonly string[]> {
   return { ok: true, value: paths };
 }
 
-/** One record's working-set bound: a wire path (4096) plus the ~110-byte
+/** One record's working-set bound: a wire path (4096 UTF-16 units, each
+ * requiring at most three UTF-8 bytes) plus the ~110-byte
  * record header. A record that outgrows it can only carry a path the grammar
  * cannot represent — refused at candidate scope when its header is valid
  * ls-tree output, corrupt output when it is not. */
-const LS_TREE_RECORD_BYTES = 4096 + 256;
+const LS_TREE_RECORD_BYTES = 3 * 4096 + 256;
 
 /** The same parse over a descriptor, a record at a time — the enumeration's
  * whole output never lands in memory, so output size alone can never be the

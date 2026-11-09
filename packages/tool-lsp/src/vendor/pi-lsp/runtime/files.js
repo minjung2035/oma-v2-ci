@@ -103,5 +103,5 @@ function resolveWorkspacePath(root, inputPath, label) {
 }
 function isInsidePath(parent, child) {
     const relativePath = path.relative(parent, child);
-    return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+    return relativePath === "" || (relativePath !== ".." && !relativePath.startsWith(".." + path.sep) && !path.isAbsolute(relativePath));
 }

@@ -1,4 +1,4 @@
-import { mailEntryPresent } from "./observations.js";
+import { mailEntryPresent, withMailInbox } from "./observations.js";
 import type { PublicationEvidence } from "@oma/contracts/publication";
 
 import { readableBody } from "./display.js";
@@ -8,7 +8,7 @@ import type { MailLedger, MailOperationReader, MailEffects } from "./ports.js";
 import { type DeliveryRow } from "@oma/contracts/ledger";
 import { type DecodedOperation as OperationRow } from "@oma/protocol/operation-codec";
 import { ownedMessages } from "@oma/domain/durable";
-import { StoreError } from "@oma/domain/errors";
+import { StoreError, errorCodeOf } from "@oma/domain/errors";
 
 import { parseDisplayedAddress } from "./addresses.js";
 import { decodeSubject, parseEmlHeaders, type ParsedEmlHeaders } from "./headers.js";
@@ -146,7 +146,7 @@ export class MailMaterializer {
           this.publishDelivery(message, delivery);
           this.store.transaction(tx => tx.markMaterialized(delivery.messageId, delivery.recipient));
         } catch (error) {
-          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+          if (errorCodeOf(error) === "STORE_CORRUPT") throw error;
           failures.push(error);
         }
       }
@@ -156,7 +156,7 @@ export class MailMaterializer {
   private publishDelivery(message: MessagePlan, delivery: DeliveryRow): void {
     const inbox = this.effects.openInbox(delivery.recipient);
 
-    try {
+    withMailInbox(inbox, () => {
       let arrivedNew = false;
       if (mailEntryPresent(inbox.observeInboxMessage("cur", message))) {
         inbox.publishInboxMessage("cur", message);
@@ -167,7 +167,7 @@ export class MailMaterializer {
       // This is the same pinned inbox that owns the delivery directories.
       // Its full arrival record and parent are durable before materialized.
       if (arrivedNew && delivery.materialized !== 1) inbox.appendMailArrival(message.id);
-    } finally { inbox.close(); }
+    });
   }
   
 }

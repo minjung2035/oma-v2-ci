@@ -67,7 +67,7 @@ export class ReviewAdvancement {
           try { await this.advanceRequest(open, false); } finally { main = undefined; }
         }
         catch (error) {
-          if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+          if (errorCodeOf(error) === "STORE_CORRUPT") throw error;
           console.error(JSON.stringify({ event: "review.advance", request: open.operation.id,
             code: errorCodeOf(error) }));
         }

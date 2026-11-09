@@ -181,20 +181,29 @@ export function registerAskUserQuestion(pi: ExtensionAPI): void {
       }
       const id = `oma.ask.${++sequence}`;
       const outcome = new Promise<QuestionnaireResult>((resolve) => pending.set(id, resolve));
-      pi.events.emit(ASK_REQUEST_EVENT, { id, questions: typed.questions });
-      // The claim is synchronous by construction: the presenter claims inside
-      // the same emit, so an unclaimed request means no OMA presenter exists
-      // in this engine — a structured refusal, not a hang.
-      if (!claims.delete(id)) {
-        pending.delete(id);
-        return buildAskToolResult(ERROR_NO_PRESENTER, { answers: [], cancelled: true, error: "no_presenter" });
-      }
       const onAbort = (): void => cancelPending(id);
       signal?.addEventListener("abort", onAbort, { once: true });
       try {
+        try { pi.events.emit(ASK_REQUEST_EVENT, { id, questions: typed.questions }); }
+        catch {
+          // A listener can fail after another listener claimed/opened the UI.
+          // Close that request and settle it before leaving this invocation.
+          cancelPending(id);
+        }
+        // Dispatch can synchronously abort before the presenter has queued the
+        // request. Repeat its cancellation after dispatch to close that gap.
+        if (signal?.aborted) cancelPending(id);
+        // The claim is synchronous by construction. A request already settled
+        // by cancellation keeps that outcome even if dispatch never claimed it.
+        if (!claims.delete(id) && pending.has(id)) {
+          pending.delete(id);
+          return buildAskToolResult(ERROR_NO_PRESENTER, { answers: [], cancelled: true, error: "no_presenter" });
+        }
         const result = await outcome;
         return buildQuestionnaireResponse(result, typed.questions.length);
       } finally {
+        claims.delete(id);
+        pending.delete(id);
         signal?.removeEventListener("abort", onAbort);
       }
     },

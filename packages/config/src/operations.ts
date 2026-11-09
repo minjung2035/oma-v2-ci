@@ -155,6 +155,7 @@ function localPath(root: string, value: unknown): string {
 class SourceClosure {
   private readonly identities = new Map<string, ConfigurationFileIdentity>();
   private readonly documentBytes = new Map<string, number>();
+  private totalDocumentBytes = 0;
   constructor(private readonly observer?: ConfigurationReadObserver) {}
   add(path: string, stat: Stats, sha256: string, document = false): void {
     const identity = Object.freeze({
@@ -167,9 +168,11 @@ class SourceClosure {
       return invalid("configuration file identity changed within one snapshot");
     if (!prior) this.identities.set(path, identity);
     const files = this.identities.size;
-    if (document) this.documentBytes.set(path, stat.size);
-    const total = [...this.documentBytes.values()].reduce((sum, value) => sum + value, 0);
-    if (files > CONFIGURATION_SOURCE_LIMITS.files || total > CONFIGURATION_SOURCE_LIMITS.bytes)
+    if (document) {
+      this.totalDocumentBytes += stat.size - (this.documentBytes.get(path) ?? 0);
+      this.documentBytes.set(path, stat.size);
+    }
+    if (files > CONFIGURATION_SOURCE_LIMITS.files || this.totalDocumentBytes > CONFIGURATION_SOURCE_LIMITS.bytes)
       throw new StoreError("LIMIT_EXCEEDED", "configuration source closure exceeds its file or byte budget");
     if (!prior) this.observer?.(Object.freeze({ phase: "source-read", path }));
   }

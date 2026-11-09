@@ -26,6 +26,7 @@ import {
 import { basename, dirname, join, relative } from "node:path";
 import type { HostConfig } from "@oma/contracts";
 import { StoreError, normalizeStorageFailure, unobserved } from "@oma/domain/errors";
+import { canonicalJson } from "@oma/domain/canonical-json";
 import { validateConfig, type ConfigurationSnapshot, type ValidatedConfigCandidate } from "./index.js";
 import { fileDigest } from "@oma/storage/file-digest";
 import { readConfigurationSource } from "./operations.js";
@@ -338,7 +339,9 @@ function publishGeneration(generations: string, id: string, published: ReadonlyM
 function assertReproduces(manifest: string, config: HostConfig, roles: Readonly<Record<string, ManagedRole>>): void {
   const source = readConfigurationSource(manifest);
   const loaded = validateConfig(source.host);
-  if (JSON.stringify(loaded) !== JSON.stringify(validateConfig(config)))
+  // Publishing sorts role filenames; object insertion order in an authored
+  // manifest is not a configuration difference. Array order remains material.
+  if (canonicalJson(loaded) !== canonicalJson(validateConfig(config)))
     throw new StoreError("INTERNAL_ERROR", "managed generation does not reproduce the candidate configuration");
   for (const [name, role] of Object.entries(roles)) {
     const authored = source.authoredRoles[name]?.value;

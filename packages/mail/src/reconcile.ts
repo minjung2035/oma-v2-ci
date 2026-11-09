@@ -62,7 +62,7 @@ export async function reconcileOrdinaryMail(store: MailLedger, mail: MailRecover
     counts.examined++;
     try { await reconcileMailOperation(store, mail, id, effects); }
     catch (error) {
-      if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error;
+      if (errorCodeOf(error) === "STORE_CORRUPT") throw error;
       console.error(JSON.stringify({ event: "reconcile.mail", operation: id, code: errorCodeOf(error) }));
     }
     const after = store.getOperationById(id);

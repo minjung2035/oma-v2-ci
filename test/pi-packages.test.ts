@@ -169,6 +169,38 @@ function tarball(files: Record<string, string>, dirs: readonly string[] = []): B
   return Buffer.concat(parts);
 }
 
+test("043. Local archives accept a dot root and directory headers after their children", async () => {
+  const f = createCompleteConfigurationFixture();
+  try {
+    const store = join(f.root, "packages");
+    mkdirSync(store);
+    const files = {
+      "./package.json": JSON.stringify({ name: "ordered-pack", pi: { extensions: ["./extensions/e.ts"] } }),
+      "./extensions/e.ts": "export default function () {}\n",
+    };
+    for (const root of [".", "./"]) {
+      const archive = join(f.root, "ordered.tar");
+      writeFileSync(archive, Buffer.concat([
+        tarball(files, [root]).subarray(0, -1024),
+        tarball({}, ["./extensions/"]),
+      ]));
+      assert.equal(await stageLocalPackage(store, archive), "local/ordered-pack");
+      assert.equal(readFileSync(join(store, "local/ordered-pack/extensions/e.ts"), "utf8"), files["./extensions/e.ts"]);
+      assert.equal(readdirSync(store).some(name => name.startsWith(".staging-local-")), false);
+    }
+    // Actual duplicate members and a file used as a directory stay refused.
+    for (const archive of [
+      tarball(files, ["extensions/", "extensions/"]),
+      Buffer.concat([tarball({ "extensions": "file" }).subarray(0, -1024), tarball({}, ["extensions/"])]),
+    ]) {
+      const path = join(f.root, "duplicate.tar");
+      writeFileSync(path, archive);
+      await assert.rejects(stageLocalPackage(store, path), /duplicate entry/);
+      assert.equal(readFileSync(join(store, "local/ordered-pack/extensions/e.ts"), "utf8"), files["./extensions/e.ts"]);
+    }
+  } finally { f.close(); }
+});
+
 test("005. `oma pi install` of a local path copies it into the store as `local/<name>`, indexed and synced like a remote package", async () => {
   const f = createCompleteConfigurationFixture();
   try {

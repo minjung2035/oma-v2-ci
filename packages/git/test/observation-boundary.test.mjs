@@ -4,13 +4,33 @@ import { mkdtempSync, writeFileSync, unlinkSync, symlinkSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { GitObserver, parseNameStatusZ, parseGitlinksZ, classifyRefAfterCas } from "@oma/git/observe";
+import { GitObserver, parseNameStatusZ, parseGitlinksZ, parseGitlinksPath, classifyRefAfterCas } from "@oma/git/observe";
 import { protectedPathMatches } from "@oma/domain/git-facts";
 import { createCanonicalObserver, CANONICAL_PROCESS_LIMITS } from "@oma/git/canonical-command";
 import { ReviewArtifacts } from "../dist/review-artifact.js";
 import { readImmutableBytes } from "@oma/storage/immutable-file";
 import { mergeDiffText } from "@oma/domain/git-facts";
 const bytes = (text) => Buffer.from(text, "utf8");
+test("010. Streamed gitlink records preserve valid Unicode paths across a read boundary", () => {
+    const root = mkdtempSync(join(tmpdir(), "oma-gitlinks-unicode-"));
+    try {
+        const header = `100644 blob ${"a".repeat(40)}\t`;
+        const filler = bytes(`${header}padding\0`);
+        const prefixBytes = 1024 * 1024 - 6000;
+        const count = Math.floor(prefixBytes / filler.length) - 1;
+        const remainder = prefixBytes - count * filler.length;
+        const longPath = "한".repeat(4000);
+        const input = Buffer.concat([
+            Buffer.from(filler.toString().repeat(count)),
+            bytes(`${header}${"p".repeat(remainder - header.length - 1)}\0`),
+            bytes(`160000 commit ${"b".repeat(40)}\t${longPath}\0`),
+        ]);
+        const spool = join(root, "tree");
+        writeFileSync(spool, input);
+        assert.deepEqual(parseGitlinksZ(input), { ok: true, value: [longPath] });
+        assert.deepEqual(parseGitlinksPath(spool), parseGitlinksZ(input));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});
 function evidence(patch = {}) {
     return { status: 0, signal: null, stdout: bytes(""), stderr: bytes(""), ...patch };
 }

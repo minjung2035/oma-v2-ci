@@ -280,8 +280,11 @@ export function collectDeadTemporaries(parent: number): void {
   for (const entry of entries) {
     if (!TEMPORARY.test(entry)) continue;
     let fd: number;
-    try { fd = openBeneath(parent, entry, constants.O_RDONLY | constants.O_NOFOLLOW); } catch { continue; }
+    try { fd = openBeneath(parent, entry, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); } catch { continue; }
     try {
+      // A syntactically matching stray may be a FIFO or device. Collection
+      // must neither wait for a writer nor claim ownership of a special file.
+      if (!fstatSync(fd).isFile()) continue;
       if (lockFileDescriptor(fd).kind !== "held") continue;
       try { unlinkAt(parent, entry); } catch { /* raced with another collector */ }
     } finally { closeSync(fd); }

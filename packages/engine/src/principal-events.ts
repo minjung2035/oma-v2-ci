@@ -2,6 +2,8 @@
 import { SKIPPED_EVENT, type PiEvent } from "./pi-rpc.js";
 import { UNSEEN, UNSEEN_EXCEPT_LAYOUT } from "@oma/domain/unseen-text";
 import { CONVERSATION_BOUNDS } from "@oma/domain/surface-bounds";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { stripVTControlCharacters } from "node:util";
 
 function textOf(message: unknown): string {
   if (typeof message === "string") return message;
@@ -64,5 +66,5 @@ export function projectEvent(event: PiEvent): { readonly line?: string } {
 export function queuePreviewLine(text: string): string {
   const flat = text.replace(UNSEEN_EXCEPT_LAYOUT, "").replace(/[\x00-\x1f\x7f]/gu, " ").replace(/\s+/gu, " ").trim();
   const cells = CONVERSATION_BOUNDS.queuePreviewCells.value;
-  return flat.length > cells ? `${flat.slice(0, cells - 1).trimEnd()}…` : flat;
+  return stripVTControlCharacters(truncateToWidth(flat, cells, "…"));
 }

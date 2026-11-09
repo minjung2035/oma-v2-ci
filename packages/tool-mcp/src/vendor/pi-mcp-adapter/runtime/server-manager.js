@@ -1316,10 +1316,10 @@ export class McpServerManager {
                 throw new Error(`MCP server "${serverName}" HTTP header "${name}" has an invalid name or value`);
             }
         }
-        // Do not give origin-bound headers to SDK requestInit: it reuses those
-        // defaults for discovered OAuth endpoints, including other origins.
-        const requestInit = !oauthEnabled && Object.keys(headers).length > 0 ? { headers } : undefined;
-        const serviceHeaders = oauthEnabled ? new Headers(headers) : new Headers();
+        // Keep service credentials in the origin-aware fetch wrapper for both
+        // OAuth and explicit non-OAuth servers. SDK requestInit is reused on
+        // other URLs, and its redirect policy is ignored by the initial SSE GET.
+        const serviceHeaders = new Headers(headers);
         let caFetch = omaCaFetch(createCaFetch(definition));
         try {
             const createAuthProvider = () => {
@@ -1370,7 +1370,7 @@ export class McpServerManager {
                 : provider !== undefined
                     ? createProviderTokenFetch(serverUrl, provider, this.providerToken, commandFetch)
                     : commandFetch;
-            const requestFetch = oauthEnabled
+            const requestFetch = oauthEnabled || Object.keys(headers).length > 0
                 ? createOAuthFetch(serverUrl, () => serviceHeaders, this.oauthRuntime?.signal, {
                     // MCP streams outlive individual auth requests; retain SDK request deadlines.
                     timeout: false,
@@ -1398,7 +1398,6 @@ export class McpServerManager {
                     }
                     : requestFetch;
                 const transportOptions = {
-                    ...(requestInit !== undefined ? { requestInit } : {}),
                     ...(transportFetch !== undefined ? { fetch: transportFetch } : {}),
                     ...(authProvider !== undefined ? { authProvider } : {}),
                     ...(authProvider !== undefined
@@ -1504,6 +1503,7 @@ export class McpServerManager {
     async fetchAllTools(client, requestOptions) {
         const allTools = [];
         let cursor;
+        const seenCursors = new Set();
         let hints;
         let firstPage = true;
         do {
@@ -1525,6 +1525,9 @@ export class McpServerManager {
             }
             allTools.push(...(result.tools ?? []));
             cursor = result.nextCursor;
+            if (cursor && seenCursors.has(cursor))
+                throw new Error("MCP catalog repeated a pagination cursor");
+            if (cursor) seenCursors.add(cursor);
         } while (cursor);
         return { tools: allTools, ...(hints !== undefined ? { hints } : {}) };
     }
@@ -1535,10 +1538,14 @@ export class McpServerManager {
         try {
             const prompts = [];
             let cursor;
+            const seenCursors = new Set();
             do {
                 const result = await client.listPrompts(cursor ? { cursor } : undefined, requestOptions);
                 prompts.push(...(result.prompts ?? []));
                 cursor = result.nextCursor;
+                if (cursor && seenCursors.has(cursor))
+                    throw new Error("MCP catalog repeated a pagination cursor");
+                if (cursor) seenCursors.add(cursor);
             } while (cursor);
             return { prompts, failed: false };
         }
@@ -1559,10 +1566,14 @@ export class McpServerManager {
         try {
             const allResources = [];
             let cursor;
+            const seenCursors = new Set();
             do {
                 const result = await client.listResources(cursor ? { cursor } : undefined, requestOptions);
                 allResources.push(...(result.resources ?? []));
                 cursor = result.nextCursor;
+                if (cursor && seenCursors.has(cursor))
+                    throw new Error("MCP catalog repeated a pagination cursor");
+                if (cursor) seenCursors.add(cursor);
             } while (cursor);
             return { resources: allResources, failed: false };
         }

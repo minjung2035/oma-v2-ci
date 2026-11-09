@@ -8,10 +8,17 @@ export class ReconcileLane {
   request(): void {
     if (this.closed) return;
     if (this.active !== null) { this.again = true; return; }
-    const task = Promise.resolve().then(async () => {
-      do { this.again = false; await this.work(); } while (this.again && !this.closed);
+    this.again = true;
+    const owned = Promise.resolve().then(async () => {
+      try {
+        while (this.again && !this.closed) { this.again = false; await this.work(); }
+      } catch (error) { this.failure(error); }
+      finally {
+        // Release in the continuation that checks the last hint. A later
+        // microtask must start work instead of joining an already-drained pass.
+        if (this.active === owned) this.active = null;
+      }
     });
-    const owned = task.catch(this.failure).finally(() => { if (this.active === owned) this.active = null; });
     this.active = owned;
     this.latest = owned;
     // The failure callback can close the mutation gate and throw. Retain that

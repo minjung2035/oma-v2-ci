@@ -22,13 +22,8 @@ function editDistanceWithin(left, right, maximum) {
     return previous[right.length] <= maximum;
 }
 function literalMatches(text, query, caseInsensitive) {
-    const haystack = caseInsensitive ? text.toLocaleLowerCase() : text;
-    const needle = caseInsensitive ? query.toLocaleLowerCase() : query;
-    const matches = [];
-    for (let start = haystack.indexOf(needle); start >= 0; start = haystack.indexOf(needle, start + Math.max(needle.length, 1))) {
-        matches.push({ query, start, end: start + query.length });
-    }
-    return matches;
+    const pattern = new RegExp(RegExp.escape(query), caseInsensitive ? "giu" : "gu");
+    return [...text.matchAll(pattern)].map(match => ({ query, start: match.index, end: match.index + match[0].length }));
 }
 function fuzzyMatches(text, query) {
     const queryTokens = normalize(query).match(/[\p{L}\p{N}]+/gu) ?? [];

@@ -10,6 +10,8 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  copyFileSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -237,4 +239,25 @@ test("009. File and portable guard imports share one patch without blocking fixe
       { encoding: "utf8", timeout: 10000 });
     assert.equal(result.status, 0, result.stderr); assert.equal(result.signal, null);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("010. Local runner starts its phases from a checkout path containing spaces and Unicode", () => {
+  const root = mkdtempSync(join(tmpdir(), "oma testlocal # 한글-"));
+  let evidence;
+  try {
+    localRunnerFixture(root);
+    for (const name of ["test-local", "test-local-phase", "local-test-guard", "local-test-summary",
+      "local-test-timing", "verification-lanes", "check-modules", "workspace-executables"])
+      copyFileSync(new URL(`../scripts/${name}.mjs`, import.meta.url), join(root, "scripts", `${name}.mjs`));
+    symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(root, "node_modules"), "dir");
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("NODE_TEST_CONTEXT")));
+    const result = spawnSync(process.execPath, [join(root, "scripts/test-local.mjs")],
+      { cwd: root, env, encoding: "utf8", timeout: 60000 });
+    evidence = /Raw TAP retained for the failed or incomplete run: (.+)/.exec(result.stderr)?.[1];
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(readFileSync(join(root, ".scratch/local-test-durations.tsv"), "utf8"), /smoke\.test\.js\t/);
+  } finally {
+    if (evidence) rmSync(evidence, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
+  }
 });

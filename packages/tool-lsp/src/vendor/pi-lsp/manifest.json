@@ -34,12 +34,12 @@
         "edits": 7
       },
       "files.js": {
-        "reason": "OMA conversion of the workspace walk: the recursion became an explicit stack, so a deep tree is collected whole -- never dropped for depth (the old OMA_MAX_COLLECT_DEPTH silently stopped) and never recursed into a stack overflow. Children are pushed in reverse sorted order so pops visit them in the recursion's own depth-first order; the collected list is identical.",
-        "edits": 1
+        "reason": "OMA conversion of the workspace walk: the recursion became an explicit stack, so a deep tree is collected whole -- never dropped for depth (the old OMA_MAX_COLLECT_DEPTH silently stopped) and never recursed into a stack overflow. Children are pushed in reverse sorted order so pops visit them in the recursion's own depth-first order; the collected list is identical. Containment rejects parent path components, not legal names beginning with two dots.",
+        "edits": 2
       },
       "text-edits.js": {
-        "reason": "OMA bounds on what a resolved code action may carry: collected workspace edits are refused past a count bound and a newText byte bound -- mid-collection, not after a flatMap materialized the whole list, and refusing only that one request (the server survives and the shutdown handshake still completes). Refusal, not truncation: a cut edit list would fabricate a corrupt fix, and an unbounded materialization is a memory bound whose failure mode is engine OOM -- both worse than a clean error. The overlap check is a sorted sweep instead of a synchronous O(n^2) pair scan no AbortSignal could interrupt, and application is one pass over the ordered edits instead of rebuilding the string once per edit.",
-        "edits": 4
+        "reason": "OMA bounds on what a resolved code action may carry: collected workspace edits are refused past a count bound and a newText byte bound -- mid-collection, not after a flatMap materialized the whole list, and refusing only that one request (the server survives and the shutdown handshake still completes). Refusal, not truncation: a cut edit list would fabricate a corrupt fix, and an unbounded materialization is a memory bound whose failure mode is engine OOM -- both worse than a clean error. The overlap check is a sorted sweep instead of a synchronous O(n^2) pair scan no AbortSignal could interrupt, and application is one pass over the ordered edits instead of rebuilding the string once per edit. Malformed text and negative, fractional or reversed positions are refused before computing an edit that the contained writer could publish.",
+        "edits": 5
       }
     }
   },
@@ -81,8 +81,8 @@
     },
     {
       "path": "runtime/files.js",
-      "bytes": 5008,
-      "sha256": "29eb1ee275e04323804e989cdb949a708d6e1890f21bb9a825be448c96d3d6d7"
+      "bytes": 5044,
+      "sha256": "7ecc0a7f7022155ad91ee318772cb78eb0518dfad6dcb3979f41007c58f71dfb"
     },
     {
       "path": "runtime/lsp-client.d.ts",
@@ -131,8 +131,8 @@
     },
     {
       "path": "runtime/text-edits.js",
-      "bytes": 5557,
-      "sha256": "b144cf9243396bde5b2e984e41a0f00bdd3a2c2c81eb817b798794a3c7615a25"
+      "bytes": 6046,
+      "sha256": "514591ad82e2a19332033498f39aecec1898b07a3999d4790774a5459ac4ae0d"
     },
     {
       "path": "runtime/types.d.ts",
@@ -285,5 +285,5 @@
       "sha256": "c775a4bc414a6a4c5e91ae9a56b721d1c813502aa50a2705f568b1a1642a62db"
     }
   ],
-  "bundleSha256": "37ad8b2affe284634cf80938564fef8117b89f3d8d60784665c1d47430573795"
+  "bundleSha256": "6bfa8ab2ce7cbc6827852c77d62af693fb9f6e735e47cdc30b4b1db88404712c"
 }

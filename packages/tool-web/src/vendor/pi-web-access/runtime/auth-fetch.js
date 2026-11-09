@@ -53,7 +53,7 @@ function loadAuthFetchProfiles() {
         parsed = value;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${WEB_SEARCH_CONFIG_PATH}: ${message}`);
     }
     if (parsed.authFetch === undefined || parsed.authFetch === null)

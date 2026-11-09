@@ -207,6 +207,9 @@ export class RequestCache {
     const initial = this.read(request.key);
     if (initial.kind === "present") return this.existing(request, initial);
     if (initial.kind !== "absent") requirePresent(initial, "initial freeze");
+    const encoded = JSON.stringify(request);
+    if (Buffer.byteLength(encoded) > this.metadataBytes)
+      throw new CacheError("CACHE_UNAVAILABLE", "request exceeds local cache budget; no freeze published");
     if (request.digest) {
       if (body === undefined || body.byteLength !== request.digest.bytes || sha256Hex(body) !== request.digest.sha256)
         throw new CacheError("INVALID_REQUEST", "fresh body does not match frozen digest");
@@ -228,7 +231,7 @@ export class RequestCache {
           throw new CacheError("CACHE_UNAVAILABLE", "another body publication exists without proven metadata; no reconstruction attempted");
         }
       }
-      const published = publishNoReplace(this.path(request.key), JSON.stringify(request));
+      const published = publishNoReplace(this.path(request.key), encoded);
       if (published === "existing") return this.existing(request, this.readMetadata(request.key));
       return { kind: "created", value: request };
     } catch (error) {

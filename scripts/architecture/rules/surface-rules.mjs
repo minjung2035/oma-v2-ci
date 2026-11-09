@@ -34,6 +34,10 @@ const ENGINE_PRIMITIVE_OWNERS = Object.freeze({
     "truncateToWidth", "visibleWidth", "wrapTextWithAnsi",
   ]),
   "packages/engine/src/interactive-display.ts": Object.freeze(["Text"]),
+  // Queue previews and widgets fit the engine's display cells, including
+  // wide characters and grapheme clusters, through its width primitive.
+  "packages/engine/src/principal-events.ts": Object.freeze(["truncateToWidth"]),
+  "packages/engine/src/interactive-view.ts": Object.freeze(["truncateToWidth"]),
 });
 const VIEW = "packages/tui/src/view/";
 const VIEW_SEAM = "packages/tui/src/view/index.ts";

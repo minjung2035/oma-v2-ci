@@ -1,4 +1,5 @@
 import { DynamicBorder, type ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { truncateToWidth } from '@earendil-works/pi-tui';
 import { UNSEEN_EXCEPT_LAYOUT } from '@oma/domain/unseen-text';
 import type { EnginePresentation } from './presentation.js';
 import type { InteractiveOutput } from './interactive-state.js';
@@ -43,7 +44,7 @@ export function createInteractiveView(input: {
                 ...prompts.map((text, index) => ` ${index + 1}. ${text}`),
                 ...(total > prompts.length ? [` +${total - prompts.length} more`] : [])];
             return {
-                render: (width: number) => rows.map(row => theme.fg("muted", row.length > width ? `${row.slice(0, Math.max(0, width - 1))}…` : row)),
+                render: (width: number) => rows.map(row => theme.fg("muted", truncateToWidth(row, Math.max(0, width), "…"))),
                 invalidate() {
                 }
             };

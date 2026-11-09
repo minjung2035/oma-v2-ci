@@ -16,9 +16,12 @@ test("001. Change locality measures actual Git files, includes pending work, and
   commit(); const base = git("rev-parse", "HEAD").trim();
   write("apps/oma/src/owned.ts", "second\n"); git("add", "."); commit();
   write("test/untracked.test.mjs", "pending\n"); write("apps/oma/src/line\nbreak.ts", "pending\n");
+  write("packages/tool-mcp/test/auth.test.mjs", "pending\n");
+  write("apps/oma/test/runtime.test.mjs", "pending\n");
   const inventory = [{ mutation: "probe", refs: [{ path: "apps/oma/src/owned.ts" }, { path: "apps/oma/src/unchanged.ts" }] }];
   const pending = changeLocality(root, base, undefined, inventory);
-  assert.equal(pending.totalFiles, 3); assert.equal(pending.counts.source, 2); assert.equal(pending.counts.tests, 1);
+  assert.equal(pending.totalFiles, 5); assert.equal(pending.counts.source, 2); assert.equal(pending.counts.tests, 3);
+  assert.equal(pending.counts.metadata, 0);
   assert.ok(pending.changedFiles.includes("apps/oma/src/line\nbreak.ts"));
   assert.deepEqual(pending.ownerIntersections, [{ mutation: "probe", files: ["apps/oma/src/owned.ts"] }]);
   const committed = changeLocality(root, base, "HEAD", inventory);

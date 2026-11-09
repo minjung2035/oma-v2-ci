@@ -4,7 +4,7 @@ import { normalizeDomain } from "./domain-filter-normalization.js";
 import { formatSearchResultsAsAnswer } from "./search-answer-formatting.js";
 import { normalizeSearchResultCount } from "./search-result-count-normalization.js";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
-import { getWebSearchConfigPath } from "./utils.js";
+import { fetchWithCredentialRedirects, getWebSearchConfigPath } from "./utils.js";
 const VALYU_SEARCH_URL = "https://api.valyu.ai/v1/search";
 const CONFIG_PATH = getWebSearchConfigPath();
 const SEARCH_TIMEOUT_MS = 60_000;
@@ -24,7 +24,7 @@ function loadConfig() {
         parsed = JSON.parse(raw);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -104,12 +104,12 @@ export async function searchWithValyu(query, options = {}) {
     const activityId = activityMonitor.logStart({ type: "api", query });
     let response;
     try {
-        response = await fetch(VALYU_SEARCH_URL, {
+        response = await fetchWithCredentialRedirects(VALYU_SEARCH_URL, {
             method: "POST",
             headers: { "x-api-key": apiKey, "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify({ query, max_num_results: numResults, ...mapDomainFilter(options.domainFilter), ...(startDate ? { start_date: startDate } : {}) }),
             signal: options.signal ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal]) : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-        });
+        }, ["x-api-key"]);
     }
     catch (err) {
         const message = errorMessage(err);

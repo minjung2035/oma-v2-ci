@@ -61,6 +61,8 @@ const TAR_METADATA_BYTES = 1024 * 1024;
 export function extractTar(source: number, area: StageArea): void {
   const fail = (words: string): never => { throw new StoreError("INVALID_REQUEST", `the package archive is not a tar oma can install: ${words}`); };
   const made = new Set<string>();
+  const directories = new Set<string>();
+  const declaredDirectories = new Set<string>();
   let position = 0, entries = 0;
   /** Exactly `length` bytes at the cursor, or the end of the archive short of
    * them -- null. */
@@ -87,7 +89,7 @@ export function extractTar(source: number, area: StageArea): void {
     let at = "";
     for (const part of rel.split("/")) {
       at = at === "" ? part : `${at}/${part}`;
-      if (part !== "" && !made.has(at)) { area.make(at); made.add(at); }
+      if (part !== "" && !made.has(at)) { area.make(at); made.add(at); directories.add(at); }
     }
   };
   /** The directories `rel`'s parent names, made; a root-level name has none
@@ -150,11 +152,18 @@ export function extractTar(source: number, area: StageArea): void {
       }
       case 0x4b: continue; // 'K' — a long link name; the link itself is refused below
       case 0x35: { // '5' — directory
+        // `tar -C package -cf package.tar .` includes the root itself. It
+        // names the staging directory we already own, not an empty child.
+        if (name === "." || name === "./") continue;
         const rel = entryName(name, true);
         ensureParents(rel);
-        if (made.has(rel)) fail(`a duplicate entry: ${rel}`);
-        area.make(rel);
+        // Parents may have been made for an earlier file. Their first
+        // explicit directory header is still a distinct, valid tar member.
+        if (declaredDirectories.has(rel) || (made.has(rel) && !directories.has(rel))) fail(`a duplicate entry: ${rel}`);
+        if (!made.has(rel)) area.make(rel);
         made.add(rel);
+        directories.add(rel);
+        declaredDirectories.add(rel);
         continue;
       }
       case 0x00: case 0x30: case 0x37: { // regular file

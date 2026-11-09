@@ -678,8 +678,13 @@ import { omaFlaggedDiagnostics, omaIsMarker, omaMarkerDiagnostic } from "./lsp-c
       "for depth (the old OMA_MAX_COLLECT_DEPTH silently stopped) and " +
       "never recursed into a stack overflow. Children are pushed in " +
       "reverse sorted order so pops visit them in the recursion's own " +
-      "depth-first order; the collected list is identical.",
+      "depth-first order; the collected list is identical. Containment " +
+      "rejects parent path components, not legal names beginning with two dots.",
     edits: [
+      {
+        find: `return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));`,
+        replace: `return relativePath === "" || (relativePath !== ".." && !relativePath.startsWith(".." + path.sep) && !path.isAbsolute(relativePath));`,
+      },
       {
         find: `function collectPath(adapter, targetPath, files, seen, visitedDirectories, realRoot, limit) {
     if (files.length >= limit || !existsSync(targetPath))
@@ -761,8 +766,31 @@ function collectPath(adapter, targetPath, files, seen, visitedDirectories, realR
       "OOM -- both worse than a clean error. The overlap check is a " +
       "sorted sweep instead of a synchronous O(n^2) pair scan no " +
       "AbortSignal could interrupt, and application is one pass over the " +
-      "ordered edits instead of rebuilding the string once per edit.",
+      "ordered edits instead of rebuilding the string once per edit. " +
+      "Malformed text and negative, fractional or reversed positions are " +
+      "refused before computing an edit that the contained writer could publish.",
     edits: [
+      {
+        find: `function positionTextEdits(text, edits) {
+    return edits.map((edit, index) => ({
+        edit,
+        index,
+        start: offsetAt(text, edit.range.start),
+        end: offsetAt(text, edit.range.end),
+    }));
+}`,
+        replace: `function positionTextEdits(text, edits) {
+    const validPosition = position => position && Number.isSafeInteger(position.line) && position.line >= 0 &&
+        Number.isSafeInteger(position.character) && position.character >= 0;
+    return edits.map((edit, index) => {
+        const start = edit?.range?.start, end = edit?.range?.end;
+        if (typeof edit?.newText !== "string" || !validPosition(start) || !validPosition(end) ||
+            start.line > end.line || (start.line === end.line && start.character > end.character))
+            throw new Error("LSP returned an invalid workspace text edit");
+        return { edit, index, start: offsetAt(text, start), end: offsetAt(text, end) };
+    });
+}`,
+      },
       {
         find: `export function positionAt(text, offset) {`,
         replace: `// OMA divergences (applied by scripts/vendor-pi-lsp.mjs; recorded under

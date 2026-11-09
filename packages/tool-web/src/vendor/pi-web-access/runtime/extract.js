@@ -38,7 +38,7 @@ function loadFetchTimeoutMs() {
         raw = JSON.parse(readFileSync(WEB_SEARCH_CONFIG_PATH, "utf-8"));
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${WEB_SEARCH_CONFIG_PATH}: ${message}`);
     }
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -171,6 +171,11 @@ async function fetchAuthenticatedRemoteUrl(url, init, validationOptions, profile
         const location = response.headers.get("location");
         if (!location)
             return response;
+        // Cancellation is best effort: do not wait for a remote stream or mask the original result.
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
         if (redirects === 5)
             throw new Error(`Too many redirects fetching ${current.toString()}`);
         const from = current;
@@ -202,7 +207,7 @@ function loadFetchRouting() {
         raw = parsed;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${WEB_SEARCH_CONFIG_PATH}: ${message}`);
     }
     if (!Object.hasOwn(raw, "fetchRouting")) {
@@ -317,6 +322,10 @@ async function extractWithJinaReader(url, timeoutMs, signal, lookup) {
             ]),
         });
         if (!res.ok) {
+            try {
+                void res.body?.cancel().catch(() => {});
+            }
+            catch {}
             activityMonitor.logComplete(activityId, res.status);
             return null;
         }
@@ -1101,6 +1110,7 @@ async function extractViaHttp(url, timeoutMs, signal, options) {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const onAbort = () => controller.abort();
     signal?.addEventListener("abort", onAbort);
+    let response;
     try {
         const ssrf = loadSsrfConfig();
         const domainPolicy = loadFetchContentDomainPolicy();
@@ -1120,7 +1130,7 @@ async function extractViaHttp(url, timeoutMs, signal, options) {
                 "Upgrade-Insecure-Requests": "1",
             },
         };
-        const response = authProfile
+        response = authProfile
             ? await fetchAuthenticatedRemoteUrl(url, requestInit, { ssrf, domainPolicy, proxy: options?.proxy, ...(options?.lookup ? { lookup: options.lookup } : {}) }, authProfile)
             : await fetchRemoteUrl(url, requestInit, {
                 allowRanges: ssrf.allowRanges,
@@ -1356,6 +1366,11 @@ async function extractViaHttp(url, timeoutMs, signal, options) {
         return { url, title: "", content: "", error: message };
     }
     finally {
+        // Stop unread bodies on policy refusals and errors without replacing their result.
+        try {
+            void response?.body?.cancel().catch(() => {});
+        }
+        catch {}
         clearTimeout(timeoutId);
         signal?.removeEventListener("abort", onAbort);
         // Imports and CPU-bound processing need not observe the fetch signal, and

@@ -304,7 +304,7 @@ export function createRequestHeadersCommandFetch(config, delegate = globalThis.f
             integrity: request.integrity,
             keepalive: request.keepalive,
             mode: request.mode,
-            redirect: request.redirect,
+            redirect: [...derived].length > 0 ? "error" : request.redirect,
             referrer: request.referrer,
             referrerPolicy: request.referrerPolicy,
         });

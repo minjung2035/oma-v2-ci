@@ -395,6 +395,19 @@ test("015. Component keys drive the model — checkboxes, tabs, typing and commi
   assert.deepEqual(multi.answersSoFar()[0]?.selected, ["moment"]);
 });
 
+test("015a. A terminal bracketed paste enters a custom answer without submitting it", () => {
+  const model = new QuestionnaireModel([question()]);
+  const component = createAskComponent(model, THEME, () => undefined);
+  model.moveDown(); model.moveDown();
+  component.handleInput("\r");
+  component.handleInput("\x1b[200~pasted\r\nanswer\x1b[201~");
+  assert.equal(model.inputMode, true);
+  assert.equal(model.inputText, "pastedanswer");
+  assert.equal(model.answersSoFar().length, 0);
+  component.handleInput("\r");
+  assert.equal(model.answersSoFar()[0]?.answer, "pastedanswer");
+});
+
 // ---------- extension ----------
 
 test("016. Registration is idempotent and the name is the one the surface pins", () => {
@@ -637,5 +650,62 @@ test("029. Presenter registration is idempotent — one claim, one dialog per re
   assert.equal(ui.calls.length, 1);
   ui.calls[0]!.done({ answers: [], cancelled: true });
   await outcomePromise;
+});
+
+test("030. Abort during request dispatch settles the tool and cancels a delayed dialog", { timeout: 5000 }, async () => {
+  for (const abortBeforePresenter of [true, false]) {
+    const host = fakePi();
+    registerAskUserQuestion(host.pi);
+    const controller = new AbortController();
+    const ui = fakeUiContext();
+    const bus = host.pi as unknown as { events: { on(channel: string, handler: () => void): void } };
+    if (abortBeforePresenter) bus.events.on(ASK_REQUEST_EVENT, () => controller.abort());
+    registerAskUserQuestionPresenter(host.pi, { context: () => ui.ctx as never });
+    if (!abortBeforePresenter) bus.events.on(ASK_REQUEST_EVENT, () => controller.abort());
+    const result = await toolExecute(host, params([question()]), { hasUI: true }, controller.signal);
+    assert.deepEqual(result.details, { answers: [], cancelled: true });
+    assert.equal(ui.calls.length, 1);
+    const delayed = ui.calls[0]!;
+    let dismissed = false;
+    const component = delayed.factory(undefined, THEME, undefined, (value: QuestionnaireResult) => {
+      dismissed = true;
+      assert.deepEqual(value, { answers: [], cancelled: true });
+      delayed.done(value);
+    }) as { render(width: number): string[] };
+    assert.equal(dismissed, true, "the later factory cannot reopen the cancelled question");
+    assert.deepEqual(component.render(80), []);
+  }
+});
+
+test("031. Request dispatch failure cancels a claimed dialog and leaves no pending invocation", { timeout: 5000 }, async () => {
+  const host = fakePi();
+  registerAskUserQuestion(host.pi);
+  const ui = fakeUiContext();
+  registerAskUserQuestionPresenter(host.pi, { context: () => ui.ctx as never });
+  const bus = host.pi as unknown as { events: { on(channel: string, handler: () => void): void } };
+  bus.events.on(ASK_REQUEST_EVENT, () => { throw new Error("extension listener failed"); });
+  const result = await toolExecute(host, params([question()]));
+  assert.deepEqual(result.details, { answers: [], cancelled: true });
+  const cancels = host.emitted.filter(entry => entry.channel === ASK_CANCEL_EVENT).length;
+  host.fire("session_shutdown");
+  assert.equal(host.emitted.filter(entry => entry.channel === ASK_CANCEL_EVENT).length, cancels);
+});
+
+test("032. Session cancellation before the UI factory prevents a late question from opening", async () => {
+  const host = fakePi();
+  registerAskUserQuestion(host.pi);
+  const ui = fakeUiContext();
+  registerAskUserQuestionPresenter(host.pi, { context: () => ui.ctx as never });
+  const pending = toolExecute(host, params([question()]));
+  host.fire("session_before_switch");
+  assert.equal((await pending).details.cancelled, true);
+  const delayed = ui.calls[0]!;
+  let dismissed = false;
+  const component = delayed.factory(undefined, THEME, undefined, (value: QuestionnaireResult) => {
+    dismissed = true;
+    delayed.done(value);
+  }) as { render(width: number): string[] };
+  assert.equal(dismissed, true);
+  assert.deepEqual(component.render(80), []);
 });
 

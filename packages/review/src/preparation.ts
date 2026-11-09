@@ -202,7 +202,7 @@ Challenge ${name}` });
     if (input.kind === "review") {
       if (principal) throw new StoreError("CAPABILITY_DENIED", "the Principal may only vote on a review request");
       if (agent.role !== "resident") throw new StoreError("CAPABILITY_DENIED", "only a Worker records a review");
-      if (low) throw new StoreError("INVALID_REQUEST", "LOW requests have no review thread; use oma_challenge_open after it is applied");
+      if (low) throw new StoreError("INVALID_REQUEST", "LOW requests have no review thread; use oma_challenge with its exact applied target after it is applied");
     } else {
       if (principal) {
         if (!before.principalRequired)
@@ -218,7 +218,7 @@ Challenge ${name}` });
         if (agent.role !== "resident") throw new StoreError("CAPABILITY_DENIED", "only a Worker votes on a review request");
         if (input.approval !== undefined)
           throw new StoreError("INVALID_REQUEST", "a Worker vote does not name an approval");
-        if (low) throw new StoreError("INVALID_REQUEST", "LOW has no prior review; use oma_challenge_open after it is applied");
+        if (low) throw new StoreError("INVALID_REQUEST", "LOW has no prior review; use oma_challenge with its exact applied target after it is applied");
         if (before.authors.includes(auth.actor))
           throw new StoreError("SELF_REVIEW", "the requester or a submitter cannot vote on their own change");
       }
@@ -324,7 +324,7 @@ Challenge ${name}` });
       throw new StoreError("CAPABILITY_DENIED", "only the requester cancels a request");
     if (before.integration !== null) {
       if (before.integration.state === "succeeded")
-        throw new StoreError("REQUEST_CLOSED", `request ${input.name} is already applied; use oma_challenge_open`,
+        throw new StoreError("REQUEST_CLOSED", `request ${input.name} is already applied; use oma_challenge with its exact applied target`,
           { details: { name: input.name, state: "applied" } });
       if (before.integration.state === "unknown")
         throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");

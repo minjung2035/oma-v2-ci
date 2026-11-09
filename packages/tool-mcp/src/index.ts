@@ -259,8 +259,8 @@ const MCP_PARAMETER_HELP: Record<string, string> = {
 
 /** The ExtensionAPI upstream's factory is allowed to see. `mcp` is the
  * only tool name that may register; commands, flags and shortcuts are
- * recorded, not registered; `exec` is refused (browser opening is its
- * only call site); `registerMcpServer`/`getMcpServers` are absent so
+ * recorded, not registered; `exec` is forwarded for the permitted browser
+ * opening path; `registerMcpServer`/`getMcpServers` are absent so
  * vendored `piSupportsMcp` is false and Pi's built-in MCP can never run
  * beside this adapter. Session plumbing -- `on`, `events`, `appendEntry`,
  * `sendMessage`, `sendUserMessage`, `getFlag`, the active-tools accessors

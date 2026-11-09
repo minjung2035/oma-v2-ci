@@ -163,3 +163,17 @@ test("008. The first freeze in a home makes every name on the cache's new path d
   for (const path of [dir, join(home, ".local/state/oma"), join(home, ".local/state"), join(home, ".local"), home])
     assert.ok(flushed.includes(path), `${path} was created but its name was never flushed: ${JSON.stringify(flushed)}`);
 });
+
+test("009. An oversized initial freeze refuses before publishing either metadata or body", t => {
+  const { home, dir } = fixture(t);
+  const input = context();
+  const bytes = Buffer.byteLength(JSON.stringify({ ...input, lastReceipt: null }));
+  const small = new RequestCache(home, undefined, bytes - 1);
+  assert.throws(() => small.freeze(input, Buffer.from("hello")),
+    (error: unknown) => error instanceof CacheError && error.code === "CACHE_UNAVAILABLE");
+  assert.deepEqual(small.read(input.key), { kind: "absent" });
+  assert.deepEqual(readdirSync(dir), []);
+  const exact = new RequestCache(home, undefined, bytes);
+  assert.equal(exact.freeze(input, Buffer.from("hello")).kind, "created");
+  assert.equal(exact.read(input.key).kind, "present");
+});

@@ -160,9 +160,11 @@ export function validateQuestionnaire(typed: QuestionParams): ValidationResult {
     const options = question.options;
     if (
       typeof question.question !== "string" || typeof question.header !== "string" ||
+      (question.multiSelect !== undefined && typeof question.multiSelect !== "boolean") ||
       !Array.isArray(options) ||
       (options as readonly AskOption[]).some(
-        (option) => typeof option.label !== "string" || typeof option.description !== "string",
+        (option) => typeof option.label !== "string" || typeof option.description !== "string" ||
+          (option.preview !== undefined && typeof option.preview !== "string"),
       )
     ) {
       return { ok: false, error: "missing_fields", message: ERROR_MISSING_FIELDS };

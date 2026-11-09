@@ -12,6 +12,7 @@
 | 코드 위치 | [책임 경계](application-boundaries.md), [협업 표면 구현·검증 위치](implementation/collaboration-v1-trace.md) |
 | 테스트 명령·병렬 실행·실패 확인 | [유지보수 안내](MAINTENANCE.md) |
 | 전체 실행 수치·실패·미검증 범위 | [현재 검증 상태](implementation/validation.md) |
+| 2026-11-09 코드 감사·사용 제약·보류 구조 개선 | [프로젝트 감사](implementation/project-audit-2026-11-09.md) |
 | 과거 실행·감사·작업 일지 | [보관 색인](archive.md) |
 
 ## 구현·검증 기준

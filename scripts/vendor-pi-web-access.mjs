@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { NPM_METADATA_PACKAGING, preserveNpmMetadata, vendorPackagingProblems } from "./vendor-bundle-lib.mjs";
 /** Vendored pi-web-access bundle maintenance — the only writer of
- * `apps/oma/src/extension/vendor/pi-web-access/runtime/` and `manifest.json`.
+ * `packages/tool-web/src/vendor/pi-web-access/runtime/` and `manifest.json`.
  *
  * `upstream/` is the exact npm tarball snapshot of pi-web-access (verified
  * against `package/npm integrity` and `shasum` at vendoring time) and is
@@ -306,15 +306,167 @@ const DEPENDENCIES = Object.freeze({
  * upstream implementations. Every change below binds one emitted anchor.
  */
 const OMA_DIVERGENCES = Object.freeze({
+  "openai-search.js": {
+  "reason": ("Hosted search rejects failed, incomplete, and truncated Responses streams before exposing partial output as success, and reads SSE data framing without requiring optional spaces.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `async function parseOpenAIResponse(response) {
+    const text = await response.text();
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            const payload = Array.isArray(parsed)
+                ? { output: parsed }
+                : parsed && typeof parsed === "object" ? parsed : { output: [] };
+            const output = Array.isArray(payload.output) ? payload.output : [];
+            return { payload, webSearchCallSeen: output.some(isWebSearchCall) };
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(\`OpenAI API returned invalid JSON: \${message}\`);
+        }
+    }
+    const outputItems = [];
+    let completedResponse = null;
+    let webSearchCallSeen = false;
+    for (const line of text.split("\\n")) {
+        if (!line.startsWith("data: "))
+            continue;
+        const data = line.slice(6).trim();
+        if (!data || data === "[DONE]")
+            continue;
+        try {
+            const parsed = JSON.parse(data);
+            if (typeof parsed.type === "string" && parsed.type.startsWith("response.web_search_call"))
+                webSearchCallSeen = true;
+            if (parsed.type === "response.output_item.done" && parsed.item) {
+                outputItems.push(parsed.item);
+                webSearchCallSeen ||= isWebSearchCall(parsed.item);
+            }
+            if ((parsed.type === "response.done" || parsed.type === "response.completed") && parsed.response && typeof parsed.response === "object") {
+                completedResponse = parsed.response;
+            }
+        }
+        catch {
+        }
+    }
+    if (completedResponse) {
+        const output = Array.isArray(completedResponse.output) ? completedResponse.output : [];
+        const payload = output.length > 0 ? completedResponse : { ...completedResponse, output: outputItems };
+        return { payload, webSearchCallSeen: webSearchCallSeen || output.some(isWebSearchCall) };
+    }
+    if (outputItems.length > 0)
+        return { payload: { output: outputItems }, webSearchCallSeen: webSearchCallSeen || outputItems.some(isWebSearchCall) };
+    throw new Error("OpenAI API returned no parseable response output");
+}
+`,
+      "replace": `function assertOpenAIResponseComplete(payload) {
+    if (payload?.error || (payload?.status !== undefined && payload.status !== "completed")) {
+        throw new Error("OpenAI API returned a failed or incomplete response");
+    }
+}
+async function parseOpenAIResponse(response) {
+    const text = await response.text();
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        let parsed;
+        try {
+            parsed = JSON.parse(trimmed);
+        }
+        catch {
+            throw new Error("OpenAI API returned invalid JSON");
+        }
+        const payload = Array.isArray(parsed)
+            ? { output: parsed }
+            : parsed && typeof parsed === "object" ? parsed : { output: [] };
+        assertOpenAIResponseComplete(payload);
+        const output = Array.isArray(payload.output) ? payload.output : [];
+        return { payload, webSearchCallSeen: output.some(isWebSearchCall) };
+    }
+    const outputItems = [];
+    let completedResponse = null;
+    let webSearchCallSeen = false;
+    for (const frame of text.split(/\\r?\\n\\r?\\n/)) {
+        const data = frame.split(/\\r?\\n/).filter(line => line.startsWith("data:"))
+            .map(line => line.slice(5).replace(/^ /, "")).join("\\n").trim();
+        if (!data || data === "[DONE]")
+            continue;
+        let parsed;
+        try {
+            parsed = JSON.parse(data);
+        }
+        catch {
+            throw new Error("OpenAI API returned invalid JSON in its event stream");
+        }
+        if (parsed?.type === "error" || parsed?.type === "response.failed" || parsed?.type === "response.incomplete") {
+            throw new Error("OpenAI API returned a failed or incomplete response");
+        }
+        if (typeof parsed?.type === "string" && parsed.type.startsWith("response.web_search_call"))
+            webSearchCallSeen = true;
+        if (parsed?.type === "response.output_item.done" && parsed.item) {
+            outputItems.push(parsed.item);
+            webSearchCallSeen ||= isWebSearchCall(parsed.item);
+        }
+        if ((parsed?.type === "response.done" || parsed?.type === "response.completed") && parsed.response && typeof parsed.response === "object") {
+            assertOpenAIResponseComplete(parsed.response);
+            completedResponse = parsed.response;
+        }
+    }
+    if (!completedResponse)
+        throw new Error("OpenAI API returned an incomplete stream without a terminal response");
+    const output = Array.isArray(completedResponse.output) ? completedResponse.output : [];
+    const payload = output.length > 0 ? completedResponse : { ...completedResponse, output: outputItems };
+    return { payload, webSearchCallSeen: webSearchCallSeen || output.some(isWebSearchCall) };
+}
+`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+  "content-find.js": {
+    reason: "Case-insensitive search keeps offsets in the original content. Unicode lowercasing can expand characters and otherwise selects unrelated excerpts.",
+    edits: [{
+      find: `    const haystack = caseInsensitive ? text.toLocaleLowerCase() : text;
+    const needle = caseInsensitive ? query.toLocaleLowerCase() : query;
+    const matches = [];
+    for (let start = haystack.indexOf(needle); start >= 0; start = haystack.indexOf(needle, start + Math.max(needle.length, 1))) {
+        matches.push({ query, start, end: start + query.length });
+    }
+    return matches;`,
+      replace: `    const pattern = new RegExp(RegExp.escape(query), caseInsensitive ? "giu" : "gu");
+    return [...text.matchAll(pattern)].map(match => ({ query, start: match.index, end: match.index + match[0].length }));`,
+    }],
+  },
   "utils.js": {
     reason:
-      "OMA web-policy seam and egress pin. The adapter installs the " +
+      ("OMA web-policy seam and egress pin. The adapter installs the " +
       "Society contract { egressPinned } before upstream's factory runs; " +
       "OMA capability flags retain separate credential boundaries. Network " +
       "access accepts local destinations and ordinary configured/per-call proxies. " +
       "Upstream owns scoped proxy transport and NO_PROXY; the verified undici " +
-      "dispatcher handles the deployment's environment proxy.",
+      "dispatcher handles the deployment's environment proxy. Curl transport " +
+      "preserves HEAD semantics and refuses incomplete transfers instead of returning partial success.") + " Cancel unread credential-bearing API redirect bodies before following or refusing the target, without waiting for remote cleanup or masking the result.",
     edits: [
+      {
+        find: `    if (method !== "GET" && method !== "HEAD")
+        args.push("-X", method);`,
+        replace: `    if (method === "HEAD") args.push("--head");
+    else if (method !== "GET") args.push("-X", method);`,
+      },
+      {
+        find: `if (code !== 0 && !out.trim()) {`,
+        replace: `if (code !== 0) {`,
+      },
+      {
+        find: `const nullBody = status === 204 || status === 205 || status === 304;`,
+        replace: `const nullBody = method === "HEAD" || status === 204 || status === 205 || status === 304;`,
+      },
       {
         find: `const proxyStorage = new AsyncLocalStorage();`,
         replace: `// OMA divergence (applied by scripts/vendor-pi-web-access.mjs; recorded
@@ -364,17 +516,19 @@ const proxyStorage = new AsyncLocalStorage();`,
 // runtime/ path inside the verified payload.
 export { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";`,
       },
-    ],
+
+{
+  "find": "        if (!location)\n            return response;\n        if (redirects === MAX_API_REDIRECTS) {",
+  "replace": "        if (!location)\n            return response;\n        // Release the abandoned body before following or refusing its target.\n        // Cleanup must neither wait for the remote stream nor replace its result.\n        try {\n            void response.body?.cancel().catch(() => {});\n        }\n        catch {}\n        if (redirects === MAX_API_REDIRECTS) {"
+}
+],
   },
   "ssrf-protection.js": {
     reason:
-      "Egress-aware SSRF preflight: when the OMA egress pin exists the " +
-      "request is carried by the env proxy the pin names, so the " +
-      "local-DNS preflight is skipped exactly as upstream skips it for a " +
-      "configured remote-DNS proxy — the CONNECT allowlist is the " +
-      "authoritative screen, and a sandboxed engine could not resolve " +
-      "names locally anyway. The pin takes the place of 'the configured " +
-      "proxy' for that comparison.",
+      (("OMA network policy: an installed policy allows local destinations " +
+      "while preserving URL grammar and explicit domain policy on each " +
+      "redirect. Environment proxy routing and configured/per-call proxy " +
+      "transport remain separate choices.") + " Cancel unread HTTP response bodies on redirects, refusals and extraction failures without replacing the original result or waiting for a remote stream.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
     edits: [
       {
         find: `    if (!hostname)
@@ -401,12 +555,30 @@ export { EnvHttpProxyAgent, setGlobalDispatcher } from "undici";`,
       },
       {
         find: `        proxy === loadConfiguredProxy();`,
-        replace: `        // OMA divergence: under an installed policy the egress pin is the
-        // one proxy normalizeProxyUrl will ever pass, so it is "the
-        // configured proxy" for the remote-DNS skip.
+        replace: `        // OMA divergence: when an environment proxy is pinned, treat it
+        // as the configured proxy for this remote-DNS comparison.
         proxy === (omaEgressPinnedProxy() ?? loadConfiguredProxy());`,
       },
-    ],
+{
+  "find": `        if (!location)
+            return response;
+`,
+  "replace": `        if (!location)
+            return response;
+        // Cancellation is best effort: do not wait for a remote stream or mask the original result.
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
+`
+},
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`
+}
+],
   },
   "credential-source.js": {
     reason:
@@ -437,11 +609,11 @@ import { omaPermits } from "./utils.js";`,
   },
   "gemini-web-config.js": {
     reason:
-      "Browser cookie refusal: upstream's opt-in browser-cookie access " +
+      ("Browser cookie refusal: upstream's opt-in browser-cookie access " +
       "(env or config) reaches Chrome-family cookie stores and the " +
       "Keychain/secret-tool decryptors behind them. OMA forbids that " +
       "ambient credential discovery outright — this one gate covers " +
-      "gemini-web, authenticated fetch profiles and /google-account.",
+      "gemini-web, authenticated fetch profiles and /google-account.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
     edits: [
       {
         find: `import { getWebSearchConfigPath } from "./utils.js";`,
@@ -457,15 +629,80 @@ import { omaPermits } from "./utils.js";`,
     if (!omaPermits("browserCookies"))
         return false;`,
       },
-    ],
+{
+  "find": `        cachedConfig = {};
+        return cachedConfig;
+    }
+    const rawText = readFileSync(CONFIG_PATH, "utf-8");
+    let raw;
+    try {
+        raw = JSON.parse(rawText);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        cachedConfig = {};
+        return cachedConfig;
+    }
+    const rawText = readFileSync(CONFIG_PATH, "utf-8");
+    let raw;
+    try {
+        raw = JSON.parse(rawText);
+    }
+    catch (err) {
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+},
+{
+  "find": `    }
+    if (!existsSync(CONFIG_PATH))
+        return false;
+    const rawText = readFileSync(CONFIG_PATH, "utf-8");
+    let raw;
+    try {
+        raw = JSON.parse(rawText);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `    }
+    if (!existsSync(CONFIG_PATH))
+        return false;
+    const rawText = readFileSync(CONFIG_PATH, "utf-8");
+    let raw;
+    try {
+        raw = JSON.parse(rawText);
+    }
+    catch (err) {
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+],
+  },
+  "gemini-api.js": {
+    reason: ("Gemini and Cloudflare credential headers follow the same explicit origin-changing redirect policy as other API providers; custom authentication headers must not follow a redirect to another origin.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+    edits: [
+      {
+        find: `import { getWebSearchConfigPath } from "./utils.js";`,
+        replace: `import { getWebSearchConfigPath, fetchWithCredentialRedirects } from "./utils.js";`,
+      },
+      {
+        find: `const response = await fetch(parsedUrl, { ...init, headers });`,
+        replace: `const response = await fetchWithCredentialRedirects(parsedUrl, { ...init, headers }, ["x-goog-api-key", "cf-aig-authorization", "authorization"]);`,
+      },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+],
   },
   "github-api.js": {
     reason:
-      "gh CLI refusal: `gh` is the host's authenticated credential " +
-      "store — `gh api`/`gh repo clone` would run with the user's GitHub " +
-      "token. Under the deny-by-default permit checkGhAvailable returns " +
-      "false, so every call site takes upstream's public REST / " +
-      "anonymous-git fallback instead.",
+      "gh CLI capability guard: the installed OMA policy permits gh. " +
+      "When the permit is absent, checkGhAvailable returns false before " +
+      "a subprocess runs, so callers use the public REST/anonymous-git fallback.",
     edits: [
       {
         find: `import { execFile } from "node:child_process";`,
@@ -475,10 +712,9 @@ import { omaPermits } from "./utils.js";`,
       {
         find: `export async function checkGhAvailable(signal) {`,
         replace: `export async function checkGhAvailable(signal) {
-    // OMA divergence: the gh CLI is host credential discovery -- its
-    // token reaches private repos the public fallbacks cannot. Refuse
-    // it outright (deny-by-default) so every caller takes upstream's
-    // anonymous path.
+    // OMA divergence: gh may use the user's GitHub credentials. The
+    // installed policy permits it; without that permit callers use
+    // upstream's public REST/anonymous-git fallback.
     if (!omaPermits("ghCli"))
         return false;`,
       },
@@ -486,12 +722,9 @@ import { omaPermits } from "./utils.js";`,
   },
   "github-extract.js": {
     reason:
-      "Git clone refusal: upstream's repository path spawns gh/git " +
-      "clones into a host-visible clone root (/tmp/pi-github-repos by " +
-      "default) with detached process groups — a subprocess plus a write " +
-      "outside the agent's owned state. Under the deny-by-default permit " +
-      "the clone path returns null, so GitHub URLs take upstream's " +
-      "subprocess-free API view and the generic fetch fallback.",
+      (("Git clone capability guard: the installed OMA policy permits " +
+      "upstream gh/git clones. Without the permit, the clone path returns " +
+      "null before any subprocess starts, leaving API/generic fetch fallbacks.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.") + " Apply repository containment to README discovery too, so a cloned README symlink cannot read host files outside the checkout.",
     edits: [
       {
         find: `import { getWebSearchConfigPath } from "./utils.js";`,
@@ -502,27 +735,34 @@ import { omaPermits } from "./utils.js";`,
     if (!config.enabled)
         return null;`,
         replace: `    const config = loadGitHubConfig();
-    // OMA divergence: the clone path is a git/gh subprocess writing into
-    // a host-visible clone root (/tmp by default). OMA's web tools are
-    // remote-only -- deny-by-default keeps every GitHub URL on the
-    // subprocess-free API path (and the generic fetch fallback) even if
-    // this module is evaluated without the adapter's install.
+    // OMA divergence: the installed policy permits upstream git/gh
+    // clones. Without that permit, keep GitHub URLs on the API and
+    // generic fetch paths before any clone subprocess starts.
     if (!omaPermits("gitClone"))
         return null;
     if (!config.enabled)
         return null;`,
       },
-    ],
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+},
+{
+  "find": `        const readmePath = join(localPath, name);
+        if (existsSync(readmePath)) {`,
+  "replace": `        const readmePath = resolveWithinRepo(localPath, name);
+        if (readmePath && existsSync(readmePath)) {`
+}
+],
   },
   "youtube-extract.js": {
     reason:
-      "Native media refusal: the YouTube path shells out to yt-dlp and " +
-      "ffmpeg and feeds the description through a model call. Under the " +
-      "deny-by-default permit isYouTubeURL reports no video and " +
-      "isYouTubeEnabled reports disabled — every caller (the main " +
-      "extractor and the frame/timestamp paths that bypass the enabled " +
-      "check) falls through to the generic remote fetch or an honest " +
-      "unsupported-feature error.",
+      ("Native media capability guard: the installed OMA policy permits " +
+      "the upstream yt-dlp/ffmpeg and model-description pipeline. Without " +
+      "the permit, URL classification and the enabled check both disable " +
+      "this pipeline, including frame/timestamp callers.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
     edits: [
       {
         find: `import { formatSeconds, readExecError, isTimeoutError, trimErrorText, mapFfmpegError, getWebSearchConfigPath } from "./utils.js";`,
@@ -531,10 +771,9 @@ import { omaPermits } from "./utils.js";`,
       {
         find: `export function isYouTubeURL(url) {`,
         replace: `export function isYouTubeURL(url) {
-    // OMA divergence: the YouTube pipeline is a yt-dlp/ffmpeg subprocess
-    // plus a model-completion describe pass -- surfaces OMA does not
-    // expose. Deny-by-default: no URL classifies as YouTube under OMA, so
-    // the main extractor and the frame/timestamp paths all fall through.
+    // OMA divergence: the installed policy permits the upstream
+    // yt-dlp/ffmpeg and model-description pipeline. Without the permit,
+    // classification keeps main and frame/timestamp callers out.
     if (!omaPermits("nativeMedia"))
         return { isYouTube: false, videoId: null };`,
       },
@@ -547,16 +786,22 @@ import { omaPermits } from "./utils.js";`,
     return omaPermits("nativeMedia") === true && loadYouTubeConfig().enabled;
 }`,
       },
-    ],
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+],
   },
   "gemini-adc.js": {
     reason:
-      "ADC discovery refusal: upstream probes the host's Google " +
+      (("ADC discovery refusal: upstream probes the host's Google " +
       "Application Default Credentials (~/.config/gcloud/...) to decide " +
       "whether the Vertex path exists. Under the deny-by-default permit " +
       "isGeminiAdcAvailable reports false — no host credential file is " +
       "ever consulted; a Gemini API key configured in the OMA-owned " +
-      "web-search.json or engine env keeps working.",
+      "web-search.json or engine env keeps working.") + " OAuth exchanges carry refresh credentials or signed assertions in the POST body; refuse redirects so HTTP307/308 cannot forward them to another origin. ADC is disabled in the current OMA adapter.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
     edits: [
       {
         find: `import { getWebSearchConfigPath } from "./utils.js";`,
@@ -570,16 +815,42 @@ import { omaPermits } from "./utils.js";`,
     // works exactly as upstream.
     return omaPermits("geminiAdc") === true && existsSync(getAdcPath());`,
       },
-    ],
+{
+  "find": `const res = await fetch(TOKEN_ENDPOINT, {
+        method: "POST",`,
+  "replace": `const res = await fetch(TOKEN_ENDPOINT, {
+        method: "POST",
+        redirect: "error",`
+},
+{
+  "find": `const res = await fetch(cfg.token_uri || TOKEN_ENDPOINT, {
+        method: "POST",`,
+  "replace": `const res = await fetch(cfg.token_uri || TOKEN_ENDPOINT, {
+        method: "POST",
+        redirect: "error",`
+},
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+},
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse Google Application Default Credentials file at \${path}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse Google Application Default Credentials file at \${path}: \${message}\`);`
+}
+],
   },
   "video-extract.js": {
     reason:
-      "Local file refusal: upstream lets fetch_content take a local path " +
+      ("Local file refusal: upstream lets fetch_content take a local path " +
       "or file:// URL into the ffprobe/ffmpeg video pipeline — a model " +
       "naming a host file for a subprocess read. Under the deny-by-" +
       "default permit the input is never a file path, so file:// and " +
       "local paths fall through to the remote-URL validation, which " +
-      "refuses non-http(s) inputs.",
+      "refuses non-http(s) inputs.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
     edits: [
       {
         find: `import { activityMonitor } from "./activity.js";`,
@@ -594,18 +865,24 @@ import { omaPermits } from "./utils.js";`,
     // evaluated without the adapter's install.
     const isFilePath = omaPermits("localFileFetch") && (input.startsWith("/") || input.startsWith("./") || input.startsWith("../") || input.startsWith("file://"));`,
       },
-    ],
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+],
   },
   "curator-server.js": {
     reason:
-      "Post-listen 'error' absorption: upstream removes its only 'error' " +
+      ("Post-listen 'error' absorption: upstream removes its only 'error' " +
       "listener after a successful listen, so an accept-class error " +
       "(EMFILE/ENFILE) later meets zero listeners and escapes the emit " +
       "as the hosting engine's death. A permanent listener beside the " +
       "startup once-listener journals best-effort and keeps the curator " +
       "socket bound for the kernel to retry — the startup rejection " +
       "contract is unchanged, and the class is closed even if the server " +
-      "ever runs under an evaluation the workflow pin did not reach.",
+      "ever runs under an evaluation the workflow pin did not reach.") + " Decode curator HTTP JSON across complete UTF-8 byte sequences, reject non-object JSON instead of hanging, and accept the SerpApi provider offered by the UI.",
     edits: [
       {
         find: `        server.once("error", onError);`,
@@ -626,7 +903,37 @@ import { omaPermits } from "./utils.js";`,
         });
         server.once("error", onError);`,
       },
-    ],
+
+{
+  "find": `        let body = "";
+        let size = 0;`,
+  "replace": `        const chunks = [];
+        let size = 0;`
+},
+{
+  "find": "            body += chunk.toString();",
+  "replace": "            chunks.push(chunk);"
+},
+{
+  "find": "                resolve(JSON.parse(body));",
+  "replace": "                resolve(JSON.parse(Buffer.concat(chunks).toString(\"utf8\")));"
+},
+{
+  "find": "        return await parseJSONBody(req);",
+  "replace": `        const body = await parseJSONBody(req);
+        if (!body || typeof body !== "object" || Array.isArray(body))
+            throw new Error("Invalid body");
+        return body;`
+},
+{
+  "find": `        if (provider === "serpbase")
+            return availableProviders.serpbase;`,
+  "replace": `        if (provider === "serpbase")
+            return availableProviders.serpbase;
+        if (provider === "serpapi")
+            return availableProviders.serpapi;`
+}
+],
   },
   "curator-run.js": {
     reason: "Workflow capability guard: upstream workflow settings run when the installed OMA policy permits workflows.",
@@ -635,17 +942,16 @@ import { omaPermits } from "./utils.js";`,
         find: `export function resolveWebSearchWorkflow(input, hasUI) {`,
         replace: `import { omaPermits } from "./utils.js";
 export function resolveWebSearchWorkflow(input, hasUI) {
-    // OMA divergence: the curator workflows are a model-completion and
-    // browser surface OMA does not expose. Deny-by-default: no request
-    // value, config default or curator state resolves to anything but
-    // "none" under OMA.
+    // OMA divergence: the installed policy permits upstream curator
+    // workflows. Without that permit, requests/config/curator state
+    // cannot activate the model-completion and browser workflow.
     if (!omaPermits("workflows"))
         return "none";`,
       },
     ],
   },
   "index.js": {
-    reason: "Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective.",
+    reason: ((("Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.") + " Keep page answers retrievable independently of their source text, with matching offsets and IDs; do not publish a research artifact after cancellation.") + " Persist curator provider selections through the canonical searchProvider key so an existing setting cannot override the new choice on restart.",
     edits: [
       {
         find: `import { formatSeconds, getWebSearchConfigDir, getWebSearchConfigPath, resolveCuratorNetworkConfig, runWithProxy } from "./utils.js";`,
@@ -684,7 +990,69 @@ function loadConfigForExtensionInit() {`,
     }
     catch (err) {`,
       },
-    ],
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`
+},
+{
+  "find": "                    const artifact = withClaimAssessment(buildResearchArtifact({",
+  "replace": `                    signal?.throwIfAborted();
+                    const artifact = withClaimAssessment(buildResearchArtifact({`
+},
+{
+  "find": `                    const storedContent = storeFetchResult(pi, responseId, data, authFetchProfile);
+                    if (urlList.length === 1) {`,
+  "replace": `                    const storedContent = storeFetchResult(pi, responseId, data, authFetchProfile);
+                    // Answers have their own offsets and must not page through original source text.
+                    const answerResponseId = mode === "answer" ? generateId() : undefined;
+                    if (answerResponseId) {
+                        storeFetchResult(pi, answerResponseId, {
+                            ...data,
+                            id: answerResponseId,
+                            urls: stripThumbnails(presentedResults),
+                        }, authFetchProfile);
+                    }
+                    const presentedResponseId = answerResponseId ?? responseId;
+                    if (urlList.length === 1) {`
+},
+{
+  "find": "                                    ? `Use ${toolNames.getSearchContent}({ responseId: \"${responseId}\", urlIndex: 0, offset: ${slice.endOffset} }) for the next slice.`",
+  "replace": "                                    ? `Use ${toolNames.getSearchContent}({ responseId: \"${presentedResponseId}\", urlIndex: 0, offset: ${slice.endOffset} }) for the next slice.`"
+},
+{
+  "find": `                                ...(storedContent ? { responseId } : {}),
+                                truncated,`,
+  "replace": `                                ...(storedContent ? { responseId } : {}),
+                                ...(answerResponseId ? { answerResponseId } : {}),
+                                truncated,`
+},
+{
+  "find": "                            ? `\\n---\\nUse ${toolNames.getSearchContent}({ responseId: \"${responseId}\", urlIndex: 0 }) to retrieve bounded content slices.`",
+  "replace": "                            ? `\\n---\\nUse ${toolNames.getSearchContent}({ responseId: \"${presentedResponseId}\", urlIndex: 0 }) to retrieve bounded ${answerResponseId ? \"answer\" : \"content\"} slices.`"
+},
+{
+  "find": "                        details: { urls: urlList, urlCount: urlList.length, successful, totalChars, ...(storedContent ? { responseId } : {}) },",
+  "replace": "                        details: { urls: urlList, urlCount: urlList.length, successful, totalChars, ...(storedContent ? { responseId } : {}), ...(answerResponseId ? { answerResponseId } : {}) },"
+},
+{
+  "find": `                    pc.searchProvider = normalized;
+                    try {
+                        saveConfig({ provider: normalized });`,
+  "replace": `                    pc.searchProvider = normalized;
+                    try {
+                        saveConfig({ searchProvider: normalized });`
+},
+{
+  "find": `                            currentSearchProvider = normalized;
+                            try {
+                                saveConfig({ provider: normalized });`,
+  "replace": `                            currentSearchProvider = normalized;
+                            try {
+                                saveConfig({ searchProvider: normalized });`
+}
+],
   },
   "utils.d.ts": {
     reason:
@@ -698,10 +1066,10 @@ function loadConfigForExtensionInit() {`,
  * vendored extension factory runs. */
 export interface OmaWebPolicy {
     /** The deployment's egress pin (the loopback CONNECT forwarder URL),
-     * or null when no proxy value is permitted at all. */
+     * or null when no environment proxy is pinned. */
     readonly egressPinned: string | null;
-    /** Deny-by-default ambient-discovery permits; all unset under
-     * Society's install. */
+    /** Deny-by-default capability permits. The adapter explicitly
+     * enables gh/git, native media and workflows. */
     readonly credentialCommands?: boolean;
     readonly browserCookies?: boolean;
     readonly ghCli?: boolean;
@@ -727,6 +1095,592 @@ export declare function getWebSearchConfigDir(): string;`,
       },
     ],
   },
+
+"parallel.js": {
+  "reason": ("Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": "import { getWebSearchConfigPath } from \"./utils.js\";",
+      "replace": "import { fetchWithCredentialRedirects, getWebSearchConfigPath } from \"./utils.js\";"
+    },
+    {
+      "find": "response = await fetch(url, {",
+      "replace": "response = await fetchWithCredentialRedirects(url, {"
+    },
+    {
+      "find": `            signal: requestSignal(signal),
+        });`,
+      "replace": `            signal: requestSignal(signal),
+        }, ["x-api-key"]);`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+"serper.js": {
+  "reason": ("Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": "import { getWebSearchConfigPath } from \"./utils.js\";",
+      "replace": "import { fetchWithCredentialRedirects, getWebSearchConfigPath } from \"./utils.js\";"
+    },
+    {
+      "find": "response = await fetch(SERPER_SEARCH_URL, {",
+      "replace": "response = await fetchWithCredentialRedirects(SERPER_SEARCH_URL, {"
+    },
+    {
+      "find": `            signal: options.signal ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal]) : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        });`,
+      "replace": `            signal: options.signal ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal]) : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        }, ["X-API-KEY"]);`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+"tinyfish.js": {
+  "reason": ("Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": "import { getWebSearchConfigPath } from \"./utils.js\";",
+      "replace": "import { fetchWithCredentialRedirects, getWebSearchConfigPath } from \"./utils.js\";"
+    },
+    {
+      "find": "response = await fetch(url, {",
+      "replace": "response = await fetchWithCredentialRedirects(url, {"
+    },
+    {
+      "find": `            signal: requestSignal(signal, timeoutMs),
+        });`,
+      "replace": `            signal: requestSignal(signal, timeoutMs),
+        }, ["X-API-Key"]);`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+"valyu.js": {
+  "reason": ("Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": "import { getWebSearchConfigPath } from \"./utils.js\";",
+      "replace": "import { fetchWithCredentialRedirects, getWebSearchConfigPath } from \"./utils.js\";"
+    },
+    {
+      "find": "response = await fetch(VALYU_SEARCH_URL, {",
+      "replace": "response = await fetchWithCredentialRedirects(VALYU_SEARCH_URL, {"
+    },
+    {
+      "find": `            signal: options.signal ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal]) : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        });`,
+      "replace": `            signal: options.signal ? AbortSignal.any([AbortSignal.timeout(SEARCH_TIMEOUT_MS), options.signal]) : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        }, ["x-api-key"]);`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+"xai-search.js": {
+  "reason": ("Protect custom credential headers supplied by the model registry, as well as Authorization, when a provider response redirects to another origin.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": "import { getWebSearchConfigPath } from \"./utils.js\";",
+      "replace": "import { fetchWithCredentialRedirects, getWebSearchConfigPath } from \"./utils.js\";"
+    },
+    {
+      "find": "const response = await fetch(XAI_RESPONSES_URL, {",
+      "replace": "const response = await fetchWithCredentialRedirects(XAI_RESPONSES_URL, {"
+    },
+    {
+      "find": `                : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        });`,
+      "replace": `                : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+        }, ["Authorization", ...Object.keys(auth.headers)]);`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+"kimi-search.js": {
+  "reason": "Protect custom credential headers supplied by the model registry, as well as Authorization, when a provider response redirects to another origin.",
+  "edits": [
+    {
+      "find": "import { randomUUID } from \"node:crypto\";",
+      "replace": `import { randomUUID } from "node:crypto";
+import { fetchWithCredentialRedirects } from "./utils.js";`
+    },
+    {
+      "find": "const response = await fetch(KIMI_SEARCH_URL, {",
+      "replace": "const response = await fetchWithCredentialRedirects(KIMI_SEARCH_URL, {"
+    },
+    {
+      "find": `            signal: requestSignal,
+        });`,
+      "replace": `            signal: requestSignal,
+        }, ["Authorization", ...Object.keys(auth.headers)]);`
+    }
+  ]
+},
+
+"extract.js": {
+  "reason": ("Cancel unread HTTP response bodies on redirects, refusals and extraction failures without replacing the original result or waiting for a remote stream.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        if (!location)
+            return response;
+`,
+      "replace": `        if (!location)
+            return response;
+        // Cancellation is best effort: do not wait for a remote stream or mask the original result.
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
+`
+    },
+    {
+      "find": `        if (!res.ok) {
+            activityMonitor.logComplete(activityId, res.status);`,
+      "replace": `        if (!res.ok) {
+            try {
+                void res.body?.cancel().catch(() => {});
+            }
+            catch {}
+            activityMonitor.logComplete(activityId, res.status);`
+    },
+    {
+      "find": `    signal?.addEventListener("abort", onAbort);
+    try {
+        const ssrf = loadSsrfConfig();`,
+      "replace": `    signal?.addEventListener("abort", onAbort);
+    let response;
+    try {
+        const ssrf = loadSsrfConfig();`
+    },
+    {
+      "find": `        const response = authProfile
+`,
+      "replace": `        response = authProfile
+`
+    },
+    {
+      "find": `    finally {
+        clearTimeout(timeoutId);`,
+      "replace": `    finally {
+        // Stop unread bodies on policy refusals and errors without replacing their result.
+        try {
+            void response?.body?.cancel().catch(() => {});
+        }
+        catch {}
+        clearTimeout(timeoutId);`
+    },
+{
+  "find": ` {
+        raw = JSON.parse(readFileSync(WEB_SEARCH_CONFIG_PATH, "utf-8"));
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`,
+  "replace": ` {
+        raw = JSON.parse(readFileSync(WEB_SEARCH_CONFIG_PATH, "utf-8"));
+    }
+    catch (err) {
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`
+},
+{
+  "find": ` throw new Error("expected a JSON object");
+        }
+        raw = parsed;
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`,
+  "replace": ` throw new Error("expected a JSON object");
+        }
+        raw = parsed;
+    }
+    catch (err) {
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+
+"github-issue-pr.js": {
+  "reason": ("Cancel unread GitHub error response bodies before reporting the original HTTP failure.") + " Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `    if (!response.ok)
+        return { value: null, response };`,
+      "replace": `    if (!response.ok) {
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
+        return { value: null, response };
+    }`
+    },
+{
+  "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+  "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+}
+]
+},
+
+"crawl4ai.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"auth-fetch.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${WEB_SEARCH_CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"serply.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"gemini-search.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"exa.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"querit.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"you.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"firecrawl.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    },
+    {
+      "find": "redactCredential(text.slice(0, 300), apiKey)",
+      "replace": "redactCredential(text, apiKey).slice(0, 300)"
+    },
+    {
+      "find": "throw new Error(`Firecrawl ${label} returned invalid JSON: ${errorMessage(err)}`);",
+      "replace": "throw new Error(`Firecrawl ${label} returned invalid JSON`);"
+    }
+  ]
+},
+"feature-config.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"page-query.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${configPath}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${configPath}: \${message}\`);`
+    }
+  ]
+},
+"search1api.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"brave.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"perplexity.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"searchinfinity.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"xcrawl.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"serpdive.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"bocha.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"kagi.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"pdf-extract.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"serpbase.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"serpapi.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"jina-search.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"ollama.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"anysearch.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"searxng.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"tavily.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"datalab-pdf-extract.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+"mistral-search.js": {
+  "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+  "edits": [
+    {
+      "find": `        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`,
+      "replace": `        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
+        throw new Error(\`Failed to parse \${CONFIG_PATH}: \${message}\`);`
+    }
+  ]
+},
+
+"curator-page.js": {
+  "reason": ("Remove SVG and MathML from untrusted provider Markdown so namespaced links cannot bypass the HTML URL sanitizer.") + " Preserve the HTTP URL validator inside the generated browser script; template-string escaping must not turn regex slashes into a line comment and return a RegExp object as every URL.",
+  "edits": [
+    {
+      "find": "container.querySelectorAll(\"script, iframe, object, embed, form, style, link, meta, base\")",
+      "replace": "container.querySelectorAll(\"script, iframe, object, embed, form, style, link, meta, base, svg, math\")"
+    }
+  ,
+{
+  "find": "    return /^https?:\\/\\//i.test(value) ? value : \"#\";",
+  "replace": "    return /^https?:[/][/]/i.test(value) ? value : \"#\";"
+}
+]
+},
 });
 
 /** Every upstream .ts module the runtime emits — upstream's whole flat

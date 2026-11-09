@@ -89,12 +89,15 @@ export function hasOverlappingTextEdits(text, edits) {
     return false;
 }
 function positionTextEdits(text, edits) {
-    return edits.map((edit, index) => ({
-        edit,
-        index,
-        start: offsetAt(text, edit.range.start),
-        end: offsetAt(text, edit.range.end),
-    }));
+    const validPosition = position => position && Number.isSafeInteger(position.line) && position.line >= 0 &&
+        Number.isSafeInteger(position.character) && position.character >= 0;
+    return edits.map((edit, index) => {
+        const start = edit?.range?.start, end = edit?.range?.end;
+        if (typeof edit?.newText !== "string" || !validPosition(start) || !validPosition(end) ||
+            start.line > end.line || (start.line === end.line && start.character > end.character))
+            throw new Error("LSP returned an invalid workspace text edit");
+        return { edit, index, start: offsetAt(text, start), end: offsetAt(text, end) };
+    });
 }
 function textEditRangesConflict(left, right) {
     if (left.start === left.end && right.start === right.end)

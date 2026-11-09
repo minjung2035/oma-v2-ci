@@ -7,6 +7,7 @@ import { collaborationSurface, decodeCollaborationSurface, requireCollaborationS
 
 import { sourceWorld } from "./source-world.mjs";
 import path from 'node:path';
+import { truncateToWidth } from '@earendil-works/pi-tui';
 
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 async function world({ setModel, init, resourceReload, dispose, fail, moduleClose, observe } = {}) {
@@ -52,7 +53,7 @@ async function world({ setModel, init, resourceReload, dispose, fail, moduleClos
   const runtime = { session, async switchSession(path) { changes.push(['switch', path]); }, services: { resourceLoader },
     async dispose() { modules.push('dispose'); hooks.session_shutdown({ reason: 'quit' }); await dispose?.(); } };
   const dependencies = {
-    "@earendil-works/pi-tui": { ProcessTerminal: class { setTitle(title) {} } },
+    "@earendil-works/pi-tui": { ProcessTerminal: class { setTitle(title) {} }, truncateToWidth },
     "@oma/protocol/delivery-boundary": { PI_BOUNDARY_PREFIX, PI_WAIT_PREFIX, PI_WAIT_OBSERVATION_PREFIX, PI_DELIVERY_NOT_STARTED_PREFIX },
     './pi-compat/interactive-tools.js': { withSearchTools: (current, cwd) => ({ current, cwd }) },
     'node:net': { Socket: class {} }, 'node:fs': { readFileSync: () => '{"version":"test"}' },

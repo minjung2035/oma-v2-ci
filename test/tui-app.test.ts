@@ -96,6 +96,34 @@ function harness(overrides: Partial<AppPorts> = {}, frameBytes = 262144): Harnes
   };
 }
 
+test("035. A throwing prompt port preserves input and reports an unconfirmed delivery", () => {
+  let calls = 0;
+  const h = harness({ submitPrompt: () => { calls++; throw new Error("transport closed"); } });
+  h.app.feed(Buffer.from("retain this request"));
+  assert.doesNotThrow(() => h.app.feed(ENTER));
+  assert.equal(h.app.snapshot.prompt.text, "retain this request");
+  assert.deepEqual(h.app.lines, [], "an exception is not an accepted prompt");
+  assert.match(h.last(), /Delivery unconfirmed; input remains in the draft/);
+  assert.doesNotMatch(h.last(), /Could not save/);
+  h.app.refresh(); h.app.draw();
+  assert.equal(calls, 1, "observation must not resend uncertain input");
+});
+
+test("036. A failed mail body read retries on refresh and caches the recovered contents", () => {
+  let readable = false, reads = 0;
+  const h = harness({ body: () => { reads++; return readable ? { text: "recovered body", truncated: false } : null; } });
+  for (const chunk of [CTRL_X, RIGHT, RIGHT, ENTER]) h.app.feed(chunk);
+  assert.equal(reads, 1);
+  h.app.draw(); h.app.draw();
+  assert.equal(reads, 1, "drawing alone must not repeatedly perform disk I/O");
+  readable = true;
+  h.app.refresh(); h.app.draw();
+  assert.match(h.last(), /recovered body/);
+  assert.equal(reads, 2);
+  h.app.refresh(); h.app.draw();
+  assert.equal(reads, 2, "successfully observed immutable contents remain cached");
+});
+
 test("001. Ctrl-L repaints the whole screen and changes nothing else", () => {
   const h = harness();
   h.app.feed(Buffer.from("draft"));

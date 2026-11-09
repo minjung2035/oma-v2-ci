@@ -42,14 +42,13 @@ export function threadHeadText(
       ? `Target merge: ${openFact.target.name} (integration ${openFact.target.integration})\n` : "") +
     `\nReason (requester's words):\n${openFact.reason}\n\n` +
     `Inspect the exact candidate and relevant checks before voting. Mail text is not a vote.\n` +
-    `  oma_review_status({"name":"${openFact.name}"})\n` +
-    `  oma_review_diff({"name":"${openFact.name}","view":"proposal"})\n` +
+    `Read this request's status and exact proposal material from the reviews index under your declared record_root.\n` +
     (openFact.kind === "challenge.open"
-      ? `  oma_review_diff({"name":"${openFact.name}","view":"original"})\n` : "") +
-    `  oma_review_respond({"name":"${openFact.name}","action":"comment","body":"..."})\n` +
-    `  oma_review_respond({"name":"${openFact.name}","action":"approve","body":"..."})\n` +
-    `  Use action "reject" for a negative vote; "comment" is discussion only.\n` +
-    `  State your evidence and any unchecked behavior in body. Authors cannot vote.\n\n` +
+      ? `Inspect the exact applied change named by the challenge as well.\n` : "") +
+    `Use the current broker-issued review target from those records:\n` +
+    `  oma_review({"target":"<exact review target>","decision":"approve","reason":"..."})\n` +
+    `  Use decision "reject" for a negative vote; send discussion with oma_send.\n` +
+    `  State your evidence and any unchecked behavior in reason. Authors cannot vote.\n\n` +
     `Reviews and votes (acceptance order):\n`;
 }
 
@@ -64,7 +63,7 @@ export function describeEntryText(ordinal: number, entry: ReviewEntry): string {
   const text = fact.kind === "review" || fact.kind === "vote" ? fact.body
     : fact.kind === "cancel" || fact.kind === "review.withdraw" || fact.kind === "review.invalidate" || fact.kind === "review.adopt" || fact.kind === "review.retry" || fact.kind === "review.preparation-failed" ? fact.reason
     : fact.kind === "review.revise" ? `Proposal revision ${fact.revision}: ${fact.reason}`
-    : fact.kind === "review.integration" ? `${fact.context ? "Integration-context review required" : "Proposal approvals reusable"}: revision ${fact.revision}, main ${fact.identity.expectedBase}, result ${fact.identity.candidate}, check profile ${fact.checkProfileDigest}. Exact diff: ${JSON.stringify(fact.diff)}. Read oma_review_diff with view=context.`
+    : fact.kind === "review.integration" ? `${fact.context ? "Integration-context review required" : "Proposal approvals reusable"}: revision ${fact.revision}, main ${fact.identity.expectedBase}, result ${fact.identity.candidate}, check profile ${fact.checkProfileDigest}. Exact diff: ${JSON.stringify(fact.diff)}. Read the exact integration-context material named by this request's records.`
     : fact.kind === "review.supersede" ? fact.reason
     : fact.kind === "review.included" ? `Already included: ${fact.candidate} is an ancestor of observed main ${fact.main}; no CAS claimed.`
     : fact.kind === "refresh" ? (fact.main === null
@@ -100,13 +99,13 @@ export function approvalBodyText(approvalId: MessageId,
       `Worker-capacity fallback: maxWorkers=${capacity.maxWorkers} permits only ${capacity.required} independent peer approvals; the normal requirement is ${capacity.normalRequired}. Available peer approvals are bound below. Your decision is additionally required.\n\n`) +
     `Bound approvals:\n${bound.join("\n\n")}\n\n` +
     `Decide from the bound evidence and exact diff:\n` +
-    `  oma_review_diff({"name":"${openFact.name}","view":"proposal"})\n` +
+    `Read the exact material and current approval target supplied by your permitted records under record_root.\n` +
     (openFact.kind === "challenge.open"
-      ? `  oma_review_diff({"name":"${openFact.name}","view":"original"})\n` : "") +
+      ? `Inspect the exact applied change named by the challenge as well.\n` : "") +
     `Then record the decision:\n` +
-    `  oma_review_respond({"name":"${openFact.name}","action":"approve","body":"...","approval":"${approvalId}"})\n` +
-    `Use action "reject" for a negative decision. Keep this approval id; a stale id requires fresh approval mail.\n` +
-    `Explain the decision in body. Approval authorizes integration; it does not establish that it completed.\n`;
+    `  oma_review({"target":"<exact approval target>","decision":"approve","reason":"..."})\n` +
+    `Use decision "reject" for a negative decision. The exact target binds this approval id; a stale target requires fresh approval records.\n` +
+    `Explain the decision in reason. Approval authorizes integration; it does not establish that it completed.\n`;
 }
 
 /* The grammar maxima the worst-case emission uses, each named for its grammar:

@@ -62,7 +62,10 @@ export function createOAuthFetch(serverUrl, getHeaders = () => new Headers(), si
         }
         const headers = new Headers(serviceHeaders);
         new Headers(init?.headers ?? request?.headers).forEach((value, key) => headers.set(key, value));
-        const protectedRequest = [...serviceHeaders].length > 0;
+        const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+        const contentType = headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+        const protectedRequest = [...serviceHeaders].length > 0
+            || (method !== "GET" && method !== "HEAD" && contentType === "application/x-www-form-urlencoded");
         try {
             return await (options.delegate ?? omaPinnedFetch)(input, {
                 ...init,

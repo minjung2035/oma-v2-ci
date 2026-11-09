@@ -148,7 +148,7 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
   const limit = typeof params.limit === "number" && Number.isFinite(params.limit)
     ? name === "find" && params.limit === 0 ? null : Math.max(1, params.limit) : null;
   const args = name === "grep" ? ["--line-number", "--null", "--with-filename", "--no-heading", "--no-context-separator", "--color=never", "--hidden"]
-    : ["--glob", "--color=never", "--hidden"];
+    : ["--glob", "--color=never", "--hidden", "--print0"];
   if (name === "grep") {
     if (params.ignoreCase === true) args.push("--ignore-case");
     if (params.literal === true) args.push("--fixed-strings");
@@ -190,6 +190,22 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
   walker.stdout.on("data", (chunk: Buffer) => {
     if (failed !== undefined || skip) return;
     try {
+      if (name === "find") {
+        // fd's NUL records are the filename boundary. Pipe chunks may split a
+        // UTF-8 character or directory prefix, and LF is valid filename data.
+        const bytes = Buffer.concat([prefix, chunk]);
+        let start = 0;
+        for (;;) {
+          const end = bytes.indexOf(0, start);
+          if (end < 0) break;
+          put(Buffer.from(`${displayPath(decodeUtf8(bytes.subarray(start, end)))}\n`));
+          count++;
+          start = end + 1;
+          if (limit !== null && count >= limit) { limited = true; skip = true; walker.kill(); break; }
+        }
+        prefix = skip ? Buffer.alloc(0) : Buffer.from(bytes.subarray(start));
+        return;
+      }
       for (let start = 0; start < chunk.length;) {
         // A pathname may itself contain LF. Until its NUL delimiter arrives,
         // LF is pathname data, not a match-row boundary. Context has no separate
@@ -203,7 +219,6 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
         else put(part);
         if (end >= 0) {
           if (!skip) put(Buffer.from("\n"));
-          if (name === "find") count++;
           if (limit !== null && count >= limit && context === 0) { limited = true; skip = true; walker.kill(); }
           header = true;
         }
@@ -213,10 +228,12 @@ export async function streamSearch(input: ContainedSearchInput, target: string, 
     } catch (error) { failed = error; walker.kill(); }
   });
   const code = await done;
-  if (header && prefix.length && failed === undefined) emitHeader(true);
+  if (name === "grep" && header && prefix.length && failed === undefined) emitHeader(true);
   if (failed !== undefined) throw failed;
   if (signal.aborted) return { complete: false, limitReached: limited, reason: "search cancelled" };
-  if (code !== 0 && code !== 1 && !limited) return { complete: false, limitReached: false, reason: stderr || `walker exited ${code}` };
+  if (code !== 0 && !(name === "grep" && code === 1) && !limited)
+    return { complete: false, limitReached: false, reason: stderr || `walker exited ${code}` };
+  if (name === "find" && prefix.length) return { complete: false, limitReached: false, reason: "search returned an incomplete filename" };
   if (!any) put(Buffer.from(name === "grep" ? "No matches found" : "No files found matching pattern"));
   return { complete: true, limitReached: limited };
 }

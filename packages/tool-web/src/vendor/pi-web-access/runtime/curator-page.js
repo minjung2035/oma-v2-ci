@@ -1565,14 +1565,14 @@ const SCRIPT = `(function() {
 
   function sanitizeHref(url) {
     var value = typeof url === "string" ? url.trim() : "";
-    return /^https?:\/\//i.test(value) ? value : "#";
+    return /^https?:[/][/]/i.test(value) ? value : "#";
   }
 
   function sanitizeMarkdownHtml(html) {
     var container = document.createElement("div");
     container.innerHTML = html;
 
-    container.querySelectorAll("script, iframe, object, embed, form, style, link, meta, base")
+    container.querySelectorAll("script, iframe, object, embed, form, style, link, meta, base, svg, math")
       .forEach(function(el) { el.remove(); });
 
     var nodes = container.querySelectorAll("*");

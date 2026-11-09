@@ -294,7 +294,7 @@ function replaceStrings(value, replace) {
 }
 function isContainedPath(root, path) {
     const rel = relative(root, path);
-    return rel === "" || (!rel.startsWith("..") && !rel.startsWith(sep) && !isAbsolute(rel));
+    return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith(sep) && !isAbsolute(rel));
 }
 function safeStat(path, description) {
     try {

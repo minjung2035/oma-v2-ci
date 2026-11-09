@@ -108,7 +108,7 @@ function parseConfigRoot(raw) {
         parsed = JSON.parse(raw);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${WEB_SEARCH_CONFIG_PATH}: ${message}`);
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -1441,7 +1441,7 @@ export default function (pi) {
                     pc.defaultProvider = normalized;
                     pc.searchProvider = normalized;
                     try {
-                        saveConfig({ provider: normalized });
+                        saveConfig({ searchProvider: normalized });
                     }
                     catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
@@ -2209,6 +2209,7 @@ export default function (pi) {
                             fetched = urls.map((url) => ({ url, title: "", content: "", error: err instanceof Error ? err.message : String(err) }));
                         }
                     }
+                    signal?.throwIfAborted();
                     const artifact = withClaimAssessment(buildResearchArtifact({
                         query: claim,
                         provider,
@@ -2366,6 +2367,16 @@ export default function (pi) {
                         urls: stripThumbnails(fetchResults),
                     };
                     const storedContent = storeFetchResult(pi, responseId, data, authFetchProfile);
+                    // Answers have their own offsets and must not page through original source text.
+                    const answerResponseId = mode === "answer" ? generateId() : undefined;
+                    if (answerResponseId) {
+                        storeFetchResult(pi, answerResponseId, {
+                            ...data,
+                            id: answerResponseId,
+                            urls: stripThumbnails(presentedResults),
+                        }, authFetchProfile);
+                    }
+                    const presentedResponseId = answerResponseId ?? responseId;
                     if (urlList.length === 1) {
                         const result = presentedResults[0];
                         if (result.error) {
@@ -2382,7 +2393,7 @@ export default function (pi) {
                             output += `\n\n---\nShowing ${slice.endOffset} of ${fullLength} chars, ${slice.shownBytes} of ${slice.totalBytes} bytes, and ${slice.shownLines} of ${slice.totalLines} lines. `;
                             output += storedContent
                                 ? getSearchContentEnabled
-                                    ? `Use ${toolNames.getSearchContent}({ responseId: "${responseId}", urlIndex: 0, offset: ${slice.endOffset} }) for the next slice.`
+                                    ? `Use ${toolNames.getSearchContent}({ responseId: "${presentedResponseId}", urlIndex: 0, offset: ${slice.endOffset} }) for the next slice.`
                                     : "Content retrieval is not registered."
                                 : "Authenticated fetch cache is off; repeat the fetch to read more.";
                         }
@@ -2407,6 +2418,7 @@ export default function (pi) {
                                 totalChars: fullLength,
                                 title: result.title,
                                 ...(storedContent ? { responseId } : {}),
+                                ...(answerResponseId ? { answerResponseId } : {}),
                                 truncated,
                                 hasImage: imageCount > 0,
                                 imageCount,
@@ -2435,12 +2447,12 @@ export default function (pi) {
                     }
                     output += storedContent
                         ? getSearchContentEnabled
-                            ? `\n---\nUse ${toolNames.getSearchContent}({ responseId: "${responseId}", urlIndex: 0 }) to retrieve bounded content slices.`
+                            ? `\n---\nUse ${toolNames.getSearchContent}({ responseId: "${presentedResponseId}", urlIndex: 0 }) to retrieve bounded ${answerResponseId ? "answer" : "content"} slices.`
                             : "\n---\nContent retrieval is not registered."
                         : "\n---\nAuthenticated fetch cache is off; repeat the fetch to read content.";
                     return {
                         content: [{ type: "text", text: output }],
-                        details: { urls: urlList, urlCount: urlList.length, successful, totalChars, ...(storedContent ? { responseId } : {}) },
+                        details: { urls: urlList, urlCount: urlList.length, successful, totalChars, ...(storedContent ? { responseId } : {}), ...(answerResponseId ? { answerResponseId } : {}) },
                     };
                 });
             },
@@ -3052,7 +3064,7 @@ export default function (pi) {
                             currentProvider = normalized;
                             currentSearchProvider = normalized;
                             try {
-                                saveConfig({ provider: normalized });
+                                saveConfig({ searchProvider: normalized });
                             }
                             catch (err) {
                                 const message = err instanceof Error ? err.message : String(err);

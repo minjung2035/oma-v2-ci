@@ -1,4 +1,5 @@
 import { StoreError, errorCodeOf } from "@oma/domain/errors";
+import { withAsyncCleanup } from "@oma/process/async";
 import { parseSurfacePlan } from "@oma/tool-runtime/tool-surface";
 import { residentEngineEffects } from "./engine/resident-effects.js";
 import type { ResidentEngineEffects } from "@oma/engine/ports";
@@ -407,20 +408,13 @@ export class RunnerModule {
         // variables never outlive the run's sockets. A proxy that cannot open
         // returns the relay first; the delivery gets no half-opened provider
         // path it was never told about.
-        let proxy: ConnectProxy | null;
-        try { proxy = await this.openConnectProxy(opened.connectDial); }
-        catch (error) { await opened.relay.close(); throw error; }
-        let boundary;
-        try {
-          boundary = await this.adapter(batch, opened.inference,
+        const boundary = await withAsyncCleanup(async () => {
+          const proxy = await this.openConnectProxy(opened.connectDial);
+          return withAsyncCleanup(() => this.adapter(batch, opened.inference,
             proxy === null ? undefined : { socketHostPath: proxy.socketPath }).deliver(batch, {
-            observe: observation => this.noteObservation(observation),
-          });
-        }
-        finally {
-          if (proxy !== null) await proxy.close();
-          await opened.relay.close();
-        }
+              observe: observation => this.noteObservation(observation),
+            }), async () => { if (proxy !== null) await proxy.close(); });
+        }, () => opened.relay.close());
         // RUN-003: graceful yield leaves the prepared batch and mail untouched.
         // The "waiting" report is the last word the broker should keep.
         if (boundary === null) { await this.observationFlush; return; }

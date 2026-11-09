@@ -46,7 +46,7 @@ function loadConfig() {
         parsed = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     const root = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
@@ -267,8 +267,13 @@ async function restJson(url, options, signal) {
         domainPolicy,
         ...(options?.lookup ? { lookup: options.lookup } : {}),
     });
-    if (!response.ok)
+    if (!response.ok) {
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
         return { value: null, response };
+    }
     return { value: await response.json(), response };
 }
 async function restFallback(url, info, options, signal) {

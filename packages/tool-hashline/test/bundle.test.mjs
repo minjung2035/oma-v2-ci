@@ -236,6 +236,20 @@ test("008. A stale anchor refuses before a byte is written", async (t) => {
     await assert.rejects(world.run("replace", { remove_from: anchors[0], remove_to: anchors[0], replacement_lines: "hacked" }), /E_STALE_ANCHOR|not owned|stale/i);
     assert.equal(readFileSync(file, "utf8"), "uno\ntwo\nthree\n", "the refused edit wrote nothing");
 });
+for (const [label, original, updated] of [
+    ["after byte 500", `${"x".repeat(600)} original`, `${"x".repeat(600)} external`],
+    ["trailing whitespace", "value", "value  "],
+]) test(`027. A stale anchor detects an external change ${label}`, async t => {
+    const world = await hashlineWorld(t);
+    const file = join(world.workspace, "long.txt");
+    writeFileSync(file, `${original}\n`);
+    const anchors = await serveAnchors(world, "long.txt");
+    writeFileSync(file, `${updated}\n`);
+    await assert.rejects(world.run("replace", {
+        remove_from: anchors[0], remove_to: anchors[0], replacement_lines: "replacement",
+    }), /E_STALE_ANCHOR|E_RANGE_STALE|not owned|stale/i);
+    assert.equal(readFileSync(file, "utf8"), `${updated}\n`);
+});
 test("009. The commit channel's identity refusal surfaces as upstream's [E_PATH_CHANGED]", async (t) => {
     // The contained writer refusing on inode identity (the file was swapped
     // between the pipeline's read and its commit) must reach the vendored

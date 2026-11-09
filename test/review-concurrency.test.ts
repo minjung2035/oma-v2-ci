@@ -303,6 +303,26 @@ test("007. Concurrent opens: same key shares one operation, different keys refus
   } finally { f.close(); }
 });
 
+test("012. A revised proposal rejects duplicate opens for its current source and releases its old source", async () => {
+  const f = fixture();
+  try {
+    const original = f.candidateWith({ "original.txt": "first proposal" });
+    const replacement = f.candidateWith({ "replacement.txt": "revised proposal" });
+    await f.submit("alice", original, "source-original");
+    await f.submit("alice", replacement, "source-replacement");
+    await f.open("alice", { tier: "MEDIUM", candidate: original }, "original-open");
+    const name = f.requestName("original-open");
+    await f.reviews.record(f.auth("alice"), "revision", { kind: "review.revise", name,
+      expectedRevision: 0, base: f.base, candidate: replacement, reason: "replace the proposed change" });
+    await assert.rejects(f.open("alice", { tier: "MEDIUM", candidate: replacement }, "duplicate-revision"),
+      { code: "REQUEST_EXISTS", details: { name } });
+    assert.equal(f.store.getOperation("alice", "duplicate-revision"), null);
+    const reopened = await f.open("alice", { tier: "MEDIUM", candidate: original }, "old-source-open");
+    assert.equal(reopened.state, "succeeded");
+    assert.notEqual(f.requestName("old-source-open"), name);
+  } finally { f.close(); }
+});
+
 test("008. Concurrent Principal votes on one approval: exactly one decision is recorded", async () => {
   const f = fixture(); try {
     const candidate = f.candidateWith({ "one.txt": "a" });

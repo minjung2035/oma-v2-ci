@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
-import { getWebSearchConfigPath } from "./utils.js";
+import { getWebSearchConfigPath, fetchWithCredentialRedirects } from "./utils.js";
 import { isGeminiAdcAvailable, getAdcAccessToken, getAdcProject, getAdcLocation, getVertexApiBase, isVertexHost, } from "./gemini-adc.js";
 const DEFAULT_API_HOST = "https://generativelanguage.googleapis.com";
 const API_VERSION = "v1beta";
@@ -21,7 +21,7 @@ function loadConfig() {
         return cachedConfig;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
 }
@@ -143,7 +143,7 @@ export async function fetchGeminiApi(url, init = {}, apiKey) {
         }
     }
     try {
-        const response = await fetch(parsedUrl, { ...init, headers });
+        const response = await fetchWithCredentialRedirects(parsedUrl, { ...init, headers }, ["x-goog-api-key", "cf-aig-authorization", "authorization"]);
         responseCredentials.set(response, { apiKey: resolvedApiKey, cloudflareApiKey, adcToken });
         return response;
     }

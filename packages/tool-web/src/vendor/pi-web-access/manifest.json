@@ -16,56 +16,216 @@
     "runtime": "tsc emit of every upstream .ts module (index.ts is the extension entry the OMA adapter drives — no exclusions), compiled with upstream's own ESNext/bundler options from a staged copy whose relative .ts specifiers were mechanically rewritten to .js, then OMA divergence splices applied",
     "tool": "scripts/vendor-pi-web-access.mjs",
     "divergences": {
-      "utils.js": {
-        "reason": "OMA web-policy seam and egress pin. The adapter installs the Society contract { egressPinned } before upstream's factory runs; OMA capability flags retain separate credential boundaries. Network access accepts local destinations and ordinary configured/per-call proxies. Upstream owns scoped proxy transport and NO_PROXY; the verified undici dispatcher handles the deployment's environment proxy.",
+      "openai-search.js": {
+        "reason": "Hosted search rejects failed, incomplete, and truncated Responses streams before exposing partial output as success, and reads SSE data framing without requiring optional spaces. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
         "edits": 2
       },
+      "content-find.js": {
+        "reason": "Case-insensitive search keeps offsets in the original content. Unicode lowercasing can expand characters and otherwise selects unrelated excerpts.",
+        "edits": 1
+      },
+      "utils.js": {
+        "reason": "OMA web-policy seam and egress pin. The adapter installs the Society contract { egressPinned } before upstream's factory runs; OMA capability flags retain separate credential boundaries. Network access accepts local destinations and ordinary configured/per-call proxies. Upstream owns scoped proxy transport and NO_PROXY; the verified undici dispatcher handles the deployment's environment proxy. Curl transport preserves HEAD semantics and refuses incomplete transfers instead of returning partial success. Cancel unread credential-bearing API redirect bodies before following or refusing the target, without waiting for remote cleanup or masking the result.",
+        "edits": 6
+      },
       "ssrf-protection.js": {
-        "reason": "Egress-aware SSRF preflight: when the OMA egress pin exists the request is carried by the env proxy the pin names, so the local-DNS preflight is skipped exactly as upstream skips it for a configured remote-DNS proxy — the CONNECT allowlist is the authoritative screen, and a sandboxed engine could not resolve names locally anyway. The pin takes the place of 'the configured proxy' for that comparison.",
-        "edits": 4
+        "reason": "OMA network policy: an installed policy allows local destinations while preserving URL grammar and explicit domain policy on each redirect. Environment proxy routing and configured/per-call proxy transport remain separate choices. Cancel unread HTTP response bodies on redirects, refusals and extraction failures without replacing the original result or waiting for a remote stream. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 6
       },
       "credential-source.js": {
         "reason": "Credential command refusal: upstream executes a `!command` source to resolve a credential; OMA's credential boundary forbids extension-driven subprocesses on credential paths, so under the deny-by-default permit the source refuses before any shell runs. Literal, $ENV and file config sources keep upstream's semantics — what they can see is the engine's own allowlisted environment and the OMA-owned config file, not the host's credential stores.",
         "edits": 2
       },
       "gemini-web-config.js": {
-        "reason": "Browser cookie refusal: upstream's opt-in browser-cookie access (env or config) reaches Chrome-family cookie stores and the Keychain/secret-tool decryptors behind them. OMA forbids that ambient credential discovery outright — this one gate covers gemini-web, authenticated fetch profiles and /google-account.",
-        "edits": 2
+        "reason": "Browser cookie refusal: upstream's opt-in browser-cookie access (env or config) reaches Chrome-family cookie stores and the Keychain/secret-tool decryptors behind them. OMA forbids that ambient credential discovery outright — this one gate covers gemini-web, authenticated fetch profiles and /google-account. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "gemini-api.js": {
+        "reason": "Gemini and Cloudflare credential headers follow the same explicit origin-changing redirect policy as other API providers; custom authentication headers must not follow a redirect to another origin. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 3
       },
       "github-api.js": {
-        "reason": "gh CLI refusal: `gh` is the host's authenticated credential store — `gh api`/`gh repo clone` would run with the user's GitHub token. Under the deny-by-default permit checkGhAvailable returns false, so every call site takes upstream's public REST / anonymous-git fallback instead.",
+        "reason": "gh CLI capability guard: the installed OMA policy permits gh. When the permit is absent, checkGhAvailable returns false before a subprocess runs, so callers use the public REST/anonymous-git fallback.",
         "edits": 2
       },
       "github-extract.js": {
-        "reason": "Git clone refusal: upstream's repository path spawns gh/git clones into a host-visible clone root (/tmp/pi-github-repos by default) with detached process groups — a subprocess plus a write outside the agent's owned state. Under the deny-by-default permit the clone path returns null, so GitHub URLs take upstream's subprocess-free API view and the generic fetch fallback.",
-        "edits": 2
+        "reason": "Git clone capability guard: the installed OMA policy permits upstream gh/git clones. Without the permit, the clone path returns null before any subprocess starts, leaving API/generic fetch fallbacks. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages. Apply repository containment to README discovery too, so a cloned README symlink cannot read host files outside the checkout.",
+        "edits": 4
       },
       "youtube-extract.js": {
-        "reason": "Native media refusal: the YouTube path shells out to yt-dlp and ffmpeg and feeds the description through a model call. Under the deny-by-default permit isYouTubeURL reports no video and isYouTubeEnabled reports disabled — every caller (the main extractor and the frame/timestamp paths that bypass the enabled check) falls through to the generic remote fetch or an honest unsupported-feature error.",
-        "edits": 3
+        "reason": "Native media capability guard: the installed OMA policy permits the upstream yt-dlp/ffmpeg and model-description pipeline. Without the permit, URL classification and the enabled check both disable this pipeline, including frame/timestamp callers. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
       },
       "gemini-adc.js": {
-        "reason": "ADC discovery refusal: upstream probes the host's Google Application Default Credentials (~/.config/gcloud/...) to decide whether the Vertex path exists. Under the deny-by-default permit isGeminiAdcAvailable reports false — no host credential file is ever consulted; a Gemini API key configured in the OMA-owned web-search.json or engine env keeps working.",
-        "edits": 2
+        "reason": "ADC discovery refusal: upstream probes the host's Google Application Default Credentials (~/.config/gcloud/...) to decide whether the Vertex path exists. Under the deny-by-default permit isGeminiAdcAvailable reports false — no host credential file is ever consulted; a Gemini API key configured in the OMA-owned web-search.json or engine env keeps working. OAuth exchanges carry refresh credentials or signed assertions in the POST body; refuse redirects so HTTP307/308 cannot forward them to another origin. ADC is disabled in the current OMA adapter. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 6
       },
       "video-extract.js": {
-        "reason": "Local file refusal: upstream lets fetch_content take a local path or file:// URL into the ffprobe/ffmpeg video pipeline — a model naming a host file for a subprocess read. Under the deny-by-default permit the input is never a file path, so file:// and local paths fall through to the remote-URL validation, which refuses non-http(s) inputs.",
-        "edits": 2
+        "reason": "Local file refusal: upstream lets fetch_content take a local path or file:// URL into the ffprobe/ffmpeg video pipeline — a model naming a host file for a subprocess read. Under the deny-by-default permit the input is never a file path, so file:// and local paths fall through to the remote-URL validation, which refuses non-http(s) inputs. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 3
       },
       "curator-server.js": {
-        "reason": "Post-listen 'error' absorption: upstream removes its only 'error' listener after a successful listen, so an accept-class error (EMFILE/ENFILE) later meets zero listeners and escapes the emit as the hosting engine's death. A permanent listener beside the startup once-listener journals best-effort and keeps the curator socket bound for the kernel to retry — the startup rejection contract is unchanged, and the class is closed even if the server ever runs under an evaluation the workflow pin did not reach.",
-        "edits": 1
+        "reason": "Post-listen 'error' absorption: upstream removes its only 'error' listener after a successful listen, so an accept-class error (EMFILE/ENFILE) later meets zero listeners and escapes the emit as the hosting engine's death. A permanent listener beside the startup once-listener journals best-effort and keeps the curator socket bound for the kernel to retry — the startup rejection contract is unchanged, and the class is closed even if the server ever runs under an evaluation the workflow pin did not reach. Decode curator HTTP JSON across complete UTF-8 byte sequences, reject non-object JSON instead of hanging, and accept the SerpApi provider offered by the UI.",
+        "edits": 6
       },
       "curator-run.js": {
         "reason": "Workflow capability guard: upstream workflow settings run when the installed OMA policy permits workflows.",
         "edits": 1
       },
       "index.js": {
-        "reason": "Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective.",
-        "edits": 3
+        "reason": "Eager four-tool surface overlay. Human workflow, command, fetch, proxy and provider settings remain effective. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages. Keep page answers retrievable independently of their source text, with matching offsets and IDs; do not publish a research artifact after cancellation. Persist curator provider selections through the canonical searchProvider key so an existing setting cannot override the new choice on restart.",
+        "edits": 12
       },
       "utils.d.ts": {
         "reason": "Declarations for the utils.js OMA policy seam (see the .js divergence) so the adapter's install call and the sibling seam imports type-check under NodeNext.",
+        "edits": 2
+      },
+      "parallel.js": {
+        "reason": "Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "serper.js": {
+        "reason": "Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "tinyfish.js": {
+        "reason": "Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "valyu.js": {
+        "reason": "Keep provider API-key headers on same-origin redirects and remove them before any cross-origin request; native fetch does not strip custom credential header names. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "xai-search.js": {
+        "reason": "Protect custom credential headers supplied by the model registry, as well as Authorization, when a provider response redirects to another origin. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 4
+      },
+      "kimi-search.js": {
+        "reason": "Protect custom credential headers supplied by the model registry, as well as Authorization, when a provider response redirects to another origin.",
+        "edits": 3
+      },
+      "extract.js": {
+        "reason": "Cancel unread HTTP response bodies on redirects, refusals and extraction failures without replacing the original result or waiting for a remote stream. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 7
+      },
+      "github-issue-pr.js": {
+        "reason": "Cancel unread GitHub error response bodies before reporting the original HTTP failure. Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 2
+      },
+      "crawl4ai.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "auth-fetch.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "serply.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "gemini-search.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "exa.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "querit.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "you.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "firecrawl.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 3
+      },
+      "feature-config.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "page-query.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "search1api.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "brave.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "perplexity.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "searchinfinity.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "xcrawl.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "serpdive.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "bocha.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "kagi.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "pdf-extract.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "serpbase.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "serpapi.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "jina-search.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "ollama.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "anysearch.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "searxng.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "tavily.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "datalab-pdf-extract.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "mistral-search.js": {
+        "reason": "Do not expose credential-bearing config fragments in JSON syntax errors; redact complete credentials before shortening remote error messages.",
+        "edits": 1
+      },
+      "curator-page.js": {
+        "reason": "Remove SVG and MathML from untrusted provider Markdown so namespaced links cannot bypass the HTML URL sanitizer. Preserve the HTTP URL validator inside the generated browser script; template-string escaping must not turn regex slashes into a line comment and return a RegExp object as every URL.",
         "edits": 2
       }
     },
@@ -903,14 +1063,14 @@
         "integrity": "sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA=="
       }
     },
-    "upstreamTests": "upstream-tests/ is the repository's test/ tree at the vendored commit (the npm tarball ships no tests); kept for provenance and porting, not wired into npm test — upstream's suite needs the upstream repo layout and hits the network for most provider tests",
     "packaging": [
       {
         "upstreamPath": "node_modules/isexe/.npmignore",
         "storedPath": "node_modules/isexe/npmignore.oma-vendor",
         "sha256": "ca06e7ce01ccdd1f477910e1cd1339c23119ecf2386350b8ad876983e1da92ea"
       }
-    ]
+    ],
+    "upstreamTests": "upstream-tests/ is the repository's test/ tree at the vendored commit (the npm tarball ships no tests); kept for provenance and porting, not wired into npm test — upstream's suite needs the upstream repo layout and hits the network for most provider tests"
   },
   "files": [
     {
@@ -54270,8 +54430,8 @@
     },
     {
       "path": "runtime/anysearch.js",
-      "bytes": 6422,
-      "sha256": "79004993ded845908153e8b0287715a72d6d10b228182f0748537d9d8382aaee"
+      "bytes": 6494,
+      "sha256": "e15373d8ab9743475da37b077d5511326e00f147d6a0c4bc234b504e38b75ae4"
     },
     {
       "path": "runtime/auth-fetch.d.ts",
@@ -54280,8 +54440,8 @@
     },
     {
       "path": "runtime/auth-fetch.js",
-      "bytes": 5987,
-      "sha256": "520554f0f99c73cce6b6d0607787b30afbdb7c4dd5e9cf7022cb1682aa37c01b"
+      "bytes": 6059,
+      "sha256": "cfba8fb90d74029ba70cd0bcecaa4b1d5a033c50cc2ac1b130a29d642fbd1a02"
     },
     {
       "path": "runtime/baizhi.d.ts",
@@ -54300,8 +54460,8 @@
     },
     {
       "path": "runtime/bocha.js",
-      "bytes": 7735,
-      "sha256": "34f6d1691296ff7533cdd431e0962349ef70c6991f4cb316bc0327f31e1368ef"
+      "bytes": 7807,
+      "sha256": "23ad3ffbd5f1f4e35afea0c830b58cbe6d1a9bff0fffbd23152232d7e35eb877"
     },
     {
       "path": "runtime/brave-rate-limit.d.ts",
@@ -54320,8 +54480,8 @@
     },
     {
       "path": "runtime/brave.js",
-      "bytes": 7913,
-      "sha256": "5e209a54615a62299e8ac459f173cd9eb22a35f6de83d259b4d2af5285b3105a"
+      "bytes": 7985,
+      "sha256": "11e5338efa2fd5962ef02755f7fe1b6334722d3cec139c2358e9d8c938d13de0"
     },
     {
       "path": "runtime/brightdata-unlocker.d.ts",
@@ -54360,8 +54520,8 @@
     },
     {
       "path": "runtime/content-find.js",
-      "bytes": 12078,
-      "sha256": "d7d4a0a040e6f0b4d88b86107fddbb631b7f88099e9046afcfc6ee2b2094fb21"
+      "bytes": 11894,
+      "sha256": "c74742e7fd51922c77e1a7e094b7b15607dbb11c18dfbb4746e02b3d83442a9f"
     },
     {
       "path": "runtime/crawl4ai.d.ts",
@@ -54370,8 +54530,8 @@
     },
     {
       "path": "runtime/crawl4ai.js",
-      "bytes": 7240,
-      "sha256": "0998385bd4d8e1d9c5d32273421b8ce0db054085360b27e6e5861dd3beb23fca"
+      "bytes": 7312,
+      "sha256": "ae0e9a5c20ca1bf5adfa1799b790957a86bdaa300e02d7d4727c280c8131206a"
     },
     {
       "path": "runtime/credential-source.d.ts",
@@ -54390,8 +54550,8 @@
     },
     {
       "path": "runtime/curator-page.js",
-      "bytes": 119684,
-      "sha256": "42ce1bff7135b0ae387529938a7f52b8223be9350588f71d79b48274532fa35d"
+      "bytes": 119697,
+      "sha256": "ca731abcc3e9934bb4d816fc6ee8dade0be3a2aa990d788da59db4fe42e43498"
     },
     {
       "path": "runtime/curator-run.d.ts",
@@ -54400,8 +54560,8 @@
     },
     {
       "path": "runtime/curator-run.js",
-      "bytes": 1686,
-      "sha256": "ae8c35924cc987ddad39e52f5b10418a41050908dad715fefd55e47f20029fdf"
+      "bytes": 1650,
+      "sha256": "38529ccca1a5b2377c557973a143afc481afcb9939ee1b7bdd748eb6fe073044"
     },
     {
       "path": "runtime/curator-server.d.ts",
@@ -54410,8 +54570,8 @@
     },
     {
       "path": "runtime/curator-server.js",
-      "bytes": 30635,
-      "sha256": "88e38eddbbc5312c9dfe82df870d4573b18ae0333aa148e169046066c1fb0c21"
+      "bytes": 30892,
+      "sha256": "7ac763283c3fa619c3cf20476e7d96aaa0917918bf6b3ce8ba5db37d795d2f6f"
     },
     {
       "path": "runtime/data-uri-sanitize.d.ts",
@@ -54430,8 +54590,8 @@
     },
     {
       "path": "runtime/datalab-pdf-extract.js",
-      "bytes": 16324,
-      "sha256": "5d5c3ceaacdef88ec5bd6acacfac07478e0a2948fafd045ee086ecde1c95878c"
+      "bytes": 16396,
+      "sha256": "d40ffd269efec668cfd05599a913ba3f9e397a7f71470672cff45d4d4d286ee5"
     },
     {
       "path": "runtime/declared-web-links.d.ts",
@@ -54470,8 +54630,8 @@
     },
     {
       "path": "runtime/exa.js",
-      "bytes": 14969,
-      "sha256": "69995b175e60802982ceb8bd6e32e90e06c425ac87c0022f4da4425c8dd8621c"
+      "bytes": 15041,
+      "sha256": "30cf69580727e6fa16b24e3173a44059e82b175ddabedcf19a844e390ecf722f"
     },
     {
       "path": "runtime/extract.d.ts",
@@ -54480,8 +54640,8 @@
     },
     {
       "path": "runtime/extract.js",
-      "bytes": 65126,
-      "sha256": "afee48ea817e518cf1534d54ab983104f245e0dcaef124606a8b6cba415b5887"
+      "bytes": 65784,
+      "sha256": "f3c9952a5dd24e4aff26b14c8c948365598e88e6a34bf4c215504d31e1352903"
     },
     {
       "path": "runtime/feature-config.d.ts",
@@ -54490,8 +54650,8 @@
     },
     {
       "path": "runtime/feature-config.js",
-      "bytes": 769,
-      "sha256": "14d39f99200fde8018fd17690cf8b5d3d2a209e8db2fa12af05db44ce03181f4"
+      "bytes": 841,
+      "sha256": "27c406a040ca3d58e388915b906c62b89f7814e94a3ff0cb51abd0ac1e428a15"
     },
     {
       "path": "runtime/fetch-params.d.ts",
@@ -54510,8 +54670,8 @@
     },
     {
       "path": "runtime/firecrawl.js",
-      "bytes": 13957,
-      "sha256": "e594853af6266bf17d55cd9741349586530036903874bded9d17fd38b2976301"
+      "bytes": 14007,
+      "sha256": "fdb4b7b5260abb300fe2f27f7742d5535a925a7acefc5953251dfffd3eb6000b"
     },
     {
       "path": "runtime/gemini-adc.d.ts",
@@ -54520,8 +54680,8 @@
     },
     {
       "path": "runtime/gemini-adc.js",
-      "bytes": 10578,
-      "sha256": "5d0ea3e07c71e5571229c925e52ac97cd8b028168c75e21589de950e538c74ec"
+      "bytes": 10776,
+      "sha256": "210516b6c1b2ce2e4540ec8001f6c2a400374c62a79fe07925a2bae26f9b9b34"
     },
     {
       "path": "runtime/gemini-api.d.ts",
@@ -54530,8 +54690,8 @@
     },
     {
       "path": "runtime/gemini-api.js",
-      "bytes": 10792,
-      "sha256": "7466ff3a348dbaf5456f97783718e4fd1f83d88056826b5f430bf358c2f05145"
+      "bytes": 10978,
+      "sha256": "374b68ae117e66e82f97f6b3d761257eb6751d4919b6764b04ec926f35ff420f"
     },
     {
       "path": "runtime/gemini-pdf-extract.d.ts",
@@ -54550,8 +54710,8 @@
     },
     {
       "path": "runtime/gemini-search.js",
-      "bytes": 43178,
-      "sha256": "9dacc7fe9ce8a0fcac42bfbe6a199925e4904ad7ed149135b3abdff505285397"
+      "bytes": 43250,
+      "sha256": "364bf9746683a5d4dee465407356546e3628681d085775bdf60e713d45a16f99"
     },
     {
       "path": "runtime/gemini-url-context.d.ts",
@@ -54570,8 +54730,8 @@
     },
     {
       "path": "runtime/gemini-web-config.js",
-      "bytes": 3800,
-      "sha256": "57b94f0167b8819029cc8f3a69116cd47f7c14db66907375ff3060aad4dc203a"
+      "bytes": 3944,
+      "sha256": "56971ac120022a057722b5d5bd55b6ad6f19c574949b457068df2a38c538b939"
     },
     {
       "path": "runtime/gemini-web.d.ts",
@@ -54590,8 +54750,8 @@
     },
     {
       "path": "runtime/github-api.js",
-      "bytes": 5816,
-      "sha256": "3501af2b363ab1c906526bb65a0fc620b4506e30ca2cee814a423bf47f372ca6"
+      "bytes": 5773,
+      "sha256": "df66f2de026d4e7c0b2e1406d24c749555391bd1aae70caf3efd4021fd5e3c8d"
     },
     {
       "path": "runtime/github-extract.d.ts",
@@ -54600,8 +54760,8 @@
     },
     {
       "path": "runtime/github-extract.js",
-      "bytes": 34883,
-      "sha256": "3842405bb3a5e1334cec3b280fcb12ff4a6686c824b89e881f72fb4e5537272e"
+      "bytes": 34831,
+      "sha256": "e0976bc400d0e8345964611cd21ec4cefbbfe2e29846a5712e61912ce8a22ebf"
     },
     {
       "path": "runtime/github-issue-pr.d.ts",
@@ -54610,8 +54770,8 @@
     },
     {
       "path": "runtime/github-issue-pr.js",
-      "bytes": 35088,
-      "sha256": "14b00d51ce87f48c0e87361f95c9679fd5eee15717f3520521a2bf8e8b52ada2"
+      "bytes": 35267,
+      "sha256": "1e129a68f03b95857541f2d79abf4ee0d4843393ee2879f6ed48133e2ff8b2d7"
     },
     {
       "path": "runtime/index.d.ts",
@@ -54620,8 +54780,8 @@
     },
     {
       "path": "runtime/index.js",
-      "bytes": 187309,
-      "sha256": "90558f5c056e0d28acff28e462feb7130f56721509646c12849cee3ebc391449"
+      "bytes": 188232,
+      "sha256": "8a2c55e006ceeae63a05c242c7a4db81302343f95cbb8555c913c8ec91c399cb"
     },
     {
       "path": "runtime/jina-search.d.ts",
@@ -54630,8 +54790,8 @@
     },
     {
       "path": "runtime/jina-search.js",
-      "bytes": 9212,
-      "sha256": "552c341ffe76fb6042a04cd4bdfae63ac5357d5197e189fdc49236cd6aa37816"
+      "bytes": 9284,
+      "sha256": "f913a87096d854bb9cc7356de861780ffe5d75a553eff6cb482e470187f061a9"
     },
     {
       "path": "runtime/kagi.d.ts",
@@ -54640,8 +54800,8 @@
     },
     {
       "path": "runtime/kagi.js",
-      "bytes": 10523,
-      "sha256": "0d4b4b0ebe336209b6e68a9ee4f508e74839945d485279fef0469449bc4201e7"
+      "bytes": 10595,
+      "sha256": "73d25c66923b554719d5ba81a132d4c1a672db68f9bb1a538641adda2447a8fb"
     },
     {
       "path": "runtime/kimi-search.d.ts",
@@ -54650,8 +54810,8 @@
     },
     {
       "path": "runtime/kimi-search.js",
-      "bytes": 7404,
-      "sha256": "b97c76a614fb75f5f136955eeb8c2270dd62e1dd9730ba3a220dd4b13e4df260"
+      "bytes": 7535,
+      "sha256": "28052b9e635397c69b924333a67d5e20b2fbda5e2bb3761755f5119921e58f47"
     },
     {
       "path": "runtime/mistral-search.d.ts",
@@ -54660,8 +54820,8 @@
     },
     {
       "path": "runtime/mistral-search.js",
-      "bytes": 9849,
-      "sha256": "517b60257a167d25bd6e314aaf4a47fcc07016491bfedfb5ddd7dc7032974425"
+      "bytes": 9921,
+      "sha256": "ebcba71a629104e964805f34bfa100763c22df68a330775e635f632bdece4466"
     },
     {
       "path": "runtime/ollama.d.ts",
@@ -54670,8 +54830,8 @@
     },
     {
       "path": "runtime/ollama.js",
-      "bytes": 9287,
-      "sha256": "1346f8a560920c41f6067562b1f837b8338e7800e97ba0befe26887650999fa1"
+      "bytes": 9359,
+      "sha256": "0ef86429672b301cd92a40ec3c7f4cf00837e163693bd67c6db7d24a64d0683e"
     },
     {
       "path": "runtime/openai-search.d.ts",
@@ -54680,8 +54840,8 @@
     },
     {
       "path": "runtime/openai-search.js",
-      "bytes": 31470,
-      "sha256": "7281518052bfb75ac6f62b5732208f50364885128b1a40c2ba2ddf963df6fee4"
+      "bytes": 31968,
+      "sha256": "3178973d8167b5425153bacd682d2d0aa99092361b6359c38a8c484e9db9a716"
     },
     {
       "path": "runtime/opencode-session-headers.d.ts",
@@ -54700,8 +54860,8 @@
     },
     {
       "path": "runtime/page-query.js",
-      "bytes": 6898,
-      "sha256": "1c78d73eb50d44466845ef9ef7272602fc3554ae70beb9d09d0282206d3bf222"
+      "bytes": 6970,
+      "sha256": "025babf5621f71db70a921e7b9047f81e17168be81e8b666c23cc3d11cf2c674"
     },
     {
       "path": "runtime/parallel-mcp.d.ts",
@@ -54720,8 +54880,8 @@
     },
     {
       "path": "runtime/parallel.js",
-      "bytes": 12003,
-      "sha256": "c7452ac32e09a7310754ca943156b0978e84020e2428ebb88e499a7b43a8e9fb"
+      "bytes": 12143,
+      "sha256": "25e5bc2db07cdc163ef1858889be49664f47bb01661fb680acbd64e6176898a6"
     },
     {
       "path": "runtime/pdf-extract.d.ts",
@@ -54730,8 +54890,8 @@
     },
     {
       "path": "runtime/pdf-extract.js",
-      "bytes": 10729,
-      "sha256": "785b27f53ae6702f528ee9d9fd63919457664aefe16061b0d5cce2ee6696b4f5"
+      "bytes": 10801,
+      "sha256": "831e5816a7f8b39f2e6187d891f6e970e05bdaf6aa52e0e3ced8be9cfda93c50"
     },
     {
       "path": "runtime/perplexity.d.ts",
@@ -54740,8 +54900,8 @@
     },
     {
       "path": "runtime/perplexity.js",
-      "bytes": 6537,
-      "sha256": "d94b57ce055c47dcf548e8d0732990fd763bf559195f0c3766dd146ad29f642d"
+      "bytes": 6609,
+      "sha256": "bcd3e97900524d222caf84c9cb44633d672cb17ab09f3410bf9146f341f3c0ee"
     },
     {
       "path": "runtime/promise-try.d.ts",
@@ -54755,8 +54915,8 @@
     },
     {
       "path": "runtime/querit.js",
-      "bytes": 12019,
-      "sha256": "8c20d47550d64ce8156b124a64f7291ab00b723f2feae329bd0b3230caff1258"
+      "bytes": 12091,
+      "sha256": "b03c87d4f22a33b51b57ecfa9b201862ddb3132b0b1e208ffccc7078e860dadb"
     },
     {
       "path": "runtime/query-rewrite.d.ts",
@@ -54815,8 +54975,8 @@
     },
     {
       "path": "runtime/search1api.js",
-      "bytes": 8846,
-      "sha256": "13bd5982c4e821fb343b67fa4d6bb4700c722d9ea0035972f9817f5e8a3f2261"
+      "bytes": 8918,
+      "sha256": "60e28bd91753d1c1e5c71b49371a23b4f4bd3bd709ac4c25e58bf834c8872636"
     },
     {
       "path": "runtime/searchinfinity.d.ts",
@@ -54825,8 +54985,8 @@
     },
     {
       "path": "runtime/searchinfinity.js",
-      "bytes": 8229,
-      "sha256": "7e96f71003e15ed269910d6518e988bd37f0ca557f34931a98cbbc42a7881a4c"
+      "bytes": 8301,
+      "sha256": "c05b0f88b25af04aa021a28982febf7eee467d7d6e075de320dae4eb49b2a9ba"
     },
     {
       "path": "runtime/searxng.d.ts",
@@ -54835,8 +54995,8 @@
     },
     {
       "path": "runtime/searxng.js",
-      "bytes": 8043,
-      "sha256": "3c20a252d69cd8b0cf4dc6ad7cbcfdc5fa3402289b235973d6e3afead797d746"
+      "bytes": 8115,
+      "sha256": "b549ba5fe20471361b53f512957a74dfd91bebd68425bcd2d071c1eb795ca90d"
     },
     {
       "path": "runtime/serpapi.d.ts",
@@ -54845,8 +55005,8 @@
     },
     {
       "path": "runtime/serpapi.js",
-      "bytes": 7616,
-      "sha256": "0572cc9857ea478d3694bf8ed1ea663f4485d61b3a372efae069de1e7b9e390e"
+      "bytes": 7688,
+      "sha256": "bf5494c42f45a72eba665ae93b372e2f401fd1e8297755f2f62f231c412d9541"
     },
     {
       "path": "runtime/serpbase.d.ts",
@@ -54855,8 +55015,8 @@
     },
     {
       "path": "runtime/serpbase.js",
-      "bytes": 7635,
-      "sha256": "5528b8f9d6934eb3ef48e1793c37e083f752d303c1c5a35276b7ab8e39c3fe9a"
+      "bytes": 7707,
+      "sha256": "969216b7ee813f0b52300a97271e3b7540665576edbdf3097bda54b05ada8f18"
     },
     {
       "path": "runtime/serpdive.d.ts",
@@ -54865,8 +55025,8 @@
     },
     {
       "path": "runtime/serpdive.js",
-      "bytes": 9510,
-      "sha256": "85a5c9404efd21440c494bdae115c76c4b71436ca4ae66a7038810a4549e2c49"
+      "bytes": 9582,
+      "sha256": "e7ac738e705fb5f288c894795290eb539da12b19106ebb085fa6456b85856047"
     },
     {
       "path": "runtime/serper.d.ts",
@@ -54875,8 +55035,8 @@
     },
     {
       "path": "runtime/serper.js",
-      "bytes": 7032,
-      "sha256": "c90e20770604ea0196a31aac86944f4769dc4b75d22f9d14d6c77f767aff6c67"
+      "bytes": 7172,
+      "sha256": "510ce2864d89275d5991504e21fe042f23cca8de0bdbce56f712044fc51f9028"
     },
     {
       "path": "runtime/serply.d.ts",
@@ -54885,8 +55045,8 @@
     },
     {
       "path": "runtime/serply.js",
-      "bytes": 7750,
-      "sha256": "9e571e454314d421a193de17bda60867e6da20cdb656e7e35fcc622ca701f046"
+      "bytes": 7822,
+      "sha256": "4252e44864dbe0d9062b27fa323fa8d2abf02c3c43fb2f006fda1bdcb7622312"
     },
     {
       "path": "runtime/source-check.d.ts",
@@ -54905,8 +55065,8 @@
     },
     {
       "path": "runtime/ssrf-protection.js",
-      "bytes": 21519,
-      "sha256": "47ff598d123793dd2ee7549eb9bdcb8dec8a23923738a7825f465d477798e63d"
+      "bytes": 21733,
+      "sha256": "0a95cd5e484be980a72e181c4ccd4ee053a206ae0209775d76347a7d3b095672"
     },
     {
       "path": "runtime/storage.d.ts",
@@ -54945,8 +55105,8 @@
     },
     {
       "path": "runtime/tavily.js",
-      "bytes": 8384,
-      "sha256": "f4a085c77c1f167602c22d49dee606dda91bdb15107360fa7342c1e8c8c8bb90"
+      "bytes": 8456,
+      "sha256": "5caad79290b737f20897407518961db2cbe06912255138b5069a946ac2d0ed74"
     },
     {
       "path": "runtime/tinyfish.d.ts",
@@ -54955,8 +55115,8 @@
     },
     {
       "path": "runtime/tinyfish.js",
-      "bytes": 11682,
-      "sha256": "7c0861c8b2eacf92bef245939d68081471e5d8f72a64f016428532852cc03ef3"
+      "bytes": 11822,
+      "sha256": "494b5c016909ff3e7a2019679f4665a67fe5d3bbe0806b22359ecb2d501119ac"
     },
     {
       "path": "runtime/tool-activation.d.ts",
@@ -54970,13 +55130,13 @@
     },
     {
       "path": "runtime/utils.d.ts",
-      "bytes": 3374,
-      "sha256": "35936a27dd97382c81b75e28d64d9cf6579164b5b0c1c5de5a96cfa75ecad9d8"
+      "bytes": 3395,
+      "sha256": "9b81262273311c6414c799144cccc610cbc334573a06d81048267abbf491c6f1"
     },
     {
       "path": "runtime/utils.js",
-      "bytes": 22882,
-      "sha256": "580cffdb1bdd4b89d397965063f35c6b47bfb466a21a46fcaf1e034adf764f87"
+      "bytes": 23173,
+      "sha256": "775716b00354bc16855fb2a7531976368e231c70ebc818813d88ea9cc3269675"
     },
     {
       "path": "runtime/valyu.d.ts",
@@ -54985,8 +55145,8 @@
     },
     {
       "path": "runtime/valyu.js",
-      "bytes": 6892,
-      "sha256": "c4795bc7ece6570c8e903d35f8bb7f117a15299efd7698beb1de0dc65abd6aab"
+      "bytes": 7032,
+      "sha256": "4dcb7767f5e71ece8f56a660e9e9c818e7477d21d1308b6b459ffec9f5087ea1"
     },
     {
       "path": "runtime/video-extract.d.ts",
@@ -54995,8 +55155,8 @@
     },
     {
       "path": "runtime/video-extract.js",
-      "bytes": 12779,
-      "sha256": "f859fd562e4e01527d0669adea9435a4bcfa5d4e0657eb3997f467a36c4c9dec"
+      "bytes": 12851,
+      "sha256": "e1380e4c83c01a5c2c696c03ca67f9730dab72de40f566e8c7ae42165f852424"
     },
     {
       "path": "runtime/xai-search.d.ts",
@@ -55005,8 +55165,8 @@
     },
     {
       "path": "runtime/xai-search.js",
-      "bytes": 15183,
-      "sha256": "403959df81bdbb94545d9500d2c0c12a5ee79f8274e7ad48010666238ccc50ec"
+      "bytes": 15357,
+      "sha256": "b0c5788056738c667552d1b09b402b7334ea7cb750d9068de26c2490a314f855"
     },
     {
       "path": "runtime/xcrawl.d.ts",
@@ -55015,8 +55175,8 @@
     },
     {
       "path": "runtime/xcrawl.js",
-      "bytes": 9133,
-      "sha256": "52841a07f829524df221702dbe105213237cc6f759790d005cde69bebbd11085"
+      "bytes": 9205,
+      "sha256": "5076b31c157742d60b84905c6e34aee913c8d14c5213c4578147588ecd7b1c22"
     },
     {
       "path": "runtime/you.d.ts",
@@ -55025,8 +55185,8 @@
     },
     {
       "path": "runtime/you.js",
-      "bytes": 6671,
-      "sha256": "d2fb17b594f99af00dc92bb590cf69371c1ef1f96db5c394f835826c44626fbc"
+      "bytes": 6743,
+      "sha256": "c52cd60f0b95dad6fbadaff0fd23650fa9b18f347d533a36d40ea769d55b2a0a"
     },
     {
       "path": "runtime/youtube-extract.d.ts",
@@ -55035,8 +55195,8 @@
     },
     {
       "path": "runtime/youtube-extract.js",
-      "bytes": 11572,
-      "sha256": "1b056f128f87a009ae638949de0599ef3523c0dfbf49a21d3e34c0c58f81004c"
+      "bytes": 11555,
+      "sha256": "3e342236a0ec0dc06cfaf20b9a37bdbda4f0f2378d6df47fa53b372244716ab0"
     },
     {
       "path": "runtime/zai.d.ts",
@@ -56014,5 +56174,5 @@
       "sha256": "025434bf88dc12430dba25f0bc68e320eabfdda4c2df7b6bbfa0868e865d4908"
     }
   ],
-  "bundleSha256": "d4e946a7e8250f550e5544a3dea365dadc08a7ab5e146316ff5963a6b5540a65"
+  "bundleSha256": "a064d10b442eada8cbbd0f5519598cf628d9756725d3dc6199d5141cd98c3062"
 }

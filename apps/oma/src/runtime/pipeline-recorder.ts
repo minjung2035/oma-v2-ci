@@ -10,6 +10,16 @@ import { canonicalJson, sha256Hex } from "@oma/domain/canonical-json";
 import { StoreError } from "@oma/domain/errors";
 import type { PipelineFrame } from "@oma/git/candidate-check";
 type Output = ReturnType<typeof createResult>;
+/** Every output owns descriptors, including siblings after an earlier flush fails. */
+function finishOutputs(outputs: readonly Output[]) {
+  const results: ReturnType<Output["finish"]>[] = [], failures: unknown[] = [];
+  for (const output of outputs) {
+    try { results.push(output.finish()); } catch (error) { failures.push(error); }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, "pipeline output completion failed");
+  return results;
+}
 export class PipelineRecorder {
   readonly directory: string;
   private active: { index: number; stdout: Output; stderr: Output } | null = null;
@@ -43,7 +53,12 @@ export class PipelineRecorder {
       if (keys !== "id,index,kind,phase,startedAt" || this.active || !expected || frame.index !== this.next || frame.id !== expected.id ||
         frame.phase !== (this.next < this.pipeline.setupSteps.length ? "setup" : "check") || typeof frame.startedAt !== "string" || !Number.isFinite(Date.parse(frame.startedAt))) fail();
       this.firstStepAtMs ??= Date.now();
-      this.active = { index: this.next, stdout: createResult(this.directory), stderr: createResult(this.directory) };
+      const stdout = createResult(this.directory);
+      try { this.active = { index: this.next, stdout, stderr: createResult(this.directory) }; }
+      catch (error) {
+        try { stdout.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "pipeline output setup and cleanup failed"); }
+        throw error;
+      }
       this.steps.push({ ...frame });
     } else if (frame.kind === "step-output") {
       if (keys !== "data,index,kind,stream" || !this.active || frame.index !== this.active.index || !["stdout", "stderr"].includes(frame.stream)) fail();
@@ -53,7 +68,8 @@ export class PipelineRecorder {
         !["exited", "signalled", "timed-out", "aborted", "spawn-failed", "output-limited", "stalled", "unobserved"].includes(frame.outcome) ||
         !(frame.exitCode === null || Number.isSafeInteger(frame.exitCode)) || !(frame.signal === null || typeof frame.signal === "string") ||
         !Number.isFinite(frame.elapsedMs) || frame.elapsedMs < 0) fail();
-      this.steps.push({ ...frame, stdout: this.active!.stdout.finish(), stderr: this.active!.stderr.finish() });
+      const [stdout, stderr] = finishOutputs([this.active!.stdout, this.active!.stderr]);
+      this.steps.push({ ...frame, stdout, stderr });
       this.active = null; this.next++;
     } else if (frame.kind === "tracked-output") {
       if (keys !== "data,kind" || this.active) fail();
@@ -72,8 +88,10 @@ export class PipelineRecorder {
   get timedOut(): boolean { return this.ended?.timedOut === true; }
   finish(scopeConfirmedDead: boolean, code: string | null): void {
     if (this.closed) return;
-    const partial = this.active === null ? null : { index: this.active.index, stdout: this.active.stdout.finish(), stderr: this.active.stderr.finish(), complete: false };
-    const tracked = this.tracked?.finish() ?? null;
+    const outputs = finishOutputs([...(this.active === null ? [] : [this.active.stdout, this.active.stderr]),
+      ...(this.tracked === null ? [] : [this.tracked])]);
+    const partial = this.active === null ? null : { index: this.active.index, stdout: outputs[0], stderr: outputs[1], complete: false };
+    const tracked = this.tracked === null ? null : outputs.at(-1)!;
     if (this.ended?.tracked.kind === "observed" && (this.ended.tracked.bytes !== (tracked?.bytes ?? 0) ||
       this.ended.tracked.sha256 !== (tracked?.sha256 ?? sha256Hex("")))) throw new StoreError("REF_STATE_UNKNOWN", "tracked delta differs from private evidence");
     let diskFreeBytes: number | null = null;

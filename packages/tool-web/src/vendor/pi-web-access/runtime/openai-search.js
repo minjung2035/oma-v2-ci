@@ -87,7 +87,7 @@ function loadConfig() {
         return cachedConfig;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
 }
@@ -412,55 +412,63 @@ function buildWebSearchTool(options) {
 function isWebSearchCall(item) {
     return !!item && typeof item === "object" && item.type === "web_search_call";
 }
+function assertOpenAIResponseComplete(payload) {
+    if (payload?.error || (payload?.status !== undefined && payload.status !== "completed")) {
+        throw new Error("OpenAI API returned a failed or incomplete response");
+    }
+}
 async function parseOpenAIResponse(response) {
     const text = await response.text();
     const trimmed = text.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        let parsed;
         try {
-            const parsed = JSON.parse(trimmed);
-            const payload = Array.isArray(parsed)
-                ? { output: parsed }
-                : parsed && typeof parsed === "object" ? parsed : { output: [] };
-            const output = Array.isArray(payload.output) ? payload.output : [];
-            return { payload, webSearchCallSeen: output.some(isWebSearchCall) };
+            parsed = JSON.parse(trimmed);
         }
-        catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            throw new Error(`OpenAI API returned invalid JSON: ${message}`);
+        catch {
+            throw new Error("OpenAI API returned invalid JSON");
         }
+        const payload = Array.isArray(parsed)
+            ? { output: parsed }
+            : parsed && typeof parsed === "object" ? parsed : { output: [] };
+        assertOpenAIResponseComplete(payload);
+        const output = Array.isArray(payload.output) ? payload.output : [];
+        return { payload, webSearchCallSeen: output.some(isWebSearchCall) };
     }
     const outputItems = [];
     let completedResponse = null;
     let webSearchCallSeen = false;
-    for (const line of text.split("\n")) {
-        if (!line.startsWith("data: "))
-            continue;
-        const data = line.slice(6).trim();
+    for (const frame of text.split(/\r?\n\r?\n/)) {
+        const data = frame.split(/\r?\n/).filter(line => line.startsWith("data:"))
+            .map(line => line.slice(5).replace(/^ /, "")).join("\n").trim();
         if (!data || data === "[DONE]")
             continue;
+        let parsed;
         try {
-            const parsed = JSON.parse(data);
-            if (typeof parsed.type === "string" && parsed.type.startsWith("response.web_search_call"))
-                webSearchCallSeen = true;
-            if (parsed.type === "response.output_item.done" && parsed.item) {
-                outputItems.push(parsed.item);
-                webSearchCallSeen ||= isWebSearchCall(parsed.item);
-            }
-            if ((parsed.type === "response.done" || parsed.type === "response.completed") && parsed.response && typeof parsed.response === "object") {
-                completedResponse = parsed.response;
-            }
+            parsed = JSON.parse(data);
         }
         catch {
+            throw new Error("OpenAI API returned invalid JSON in its event stream");
+        }
+        if (parsed?.type === "error" || parsed?.type === "response.failed" || parsed?.type === "response.incomplete") {
+            throw new Error("OpenAI API returned a failed or incomplete response");
+        }
+        if (typeof parsed?.type === "string" && parsed.type.startsWith("response.web_search_call"))
+            webSearchCallSeen = true;
+        if (parsed?.type === "response.output_item.done" && parsed.item) {
+            outputItems.push(parsed.item);
+            webSearchCallSeen ||= isWebSearchCall(parsed.item);
+        }
+        if ((parsed?.type === "response.done" || parsed?.type === "response.completed") && parsed.response && typeof parsed.response === "object") {
+            assertOpenAIResponseComplete(parsed.response);
+            completedResponse = parsed.response;
         }
     }
-    if (completedResponse) {
-        const output = Array.isArray(completedResponse.output) ? completedResponse.output : [];
-        const payload = output.length > 0 ? completedResponse : { ...completedResponse, output: outputItems };
-        return { payload, webSearchCallSeen: webSearchCallSeen || output.some(isWebSearchCall) };
-    }
-    if (outputItems.length > 0)
-        return { payload: { output: outputItems }, webSearchCallSeen: webSearchCallSeen || outputItems.some(isWebSearchCall) };
-    throw new Error("OpenAI API returned no parseable response output");
+    if (!completedResponse)
+        throw new Error("OpenAI API returned an incomplete stream without a terminal response");
+    const output = Array.isArray(completedResponse.output) ? completedResponse.output : [];
+    const payload = output.length > 0 ? completedResponse : { ...completedResponse, output: outputItems };
+    return { payload, webSearchCallSeen: webSearchCallSeen || output.some(isWebSearchCall) };
 }
 function cleanSourceUrl(rawUrl) {
     try {

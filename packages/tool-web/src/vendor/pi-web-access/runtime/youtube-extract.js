@@ -51,7 +51,7 @@ function loadYouTubeConfig() {
         raw = JSON.parse(rawText);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     const yt = raw.youtube ?? {};
@@ -62,10 +62,9 @@ function loadYouTubeConfig() {
     return cachedConfig;
 }
 export function isYouTubeURL(url) {
-    // OMA divergence: the YouTube pipeline is a yt-dlp/ffmpeg subprocess
-    // plus a model-completion describe pass -- surfaces OMA does not
-    // expose. Deny-by-default: no URL classifies as YouTube under OMA, so
-    // the main extractor and the frame/timestamp paths all fall through.
+    // OMA divergence: the installed policy permits the upstream
+    // yt-dlp/ffmpeg and model-description pipeline. Without the permit,
+    // classification keeps main and frame/timestamp callers out.
     if (!omaPermits("nativeMedia"))
         return { isYouTube: false, videoId: null };
     try {

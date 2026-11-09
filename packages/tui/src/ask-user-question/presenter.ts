@@ -93,10 +93,14 @@ export function registerAskUserQuestionPresenter(pi: AskPresenterPi, deps: AskPr
       }
       active += 1;
       let cancelDialog: (() => void) | undefined;
+      let cancelled = false;
+      // custom() may initialize its factory later, or trigger lifecycle hooks
+      // before returning. Keep cancellation until the dialog can be dismissed.
+      open.set(request.id, () => { cancelled = true; cancelDialog?.(); });
       const close = (result: QuestionnaireResult): void => {
         open.delete(request.id);
         active -= 1;
-        respond(request.id, result ?? CANCELLED);
+        respond(request.id, cancelled ? CANCELLED : result ?? CANCELLED);
         next();
       };
       try {
@@ -104,6 +108,10 @@ export function registerAskUserQuestionPresenter(pi: AskPresenterPi, deps: AskPr
           ctx.ui.custom(
             (_tui, theme, _keybindings, done) => {
               cancelDialog = () => done(CANCELLED);
+              if (cancelled) {
+                done(CANCELLED);
+                return { render: () => [], handleInput: () => {}, invalidate: () => {} };
+              }
               return createAskComponent(new QuestionnaireModel(request.questions), theme, done);
             },
             OVERLAY_OPTIONS,
@@ -113,7 +121,6 @@ export function registerAskUserQuestionPresenter(pi: AskPresenterPi, deps: AskPr
         close(CANCELLED);
         continue;
       }
-      open.set(request.id, () => cancelDialog?.());
     }
   };
 

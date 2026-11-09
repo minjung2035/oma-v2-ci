@@ -64,7 +64,7 @@ export class ReviewAcceptance {
         const main = this.effects.main();
         if (main.kind === "corrupt") throw new StoreError("STORE_CORRUPT", "canonical main observation is malformed");
         if (main.kind === "present" && main.value === (prepared.before.integration?.identity ?? prepared.before.identity).candidate)
-          throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge_open");
+          throw new StoreError("REQUEST_CLOSED", "the request is already applied; use oma_challenge with its exact applied target");
         if (main.kind !== "present" || main.value !== (prepared.before.integration?.identity ?? prepared.before.identity).expectedBase)
           throw new StoreError("REF_STATE_UNKNOWN", "the request's integration outcome is unknown");
       }
@@ -131,7 +131,7 @@ export class ReviewAcceptance {
       const plans = accepted.plan.messages;
       let materializedAll = true;
       try { await this.mail.materialize(prepared.id); }
-      catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
+      catch (error) { if (errorCodeOf(error) === "STORE_CORRUPT") throw error; materializedAll = false; }
       if (materializedAll)
         this.store.transaction(tx => tx.setOperationSucceeded(prepared.id, JSON.stringify({
           kind: "attest.record", request: prepared.name,

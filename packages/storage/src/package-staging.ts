@@ -62,7 +62,7 @@ function copyFdRange(source: number, position: number, size: number, out: number
  * when `rel` names nothing). */
 function descendBeneath(dir: number, rel: string, create: boolean): number {
   let current = dir;
-  for (const part of rel.split("/")) {
+  try { for (const part of rel.split("/")) {
     if (part === "") continue;
     if (create) {
       try { mkdirAt(current, part); }
@@ -72,10 +72,14 @@ function descendBeneath(dir: number, rel: string, create: boolean): number {
     // and its scope directories -- so an entry a stray left at mode-000 is
     // pinned, given its owner bits back and opened, never EACCES-wedged.
     const child = openOwnedDirectory(current, part);
-    if (current !== dir) closeSync(current);
+    const previous = current;
     current = child;
+    if (previous !== dir) closeSync(previous);
   }
   return current;
+  } catch (error) {
+    return withCleanup(() => { throw error; }, () => { if (current !== dir) closeSync(current); });
+  }
 }
 
 /** The first entry of `parts` beneath the held `parent` (whose path is
@@ -188,8 +192,8 @@ export function ownedStaging(root: string): StageArea {
       }
       // What ensureUserDirectory also gave the name: the durability barrier
       // -- every name on the path flushed, the new `local` included.
-      flushDirectoryChain(localPath);
       try {
+        flushDirectoryChain(localPath);
         const parts = name.split("/");
         const destName = parts.pop()!;
         // `dest` is `local` itself when the name holds no scope.

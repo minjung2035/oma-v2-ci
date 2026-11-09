@@ -1,0 +1,958 @@
+status	scope	path_or_pattern	file_count	detail
+INSPECTED	CI	.github/workflows/architecture-verification.yml	1	client-extra
+INSPECTED	CI	.github/workflows/native-runtime.yml	1	client-extra
+INSPECTED	AUTHORED	apps/oma/src/application/execution-recovery.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/exit.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/extensions.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/local-packages.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/mail.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/project-session-settings.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/project-settings.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/session-archive.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/settings.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-bootstrap.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-conversation.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-interaction.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-panel.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-runtime.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/society-transition.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/application/status-observation.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/broker/broker-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/git-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/git-ledger.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/invocation-sources.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/lifecycle-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/lifecycle-ledger.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/mail-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/mail-effects.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/reconcile-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/broker/review-composition.ts	1	broker
+INSPECTED	AUTHORED	apps/oma/src/diagnostics/files.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/diagnostics/integrity.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/diagnostics/ledger.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/diagnostics/mail.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/personal-composition.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/personal-entry.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/presentation.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/principal-profile.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/resident-effects.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/settings-files.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/engine/start-effects.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/broker.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/candidate-check.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/download-cache.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/module-conformance.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/oma-society.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/oma.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/personal-host.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/pi-interactive.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/pi-personal.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/pi-settings-preload.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/prepare-society.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/quarantine.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/entry/runner.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/platform/package-files.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/ports/ledger.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/ports/package-files.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/ports/runtime.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/request-cache.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runner.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/assets.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/broker-channel.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/broker-supervisor.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/caller-git.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/candidate-checks.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/client-preload.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/client-runtime.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/collaboration-sources.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/compile-cache.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/connect-proxy.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/deployment-manifest.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/execution-runtime.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/extension-integrity.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/host-arguments.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/host-invocations.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/host-tenure.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/human-controls.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/inference-relay.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects/code.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects/context.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects/goal.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects/mail.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/input-effects/submit.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/invocation-codec.ts	1	runtime
+EXCLUDED_MACOS	MACOS	apps/oma/src/runtime/keychain-credentials.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	apps/oma/src/runtime/locked-files.ts	1	runtime
+EXCLUDED_MACOS	MACOS	apps/oma/src/runtime/mac-protected-node.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	apps/oma/src/runtime/mac-runtime-artifact.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	apps/oma/src/runtime/mac-runtime-generation.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	apps/oma/src/runtime/module-inventory.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/native-residents.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/native-support.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/packages/index.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/packages/store.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/personal-models.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/personal-session.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/personal-settings.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/pipeline-cache.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/pipeline-recorder.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/principal-delivery.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/project-binding.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/provision.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/quarantine-execution.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/request-cache-codec.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/request-intent.ts	1	root
+EXCLUDED_MACOS	MACOS	apps/oma/src/runtime/resident-tools.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	apps/oma/src/runtime/session-catalog.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/session-history.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/session-mode.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/session-storage-state.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/session-storage.ts	1	root
+INSPECTED	AUTHORED	apps/oma/src/runtime/society-lease.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/society-preparation.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/supervision-channel.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/runtime/user-files.ts	1	runtime
+INSPECTED	AUTHORED	apps/oma/src/views.ts	1	client-extra
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-history.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-logs.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-mail.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-receipts.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-review-materials.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-reviews.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/collaboration-state.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/mail-notices.ts	1	client
+INSPECTED	AUTHORED	apps/oma/src/views/pending-work.ts	1	client
+INSPECTED	AUTHORED	packages/broker/src/connection.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/index.ts	1	broker,client-extra
+INSPECTED	AUTHORED	packages/broker/src/internal-dispatcher.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/lifetime.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/listeners.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/logs.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/peer-authenticator.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/peer-pin.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/ports.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/principal-endpoint.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/process-ancestry.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/public-dispatcher.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/replies.ts	1	broker
+INSPECTED	AUTHORED	packages/broker/src/run-registry.ts	1	broker,client-extra
+INSPECTED	AUTHORED	packages/broker/src/status-refresh.ts	1	broker
+INSPECTED	AUTHORED	packages/client/src/channel.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/connection.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/context.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/errors.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/index.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/receipts.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/request-service.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/runtime.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/settings.ts	1	client
+INSPECTED	AUTHORED	packages/client/src/transport.ts	1	client
+INSPECTED	AUTHORED	packages/config/src/defaults.ts	1	root
+INSPECTED	AUTHORED	packages/config/src/generations.ts	1	root
+INSPECTED	AUTHORED	packages/config/src/index.ts	1	root
+INSPECTED	AUTHORED	packages/config/src/operations.ts	1	root
+INSPECTED	AUTHORED	packages/config/src/policy.ts	1	root
+INSPECTED	AUTHORED	packages/config/src/state-format.ts	1	root
+INSPECTED	AUTHORED	packages/contracts/src/assets.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/attestation.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/check-pipeline.ts	1	client
+EXCLUDED_MACOS	MACOS	packages/contracts/src/credentials.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/contracts/src/durable.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/errors.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/files.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/git.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/host.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/identity.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/index.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/integration.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/internal-wire.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/ledger.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/presentation.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/public-wire.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/publication.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/runtime.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/stream.ts	1	client
+INSPECTED	AUTHORED	packages/contracts/src/values.ts	1	client
+INSPECTED	AUTHORED	packages/domain/src/actor-address.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/admission.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/agent-spec.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/ask-user-question/envelope.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/ask-user-question/model.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/ask-user-question/questionnaire.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/attestation-relations.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/attestation.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/authority.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/batch-settlement.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/canonical-json.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/capabilities.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/check-pipeline.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/child-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/collaboration-inputs.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/collaboration-prompts.ts	1	broker,client-extra
+INSPECTED	AUTHORED	packages/domain/src/collaboration-review.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/collaboration-surface.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/collaboration-targets.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/config-format.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/context-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/deployment.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/derived.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/display-address.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/durable.ts	1	broker,client-extra
+INSPECTED	AUTHORED	packages/domain/src/egress.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/errors.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/exhaustive.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/extension-paths.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/git-facts.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/host-signals.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/identifiers.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/integer-fields.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/integration-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/limits.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/lineage.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/mail-values.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/package-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/paths.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/process-command.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/protocol-limits.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/recovery-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/request-identity.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/resident-paths.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/review-bounds.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/review-evaluation.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/risk-tier.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/role-prompts.ts	1	broker,client-extra
+INSPECTED	AUTHORED	packages/domain/src/session-mode.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/settings-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/settings.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/spec-identity.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/surface-bounds.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/turn-admission.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/unseen-text.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/utf8.ts	1	broker
+INSPECTED	AUTHORED	packages/domain/src/validation.ts	1	broker
+INSPECTED	AUTHORED	packages/engine/src/credential-store.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/engine-auth.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/extension-modules.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-channel.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-commands.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-configuration.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-display.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-events.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-extension.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-input.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-lifetime.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-rpc.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-runtime.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-selections.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-state.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive-view.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/interactive.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/login.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/oma-theme.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/open-tui-brand.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/package-resources.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/personal-configuration.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/personal-history.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/personal-ports.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/personal-state.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/personal.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-adapter.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/commands.ts	1	runtime
+INSPECTED	CONFIG_ASSET	packages/engine/src/pi-compat/contacts.json	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/env.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/interactive-editor.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/interactive-mode.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/interactive-tool-setup.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/interactive-tools.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/interactive-ui.ts	1	runtime
+INSPECTED	DECLARATION	packages/engine/src/pi-compat/pi-private.d.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/prompt-editor.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/search-tool-status.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/session.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/settings-files.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/settings-object.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/settings.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-compat/wire.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-presentation.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-rpc.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-runtime.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/pi-spawn-plan.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/ports.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/presentation.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/principal-events.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/principal-launch.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/principal-session.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/session-directories.ts	1	runtime
+INSPECTED	AUTHORED	packages/engine/src/session-metadata.ts	1	runtime
+INSPECTED	AUTHORED	packages/extension/src/ask-user-question.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/collaboration-help.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/collaboration-invocations.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/collaboration-tools.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/delivery.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/egress-bridge.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/index.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/inference-bridge.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/mail-tools.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/principal-channel.ts	1	client
+INSPECTED	AUTHORED	packages/extension/src/prompt-boundary.ts	1	client
+INSPECTED	AUTHORED	packages/file-descriptors/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/git/src/candidate-check.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/canonical-command.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/canonical-directory.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/canonical-health.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/check-pipeline.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/context-publication.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/context-repository.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/context.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/download-cache.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/index.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/integration-preparation.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/integration-publication.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/integration.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/mail-attachments.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/observe.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/paths.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/ports.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/prepared-ref-owner.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/project-preparation.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/project-snapshot.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/provenance-index.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/publication.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/quarantine-worker.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/quarantine.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/read-port.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/repository-health.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/repository-port.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/repository.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/review-artifact.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/review-record.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/git/src/submit.ts	1	broker
+INSPECTED	AUTHORED	packages/git/src/workspace.ts	1	broker,runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/actions.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/contracts.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/create-publication.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/create.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/policy.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/ports.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/registry-operations.ts	1	runtime
+INSPECTED	AUTHORED	packages/lifecycle/src/society.ts	1	runtime
+INSPECTED	AUTHORED	packages/mail/src/addresses.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/batch-policy.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/batch-view.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/batches.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/display.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/facts.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/headers.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/index.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/materializer.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/observations.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/ports.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/reconcile.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/records.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/review-documents.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/routing.ts	1	broker
+INSPECTED	AUTHORED	packages/mail/src/serialize.ts	1	broker
+EXCLUDED_MACOS	MACOS	packages/native/src/audit-origin.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/audit-session.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/audit-token.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/cleanup.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/control-socket.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-file-flags.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-job-assets.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-job-control.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-job-launch.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-job-peer.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-launchd-job.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-macho-image.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-metadata.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-society-fence.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/darwin-supervisor.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/descriptor-path.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/directory-layout.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/files.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/identity.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/job-helper/config.h	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/job-helper/main.c	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/linux.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/mach-message.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/mach-poll.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/metadata-observation.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/metadata/main.c	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/peer-uid.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/pid-namespace.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/posix-files.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/private-parent.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/process-event.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/process-lock.ts	1	runtime
+INSPECTED	AUTHORED	packages/native/src/process-observation.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/seatbelt/launch-fds.h	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/seatbelt/main.c	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/snapshot-reader.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/native/src/society-fence/bridge.c	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/society-fence/control.c	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/society-fence/producer.c	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/society-fence/protocol.h	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/sqlite-root.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/native/src/sqlite-root/main.c	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/native/src/unix-message.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/bubblewrap-arguments.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/candidate-sandbox.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/credential-stream.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/git-sandbox.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/namespace-execution.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/peer-identity.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/resident-rootfs.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/runner-scope.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/sandbox-seccomp.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/sandbox.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/worker-spawn.ts	1	runtime
+INSPECTED	AUTHORED	packages/platform-linux/src/workload-budget.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/audit-peer.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/developer-tools.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/git-sandbox.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/job-control.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/job-launch.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/job-recovery.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/job-scope.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/keychain-client.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/keychain/main.swift	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/keychain/oma-keychain.entitlements	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/launchd-job.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/mach-address.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/mach-peer-source.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/mach-poll.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/mach-stream.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/mach-transport.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/macho-image.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/native-assets.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/native-channel.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/path-view.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/resident-sandbox.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/platform-mac/src/seatbelt.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/process/src/async.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/coalesced-wake.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/command.ts	1	runtime
+EXCLUDED_MACOS	MACOS	packages/process/src/darwin-execution.ts	1	User excluded macOS-specific code; left unchanged
+EXCLUDED_MACOS	MACOS	packages/process/src/darwin-preparation.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/process/src/deadline.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/execution-scope.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/execution-witness.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/fence.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/host-loss.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/observed-stream.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/owned-execution.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/packet-stream.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/policies.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/preparation-lifetime.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/preparation.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/replace.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/resident-logs.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/resident-runtime.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/resident-supervisor.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/restart-policy.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/restic.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/run.ts	1	runtime
+INSPECTED	AUTHORED	packages/process/src/writer.ts	1	runtime
+INSPECTED	AUTHORED	packages/protocol/src/alarm.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/ask-user-question.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/batch-view.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/byte-queue.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/client-codecs.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/delivery-boundary.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/failure-codec.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/frame.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/git-execution-view.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/host-channel.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/invocation-mail.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/invocation-rejection.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/invocation-resolution.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/invocation-submission.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/jsonl.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/log-limits.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/log-response.ts	1	client
+EXCLUDED_MACOS	MACOS	packages/protocol/src/mac-developer-tools.ts	1	User excluded macOS-specific code; left unchanged
+INSPECTED	AUTHORED	packages/protocol/src/methods.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/operation-codec.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/operation-results.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/persisted-formats.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/principal-credential.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/receipt-chunks.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/receipt-codec.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/receipt-projector.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/receipts.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/request-codec.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/resident-context.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/response-codec.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/run-lease.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/session-handoff.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/status-page.ts	1	client
+INSPECTED	AUTHORED	packages/protocol/src/status-view.ts	1	client
+INSPECTED	AUTHORED	packages/reconcile/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/reconcile/src/lane.ts	1	runtime
+INSPECTED	AUTHORED	packages/reconcile/src/operations.ts	1	runtime
+INSPECTED	AUTHORED	packages/reconcile/src/ports.ts	1	runtime
+INSPECTED	AUTHORED	packages/reconcile/src/preaccept-event.ts	1	runtime
+INSPECTED	AUTHORED	packages/review/src/acceptance.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/advancement.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/authority.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/index.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/messages.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/ports.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/preparation.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/status-projection.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/status.ts	1	broker
+INSPECTED	AUTHORED	packages/review/src/types.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/arrival-journal.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/batch-view.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/cache-trees.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/context-files.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/context-snapshot.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/context-stream.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/delivery-receipt.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/diagnostic-snapshot.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/directory.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/durable-fs.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/execution-journal.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/execution-recovery.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/execution-staging.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/facets.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/file-digest.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/immutable-file.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/installation-surface.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/ledger-reader.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/mail-notices.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/mailbox.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/operation-journal.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/operation-transitions.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/output-spool.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/package-replacement.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/package-staging.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/package-tar.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/preaccept-artifact.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/preaccept-collection.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/published-mail.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/resident-logs.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/restic-tar.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/restic-tool.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/restic-verification.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/rows.ts	1	broker
+INSPECTED	SCHEMA	packages/storage/src/schema-v4.sql	1	broker
+INSPECTED	SCHEMA	packages/storage/src/schema-v5.sql	1	broker
+INSPECTED	AUTHORED	packages/storage/src/socket-name.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/staged-tree.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/store-access.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/store.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/submit-spool.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/transaction.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/transitions.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/transport-spool.ts	1	broker
+INSPECTED	AUTHORED	packages/storage/src/tree-lease.ts	1	broker
+INSPECTED	AUTHORED	packages/tool-files/src/descriptor-files.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-files/src/errors.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-files/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-files/src/private-state.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-files/src/results.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-hashline/src/index.ts	1	runtime
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/LICENSE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/NOTICE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/manifest.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+EXCLUDED_DEPENDENCY	DEPENDENCY	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/node_modules/**	244	Installed dependency closure; not manually reviewed
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/copy-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/copy-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/copy.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/grep-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/grep.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/insert-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/insert-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/insert.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/move-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/move-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/move.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/read-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/read-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/read.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace-within-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace-within-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace-within.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/replace.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/undo-last-change-guidelines.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/undo-last-change-snippet.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/prompts/undo-last-change.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+EXCLUDED_GENERATED	GENERATED	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/**	39	Generated declarations/source maps; corresponding runtime JS reviewed
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/anchor-registry.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/auto-read-all-state.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/batch.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/commit.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/config.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/constants.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/edit-common.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/edit-fidelity.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/file-kind.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/file-reader.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/fs-write.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hash-store.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hash-store/cache.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hash-store/retry.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hash-store/validation.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/alphabet.js	1	runtime-vendor
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/anchor-table.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/apply.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/hash.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/hasher.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/index.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/parse.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/resolve.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/insert.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/line-endings.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/normalize.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/paths.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/payload-contract.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/prompts.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/read.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace-diff.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace-render.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace-response.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace-undo.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace-within.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/replace.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/served.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/utils.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/validation.js	1	runtime-vendor
+INSPECTED	VENDOR_RUNTIME	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/write-hook.js	1	runtime-vendor
+NOT_INSPECTED_UPSTREAM_TEST	UPSTREAM_TEST	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/upstream-tests/**	122	Pinned upstream tests/provenance; not independently read
+NOT_INSPECTED_UPSTREAM_SOURCE	UPSTREAM	packages/tool-hashline/src/vendor/pi-hashline-edit-pro/upstream/**	72	Pinned source; emitted runtime reviewed separately, not a direct source read
+INSPECTED	AUTHORED	packages/tool-lsp/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-lsp/src/lsp-call-scope.ts	1	runtime
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-lsp/src/vendor/pi-lsp/LICENSE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-lsp/src/vendor/pi-lsp/NOTICE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-lsp/src/vendor/pi-lsp/manifest.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/adapters.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/adapters.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/command.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/command.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/files.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/files.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/lsp-client.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/lsp-client.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/routes.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/routes.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/runner.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/runner.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/session-lifecycle.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/session-lifecycle.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/text-edits.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/text-edits.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/types.d.ts	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-lsp/src/vendor/pi-lsp/runtime/types.js	1	root
+NOT_INSPECTED_UPSTREAM_TEST	UPSTREAM_TEST	packages/tool-lsp/src/vendor/pi-lsp/upstream-tests/**	11	Pinned upstream tests/provenance; not independently read
+NOT_INSPECTED_UPSTREAM_SOURCE	UPSTREAM	packages/tool-lsp/src/vendor/pi-lsp/upstream/**	17	Pinned source; emitted runtime reviewed separately, not a direct source read
+INSPECTED	AUTHORED	packages/tool-mcp/src/index.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-mcp/src/mcp-sdk-env.ts	1	runtime
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/LICENSE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/NOTICE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/manifest.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+EXCLUDED_DEPENDENCY	DEPENDENCY	packages/tool-mcp/src/vendor/pi-mcp-adapter/node_modules/**	2086	Installed dependency closure; not manually reviewed
+EXCLUDED_GENERATED	GENERATED	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/**	87	Generated declarations/source maps; corresponding runtime JS reviewed
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/abort.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/agent-dir.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/agent-plugin-loader.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/agent-plugin-provenance.js	1	client-extra
+EXCLUDED_DEPENDENCY_BUNDLE	DEPENDENCY	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/app-bridge.bundle.js	1	Minified app bridge; runtime/upstream SHA256 7d069dbfba3733453e4a7a6e340e767b95fddc10b01fa907b8582c1a85144e8e match
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/bearer-command-resolver.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/claude-plugin-loader.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/commands.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/config.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/consent-manager.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/direct-tool-surface.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/direct-tools.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/elicitation-handler.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/error-signal.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/errors.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/failure-backoff.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/glimpse-ui.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/host-html-template.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/host-managed.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/http-ca.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/index.js	1	root,runtime-mcp; root 1-500 and runtime_tools 501-2278
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/init.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/jev-client.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/jev-contracts.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/jev-key-store.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/json-schema-validator.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/lazy-loader.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/lifecycle.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/logger.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-auth-fetch.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-auth-flow.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-auth.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-bearer-store.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-callback-server.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-code.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-install.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-keyring-helper.cjs	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-oauth-provider.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-output-guard.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-panel-theme.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-panel.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-probe.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-references.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-script-wasm.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-script-worker.mjs	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-setup-panel.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-status.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-tasks.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-trace.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/metadata-cache.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/namespace-tools.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/npx-resolver.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/oauth-handler.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/oauth.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/onboarding-state.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/output-shape.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/package-mcp-loader.js	1	client-extra
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/package.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/panel-keys.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/pi-builtin-mcp.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/pi-signin-import.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/project-server-trust.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/prompts.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/proxy-modes.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/request-headers-command.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/resource-tools.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/runtime-owner.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/sampling-handler.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/sandbox-proxy-template.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/search-ranking.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/secure-keyring.js	1	runtime-mcp
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/semantic-search.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/server-manager.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/session-approvals.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/session-recovery.js	1	client-extra
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/skills/mcp-scripting/SKILL.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/skills/mcp-scripting/references/jev.md	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/state.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/tool-approval.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/tool-metadata.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/tool-parameters.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/tool-registrar.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/tool-result-renderer.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ts-shape.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/types.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-app-bridge-helpers.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-resource-handler.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-server.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-session.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-stream-types.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/ui-tool-visibility.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/unix-socket-transport.js	1	client-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/utils.js	1	client-extra
+NOT_INSPECTED_UPSTREAM_TEST	UPSTREAM_TEST	packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream-tests/**	207	Pinned upstream tests/provenance; not independently read
+DUPLICATE_INSPECTED_BYTES	UPSTREAM	packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream/**	2	Byte comparison matched individually INSPECTED runtime files
+NOT_INSPECTED_UPSTREAM_SOURCE	UPSTREAM	packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream/**	249	Pinned source; emitted runtime reviewed separately, not a direct source read
+EXCLUDED_DEPENDENCY_BUNDLE	DEPENDENCY	packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream/app-bridge.bundle.js	1	Minified app bridge; runtime/upstream SHA256 7d069dbfba3733453e4a7a6e340e767b95fddc10b01fa907b8582c1a85144e8e match
+INSPECTED	AUTHORED	packages/tool-runtime/src/batch-view.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/child-env.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/collaboration-groups.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/contained-search.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/contained-tools.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/private-state.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/provenance.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/result-read.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/shared.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/tool-surface.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/vendor-bundle.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-runtime/src/workspace-guard.ts	1	runtime
+INSPECTED	AUTHORED	packages/tool-web/src/index.ts	1	runtime
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-web/src/vendor/pi-web-access/LICENSE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-web/src/vendor/pi-web-access/NOTICE	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+NOT_INSPECTED_ASSET	VENDOR_ASSET	packages/tool-web/src/vendor/pi-web-access/manifest.json	1	Manifest/license/prompt/config/skill asset; no independent code-read claim
+EXCLUDED_DEPENDENCY	DEPENDENCY	packages/tool-web/src/vendor/pi-web-access/node_modules/**	10664	Installed dependency closure; not manually reviewed
+EXCLUDED_GENERATED	GENERATED	packages/tool-web/src/vendor/pi-web-access/runtime/**	81	Generated declarations/source maps; corresponding runtime JS reviewed
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/abortable.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/activity.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/anysearch.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/auth-fetch.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/baizhi.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/bocha.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/brave-rate-limit.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/brave.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/brightdata-unlocker.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/brightdata.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/chrome-cookies.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/content-find.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/crawl4ai.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/credential-source.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/curator-page.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/curator-run.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/curator-server.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/data-uri-sanitize.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/datalab-pdf-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/declared-web-links.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/domain-filter-normalization.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/duckduckgo.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/exa.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/extract.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/feature-config.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/fetch-params.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/firecrawl.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-adc.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-api.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-pdf-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-url-context.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-web-config.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/gemini-web.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/github-api.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/github-extract.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/github-issue-pr.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/index.js	1	web-extra
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/jina-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/kagi.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/kimi-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/mistral-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/ollama.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/openai-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/opencode-session-headers.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/page-query.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/parallel-mcp.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/parallel.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/pdf-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/perplexity.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/querit.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/query-rewrite.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/render-search-error.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/rsc-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/search-answer-formatting.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/search-result-count-normalization.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/search1api.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/searchinfinity.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/searxng.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/serpapi.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/serpbase.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/serpdive.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/serper.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/serply.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/source-check.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/ssrf-protection.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/storage.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/summary-model-scope.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/summary-review.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/tavily.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/tinyfish.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/tool-activation.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/utils.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/valyu.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/video-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/xai-search.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/xcrawl.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/you.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/youtube-extract.js	1	root
+INSPECTED	VENDOR_RUNTIME	packages/tool-web/src/vendor/pi-web-access/runtime/zai.js	1	root
+NOT_INSPECTED_UPSTREAM_TEST	UPSTREAM_TEST	packages/tool-web/src/vendor/pi-web-access/upstream-tests/**	104	Pinned upstream tests/provenance; not independently read
+NOT_INSPECTED_UPSTREAM_SOURCE	UPSTREAM	packages/tool-web/src/vendor/pi-web-access/upstream/**	89	Pinned source; emitted runtime reviewed separately, not a direct source read
+INSPECTED	AUTHORED	packages/tui/src/app.ts	1	root
+INSPECTED	AUTHORED	packages/tui/src/ask-user-question/component.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/ask-user-question/presenter.ts	1	client
+INSPECTED	AUTHORED	packages/tui/src/cells.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/compact-tools.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/dashboard.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/keys.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/mail-names.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/model.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/panel-style.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/panel-terminal.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/prompt.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/screen.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/session-mode.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/society-panel.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/transcript.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/view/dashboard.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/view/index.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/view/labels.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/view/layout.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/view/notice.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/view/screens.ts	1	client-extra,root
+INSPECTED	AUTHORED	packages/tui/src/view/session-mode.ts	1	client-extra
+INSPECTED	AUTHORED	packages/tui/src/view/text.ts	1	client-extra,root
+INSPECTED	SCRIPT	scripts/adversarial-report.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture-check.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture-owners.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rule-check.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/contract-direction-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/effect-ownership-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/fence-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/owned-state-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/ownership-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/schema-duplication-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/shared.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/state-tree-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/surface-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/architecture/rules/transaction-rules.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/benchmark-startup.py	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/bounded-script.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/build-module.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/build-workspaces.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/build.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/change-locality.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/check-legacy.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/check-modules.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/check-package-isolation.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/check-package.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/check-state.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/compliance.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/contract-surface.mjs	1	runtime-scripts
+EXCLUDED_MACOS	MACOS	scripts/darwin-cases.mjs	1	User excluded macOS-specific code; left unchanged
+INSPECTED	SCRIPT	scripts/dependency-graph.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/dependency-lattice.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/descriptor-capability-observation.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/diagnostic-observers.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/document-integrity.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/durable-boundaries.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/exploration-parameters.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/export-operations-config.mjs	1	runtime-scripts
+INSPECTED	SCRIPT	scripts/functional-pi-smoke.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/functional-surface.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/install-restic.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/isolated-declarations.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/kernel-zones.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/loc.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/local-test-guard.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/local-test-summary.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/local-test-timing.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/mutation-locality.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/native-tap-reporter.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/package-isolation-lock.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/powercut-lane.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/production-inventory.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/refresh-evidence.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/review-closure.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/review-ledger.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/run-native-linux-ci.sh	1	client-extra
+INSPECTED	SCRIPT	scripts/runtime-artifact-digest.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/setup-native-linux-ci.sh	1	client-extra
+INSPECTED	SCRIPT	scripts/source-digest.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/spec-inventory.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/split-operations-config.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/test-local-phase.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/test-local.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/test-native-integration.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/traceability.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/transaction-check.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/vendor-bundle-lib.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/vendor-pi-hashline.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/vendor-pi-lsp.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/vendor-pi-mcp-adapter.mjs	1	root
+INSPECTED	SCRIPT	scripts/vendor-pi-web-access.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/vendored-source-roots.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/verification-lanes.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/verify-import-runtime.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/verify-lane.mjs	1	client-extra
+EXCLUDED_MACOS	MACOS	scripts/verify-native.mjs	1	User excluded macOS-specific code; left unchanged
+INSPECTED	SCRIPT	scripts/workspace-assets.mjs	1	client-extra
+INSPECTED	SCRIPT	scripts/workspace-build-cache.mjs	1	client-extra
+EXCLUDED_MACOS	MACOS	scripts/workspace-executables.mjs	1	User excluded macOS-specific code; left unchanged

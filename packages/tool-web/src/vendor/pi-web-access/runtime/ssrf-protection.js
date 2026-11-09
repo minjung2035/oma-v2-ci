@@ -36,7 +36,7 @@ function loadConfigRoot() {
         parsed = JSON.parse(raw);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${WEB_SEARCH_CONFIG_PATH}: ${message}`);
     }
     const value = parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -196,6 +196,11 @@ export async function fetchRemoteUrl(url, init = {}, options = {}) {
         const location = response.headers.get("location");
         if (!location)
             return response;
+        // Cancellation is best effort: do not wait for a remote stream or mask the original result.
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
         if (redirects === maxRedirects)
             throw new Error(`Too many redirects fetching ${current.toString()}`);
         const from = current;
@@ -302,9 +307,8 @@ function isConfiguredRemoteDnsProxy(url, proxy) {
     return proxy !== null &&
         REMOTE_DNS_PROXY_PROTOCOLS.has(new URL(proxy).protocol) &&
         !isProxyBypassedUrl(url) &&
-        // OMA divergence: under an installed policy the egress pin is the
-        // one proxy normalizeProxyUrl will ever pass, so it is "the
-        // configured proxy" for the remote-DNS skip.
+        // OMA divergence: when an environment proxy is pinned, treat it
+        // as the configured proxy for this remote-DNS comparison.
         proxy === (omaEgressPinnedProxy() ?? loadConfiguredProxy());
 }
 function assertPublicAddress(address, hostname, allowRanges = []) {

@@ -13,7 +13,7 @@ export function changeLocality(root, base, until, inventory = []) {
   if (until === undefined) files.push(...split(git(root, ["ls-files", "--others", "--exclude-standard", "-z"])));
   const changedFiles = [...new Set(files)].sort();
   const category = file => isVendoredExtension(file) ? "vendor" : file.startsWith("apps/oma/src/") || /^packages\/[^/]+\/src\//.test(file) ? "source"
-    : file.startsWith("test/") ? "tests" : file.startsWith("scripts/") ? "tools" : "metadata";
+    : /^(?:test\/|(?:packages|apps)\/[^/]+\/test\/)/.test(file) ? "tests" : file.startsWith("scripts/") ? "tools" : "metadata";
   const counts = { source: 0, tests: 0, tools: 0, metadata: 0, vendor: 0 };
   for (const file of changedFiles) counts[category(file)]++;
   return { from, to, totalFiles: changedFiles.length, counts, changedFiles,

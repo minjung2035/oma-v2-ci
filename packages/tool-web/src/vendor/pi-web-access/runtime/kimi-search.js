@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { fetchWithCredentialRedirects } from "./utils.js";
 import { activityMonitor } from "./activity.js";
 import { normalizeDomain } from "./domain-filter-normalization.js";
 import { redactCredential } from "./credential-source.js";
@@ -148,12 +149,12 @@ export async function searchWithKimi(query, options = {}, ctx) {
         ? AbortSignal.any([timeoutSignal, options.signal])
         : timeoutSignal;
     try {
-        const response = await fetch(KIMI_SEARCH_URL, {
+        const response = await fetchWithCredentialRedirects(KIMI_SEARCH_URL, {
             method: "POST",
             headers: buildRequestHeaders(auth),
             body: JSON.stringify({ text_query: query }),
             signal: requestSignal,
-        });
+        }, ["Authorization", ...Object.keys(auth.headers)]);
         if (!response.ok) {
             activityMonitor.logError(activityId, `HTTP ${response.status}`);
             const errorText = redactCredential(await response.text(), auth.apiKey);

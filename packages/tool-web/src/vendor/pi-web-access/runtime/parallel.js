@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { activityMonitor } from "./activity.js";
 import { normalizeDomain } from "./domain-filter-normalization.js";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.js";
-import { getWebSearchConfigPath } from "./utils.js";
+import { fetchWithCredentialRedirects, getWebSearchConfigPath } from "./utils.js";
 const PARALLEL_SEARCH_URL = "https://api.parallel.ai/v1/search";
 const PARALLEL_EXTRACT_URL = "https://api.parallel.ai/v1/extract";
 const CONFIG_PATH = getWebSearchConfigPath();
@@ -37,7 +37,7 @@ function loadConfig() {
         return cachedConfig;
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
 }
@@ -284,7 +284,7 @@ async function parallelFetch(url, body, signal) {
     const activityId = activityMonitor.logStart(activityContext(url, body));
     let response;
     try {
-        response = await fetch(url, {
+        response = await fetchWithCredentialRedirects(url, {
             method: "POST",
             headers: {
                 "x-api-key": apiKey,
@@ -292,7 +292,7 @@ async function parallelFetch(url, body, signal) {
             },
             body: JSON.stringify(body),
             signal: requestSignal(signal),
-        });
+        }, ["x-api-key"]);
     }
     catch (err) {
         const message = errorMessage(err);

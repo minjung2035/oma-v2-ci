@@ -247,12 +247,10 @@ export class ReviewAuthorityReader {
   duplicateName(fact: Extract<ReviewFact, { kind: "merge.open" }>): string | null {
     for (const { open, input } of this.projection()) {
       const existing = open.operation.plan.fact;
-      if (!isOpenFact(existing)) continue;
-      if (existing.kind !== fact.kind || existing.identity.candidate !== fact.identity.candidate ||
-        existing.identity.expectedBase !== fact.identity.expectedBase || existing.tier !== fact.tier ||
-        existing.identity.policyRevision !== fact.identity.policyRevision) continue;
+      if (!isOpenFact(existing) || existing.kind !== fact.kind) continue;
       const state = reviewState(input);
-      if (state.terminal === null && state.included === null && state.integration === null) return existing.name;
+      if (state.terminal === null && state.included === null && state.integration === null &&
+          this.sameProposal(fact, existing, input, state)) return existing.name;
     }
     return null;
   }
@@ -267,12 +265,21 @@ export class ReviewAuthorityReader {
       const state = reviewState(input);
       if (state.integration?.state === "succeeded") return existing.name;
       if (state.terminal === null && state.included === null && state.integration === null &&
-          existing.identity.expectedBase === fact.identity.expectedBase &&
-          existing.identity.candidate === fact.identity.candidate &&
-          existing.identity.policyRevision === fact.identity.policyRevision &&
-          existing.tier === fact.tier) return existing.name;
+          this.sameProposal(fact, existing, input, state)) return existing.name;
     }
     return null;
+  }
+
+  /** Revisions replace the live proposal. Prepared integration scope may use
+   * another candidate/tier, so compare source facts rather than the CAS view. */
+  private sameProposal(fact: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
+      original: Extract<ReviewFact, { kind: "merge.open" | "challenge.open" }>,
+      input: ReviewStateInput, state: ReviewState): boolean {
+    let tier = original.tier;
+    for (const entry of input.entries) if (entry.fact.kind === "review.revise") tier = entry.fact.tier;
+    return state.sourceIdentity.expectedBase === fact.identity.expectedBase &&
+      state.sourceIdentity.candidate === fact.identity.candidate &&
+      state.sourceIdentity.policyRevision === fact.identity.policyRevision && tier === fact.tier;
   }
 
   /** T-side re-derivation for a challenge open: the target merge must still be

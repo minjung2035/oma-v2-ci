@@ -5,10 +5,9 @@ const MAX_INLINE_FILE_CHARS = 100_000;
 let ghAvailable = null;
 let ghHintShown = false;
 export async function checkGhAvailable(signal) {
-    // OMA divergence: the gh CLI is host credential discovery -- its
-    // token reaches private repos the public fallbacks cannot. Refuse
-    // it outright (deny-by-default) so every caller takes upstream's
-    // anonymous path.
+    // OMA divergence: gh may use the user's GitHub credentials. The
+    // installed policy permits it; without that permit callers use
+    // upstream's public REST/anonymous-git fallback.
     if (!omaPermits("ghCli"))
         return false;
     if (ghAvailable !== null)

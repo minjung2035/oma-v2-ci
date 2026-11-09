@@ -30,5 +30,6 @@ export function hashSource(line) {
     return truncateToBytes(canon(line), MAX_HASH_SOURCE_BYTES);
 }
 export function lineChecksum(line) {
-    return contentChecksum(hashSource(line));
+    // OMA: served-range validation must detect every changed character.
+    return contentChecksum(line);
 }

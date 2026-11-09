@@ -132,7 +132,7 @@ export function resolveRealContainedPath(root, candidate, allowMissing = false) 
 export function resolveContainedPath(root, candidate) {
     const resolved = resolve(root, candidate);
     const rel = relative(root, resolved);
-    return rel === "" || (!rel.startsWith("..") && !rel.startsWith(sep) && !isAbsolute(rel)) ? resolved : null;
+    return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith(sep) && !isAbsolute(rel)) ? resolved : null;
 }
 export function stableStringify(value) {
     if (value === null || typeof value !== "object")

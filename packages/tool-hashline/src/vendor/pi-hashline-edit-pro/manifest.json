@@ -16,6 +16,10 @@
     "runtime": "tsc emit of upstream/src modules minus the excluded feature surfaces (auto-read-all, config-ui, copy-move, glob, grep; the package entry index.ts is vendored but never compiled or loaded), compiled with upstream's own ESNext/bundler options, then mechanically rewritten to Node-loadable ESM specifiers (./x -> ./x.js, ./dir -> ./dir/index.js, JSON imports gain with { type: \"json\" }), then OMA divergence splices applied",
     "tool": "scripts/vendor-pi-hashline.mjs",
     "divergences": {
+      "hashline/hasher.js": {
+        "reason": "Stale-edit detection compares complete line text, including trailing whitespace. Upstream hashes only the first 500 bytes of normalized text for both allocation and served-range validation, allowing an external suffix or whitespace change to be overwritten through an old anchor. The pure anchor seed remains unchanged; the authoritative per-line checksum now binds all text.",
+        "edits": 1
+      },
       "file-kind.js": {
         "reason": "OMA read seam: the whole file load — sniff sample and body — goes through one injectable opener. In a host engine the adapter installs the contained opener (workspace/readable-root admission plus the descriptor-relative no-follow walk), so a hashline read cannot reach a path the workspace guard would refuse. Uninstalled, upstream's plain fs open is the behavior — the seam adds authority routing, never weakens it. Image bytes are captured with a bounded read from that same descriptor, so the SDK cannot reopen or reinterpret the path.",
         "edits": 3
@@ -1647,8 +1651,8 @@
     },
     {
       "path": "runtime/hashline/hasher.js",
-      "bytes": 994,
-      "sha256": "6d564ea8e2348ddf86d1561a1e4f25f1e123366171819eefd6689a3fd2ac6470"
+      "bytes": 1055,
+      "sha256": "275e6d86f72b29608cde54cd41719ac7943fc6da014841ee020e49182842fe4d"
     },
     {
       "path": "runtime/hashline/index.d.ts",
@@ -2821,5 +2825,5 @@
       "sha256": "16e1adab2395005d09e878bd6a485fc84aba20d13b51bdb64d5f32b624caae9c"
     }
   ],
-  "bundleSha256": "f7209336a67449876de7008e857119637f9922e5b2afde01d485047a6212303b"
+  "bundleSha256": "5bb506ad2c11e53da14ffac3c582be7c262a11133416921744d4bbea4890cc70"
 }

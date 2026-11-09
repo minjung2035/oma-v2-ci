@@ -27,7 +27,7 @@ function loadConfig() {
         parsed = JSON.parse(raw);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -278,14 +278,14 @@ async function firecrawlFetch(endpoint, body, signal, options, label = endpoint,
         }, options);
         if (!response.ok) {
             const text = await response.text().catch(() => "");
-            throw new Error(`Firecrawl ${label} error ${response.status}: ${redactCredential(text.slice(0, 300), apiKey)}`);
+            throw new Error(`Firecrawl ${label} error ${response.status}: ${redactCredential(text, apiKey).slice(0, 300)}`);
         }
         let data;
         try {
             data = await response.json();
         }
         catch (err) {
-            throw new Error(`Firecrawl ${label} returned invalid JSON: ${errorMessage(err)}`);
+            throw new Error(`Firecrawl ${label} returned invalid JSON`);
         }
         if (!data || typeof data !== "object" || Array.isArray(data)) {
             throw new Error(`Firecrawl ${label} returned an unexpected response shape`);

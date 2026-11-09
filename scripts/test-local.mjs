@@ -4,6 +4,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
+import { fileURLToPath } from "node:url";
 import { localTestFiles, serialTestFiles, nativeExecutionTestFiles } from "./verification-lanes.mjs";
 import { readLocalTestSummary } from "./local-test-summary.mjs";
 import { workspaceTestFiles } from "./check-modules.mjs";
@@ -130,7 +131,7 @@ try {
     const phaseTimingPath = join(summaryDir, `durations-${phase.name}.tsv`);
     const child = spawn(
       process.execPath,
-      [new URL("./test-local-phase.mjs", import.meta.url).pathname,
+      [fileURLToPath(new URL("./test-local-phase.mjs", import.meta.url)),
         String(phase.concurrency), summaryPath, phaseTimingPath,
         ...phase.files],
       { stdio: "inherit", env: { ...childEnv, OMA_TEST_ARTIFACT_DIR: process.env.OMA_TEST_ARTIFACT_DIR ?? process.env.OMA_NATIVE_EVIDENCE_DIR ?? join(summaryDir, "artifacts") } },

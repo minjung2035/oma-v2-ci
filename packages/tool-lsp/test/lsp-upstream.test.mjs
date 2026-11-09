@@ -13,6 +13,7 @@ import { LspClient } from "../dist/vendor/pi-lsp/runtime/lsp-client.js";
 import { runDiagnostics, runFix } from "../dist/vendor/pi-lsp/runtime/runner.js";
 import { selectDiagnosticRoutes } from "../dist/vendor/pi-lsp/runtime/routes.js";
 import { commandExists } from "../dist/vendor/pi-lsp/runtime/command.js";
+import { collectSupportedFiles, resolveSupportedFile } from "../dist/vendor/pi-lsp/runtime/files.js";
 import { applyTextEdits, collectWorkspaceEdits, hasOverlappingTextEdits } from "../dist/vendor/pi-lsp/runtime/text-edits.js";
 const BUNDLE = fileURLToPath(new URL("../dist/vendor/pi-lsp/", import.meta.url));
 const FIXTURE = join(BUNDLE, "upstream-tests", "fixtures", "diagnostics-server.mjs");
@@ -579,4 +580,30 @@ test("030. OMA's markers are never sent to the server inside the codeAction cont
     const result = await runFix(hostileAdapter("marker-context"), { root, path: "note.tfix" }, 30_000, new AbortController().signal, ctx, "lsp");
     const details = result.details;
     assert.match(details.text ?? "", /context-diagnostics=1024\b/);
+});
+
+test("031. LSP containment accepts two-dot filename prefixes while refusing parent traversal", t => {
+    const root = tmp(t), workspace = join(root, "workspace"), adapter = fixtureAdapter("paths");
+    mkdirSync(join(workspace, "..cache"), { recursive: true });
+    writeFileSync(join(workspace, "..note.tfix"), "hello");
+    writeFileSync(join(workspace, "..cache", "note.tfix"), "hello");
+    writeFileSync(join(root, "outside.tfix"), "outside");
+    assert.equal(resolveSupportedFile(adapter, workspace, "..note.tfix"), join(workspace, "..note.tfix"));
+    assert.deepEqual(collectSupportedFiles(adapter, workspace, undefined, 100).sort(),
+        [join(workspace, "..cache", "note.tfix"), join(workspace, "..note.tfix")].sort());
+    assert.throws(() => resolveSupportedFile(adapter, workspace, "../outside.tfix"), /outside|escapes/);
+});
+
+test("032. Malformed LSP edits cannot become corrupted replacement text", () => {
+    const edit = { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, newText: "X" };
+    for (const invalid of [null, { ...edit, newText: undefined },
+        { ...edit, range: { ...edit.range, start: { line: 0, character: -1 } } },
+        { ...edit, range: { ...edit.range, start: { line: 0, character: 0.5 } } },
+        { ...edit, range: { ...edit.range, start: { line: 0, character: 2 } } },
+        { ...edit, range: { ...edit.range, end: { line: -1, character: 0 } } },
+    ]) {
+        assert.throws(() => hasOverlappingTextEdits("abc", [invalid]), /invalid workspace text edit/);
+        assert.throws(() => applyTextEdits("abc", [invalid]), /invalid workspace text edit/);
+    }
+    assert.equal(applyTextEdits("abc", [edit]), "Xbc");
 });

@@ -8,7 +8,7 @@ import { ownedMessages } from "@oma/domain/durable";
 import type { Actor, Address, Json, MailInput, MessageId, MessagePlan, OperationId, RequestKey, AuthContext, PreparedBatch, BatchCompletionInput, Receipt } from "@oma/contracts";
 import type { MailLedger, MailEffects, MailPreacceptScope, SharedAttachmentPort } from "./ports.js";
 import type { PreacceptArtifactOwner } from "@oma/contracts/files";
-import { StoreError, acceptedFailure } from "@oma/domain/errors";
+import { StoreError, acceptedFailure, errorCodeOf } from "@oma/domain/errors";
 import { receiptOfOperation as receiptOf } from "@oma/protocol/receipt-projector";
 import { assertCurrentActor } from "@oma/domain/authority";
 import { mailAttachmentRootId, messageIdForOperation as generateMessageId } from "@oma/domain/derived";
@@ -195,7 +195,7 @@ export class MailModule {
       const result = { kind: operationKind, message: messageId, recipientCount: route.recipients.length, archivePath: this.archivePath(messageId, audience) };
       let materializedAll = true;
       try { await this.materialize(opId); }
-      catch (error) { if (error instanceof StoreError && error.code === "STORE_CORRUPT") throw error; materializedAll = false; }
+      catch (error) { if (errorCodeOf(error) === "STORE_CORRUPT") throw error; materializedAll = false; }
       if (materializedAll) this.store.transaction(tx => tx.setOperationSucceeded(opId, JSON.stringify(result)));
       const finalOp = this.store.getOperation(auth.actor, key);
       if (!finalOp) throw new StoreError("STORE_CORRUPT", "accepted mail operation missing");

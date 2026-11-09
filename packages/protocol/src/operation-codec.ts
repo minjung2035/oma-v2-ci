@@ -265,11 +265,11 @@ function validateDeliveries(id: string, messages: readonly MessagePlan[], rows: 
     if (rows.length !== 0) corrupt("operation without an owned message has delivery rows");
     return;
   }
+  const recipientsByMessage = new Map(messages.map(message => [message.id, new Set(message.recipients)]));
   const seen = new Set<string>();
   for (const raw of rows) {
     if (!record(raw) || raw.operation_id !== id || !isValidActor(raw.recipient)) corrupt("delivery identity differs from operation/message");
-    const message = messages.find(candidate => candidate.id === raw.message_id);
-    if (message === undefined || !message.recipients.includes(raw.recipient)) corrupt("duplicate or extra delivery recipient");
+    if (typeof raw.message_id !== "string" || !recipientsByMessage.get(raw.message_id)?.has(raw.recipient)) corrupt("duplicate or extra delivery recipient");
     const delivery = `${raw.message_id as string}/${raw.recipient}`;
     if (seen.has(delivery)) corrupt("duplicate or extra delivery recipient");
     seen.add(delivery);

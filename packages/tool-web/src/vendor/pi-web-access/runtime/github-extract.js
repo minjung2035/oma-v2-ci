@@ -79,7 +79,7 @@ function loadGitHubConfig() {
         raw = JSON.parse(rawText);
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof SyntaxError ? "invalid JSON (config contents omitted)" : err instanceof Error ? err.message : String(err);
         throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
     }
     const gc = raw.githubClone ?? {};
@@ -718,8 +718,8 @@ function buildDirListing(rootPath, subPath) {
 function readReadme(localPath) {
     const candidates = ["README.md", "readme.md", "README", "README.txt", "README.rst"];
     for (const name of candidates) {
-        const readmePath = join(localPath, name);
-        if (existsSync(readmePath)) {
+        const readmePath = resolveWithinRepo(localPath, name);
+        if (readmePath && existsSync(readmePath)) {
             try {
                 const content = readFileSync(readmePath, "utf-8");
                 return content.length > 8192 ? content.slice(0, 8192) + "\n\n[README truncated at 8K chars]" : content;
@@ -843,11 +843,9 @@ export async function extractGitHub(url, signal, forceClone) {
     if (signal?.aborted)
         return null;
     const config = loadGitHubConfig();
-    // OMA divergence: the clone path is a git/gh subprocess writing into
-    // a host-visible clone root (/tmp by default). OMA's web tools are
-    // remote-only -- deny-by-default keeps every GitHub URL on the
-    // subprocess-free API path (and the generic fetch fallback) even if
-    // this module is evaluated without the adapter's install.
+    // OMA divergence: the installed policy permits upstream git/gh
+    // clones. Without that permit, keep GitHub URLs on the API and
+    // generic fetch paths before any clone subprocess starts.
     if (!omaPermits("gitClone"))
         return null;
     if (!config.enabled)

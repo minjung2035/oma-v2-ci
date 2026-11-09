@@ -82,6 +82,12 @@ export function createAskComponent(
       return lines.map((line) => truncateToWidth(line, width));
     },
     handleInput(data: string): void {
+      // Pi's terminal assembles a paste and forwards it with both markers.
+      // It is answer text, even when its body contains Enter or key sequences.
+      if (data.startsWith("\x1b[200~") && data.endsWith("\x1b[201~")) {
+        if (model.inputMode) model.typeText(data.slice(6, -6));
+        return;
+      }
       if (isKeyRelease(data) || isKeyRepeat(data)) return;
       if (model.inputMode) keyForInput(data);
       else keyForList(data);

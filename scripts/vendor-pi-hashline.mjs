@@ -109,7 +109,7 @@ const DEPENDENCIES = Object.freeze({
  * or the regeneration fails instead of emitting a partially patched
  * runtime.
  *
- * Divergence policy: OMA boundary seams only — the read path's file open
+ * Divergence policy: OMA boundary seams and exact stale-edit detection. The read path's file open
  * and the write path's commit+re-read become injectable so the adapter can
  * route them through OMA's contained admission and the serialized
  * quota-deciding writer. The read seam keeps upstream's plain open as its
@@ -117,9 +117,27 @@ const DEPENDENCIES = Object.freeze({
  * plan is the boundary); the commit seam is fail-closed instead: with no
  * channel installed it throws, and direct writeAtomic use is confined to
  * the bundle's own state directory, so a mutation-target write outside
- * the channel cannot happen silently. Nothing about anchors, hashing,
- * parsing, diffing or payload validation is touched. */
+ * the channel cannot happen silently. Line checksums cover complete text
+ * so stale anchors cannot authorize overwriting an unseen suffix or changed
+ * whitespace. Parsing, diffing and payload validation remain upstream's. */
 const OMA_DIVERGENCES = Object.freeze({
+  "hashline/hasher.js": {
+    reason:
+      "Stale-edit detection compares complete line text, including trailing whitespace. " +
+      "Upstream hashes only the first 500 bytes of normalized text for both allocation " +
+      "and served-range validation, allowing an external suffix or whitespace change " +
+      "to be overwritten through an old anchor. The pure anchor seed remains unchanged; " +
+      "the authoritative per-line checksum now binds all text.",
+    edits: [{
+      find: `export function lineChecksum(line) {
+    return contentChecksum(hashSource(line));
+}`,
+      replace: `export function lineChecksum(line) {
+    // OMA: served-range validation must detect every changed character.
+    return contentChecksum(line);
+}`,
+    }],
+  },
   "file-kind.js": {
     reason:
       "OMA read seam: the whole file load — sniff sample and body — goes " +

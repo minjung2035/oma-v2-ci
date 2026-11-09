@@ -382,9 +382,9 @@ export class McpLifecycleManager {
         this.healthCheckInterval = undefined;
         this.removeHealthAbortListener?.();
         this.removeHealthAbortListener = undefined;
-        await this.activeHealthCheck;
+        const settled = await Promise.allSettled([this.activeHealthCheck, this.activeConvergence]);
+        const errors = settled.filter(result => result.status === "rejected").map(result => result.reason);
         this.activeHealthCheck = undefined;
-        await this.activeConvergence;
         this.activeConvergence = undefined;
         this.onReconnect = undefined;
         this.onReconnectFailure = undefined;
@@ -394,8 +394,18 @@ export class McpLifecycleManager {
         this.retryStates.clear();
         this.pendingMetadataPublications.clear();
         if (typeof this.manager.closeAll === "function") {
-            await this.manager.closeAll();
+            try {
+                await this.manager.closeAll();
+            }
+            catch (error) {
+                errors.push(error);
+            }
         }
+        const uniqueErrors = [...new Set(errors)];
+        if (uniqueErrors.length === 1)
+            throw uniqueErrors[0];
+        if (uniqueErrors.length > 1)
+            throw new AggregateError(uniqueErrors, "MCP shutdown failed");
     }
 }
 function shouldReconnectAfterRefresh(error, hadSessionId, definition) {

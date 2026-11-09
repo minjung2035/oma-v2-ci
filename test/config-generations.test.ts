@@ -13,6 +13,20 @@ import { createCompleteConfigurationFixture } from "./fixtures/configuration.js"
 const principalModel = (snapshot: ConfigurationSnapshot): string => snapshot.config.agentProfiles[snapshot.config.principalProfile]!.modelProfile;
 const withPrincipalModel = (snapshot: ConfigurationSnapshot, model: string) => validateConfig({ ...snapshot.config,
     agentProfiles: { ...snapshot.config.agentProfiles, principal: { ...snapshot.config.agentProfiles.principal!, modelProfile: model } } });
+test("017. An authored role order survives managed publication without changing the policy", () => {
+    const f = createCompleteConfigurationFixture();
+    try {
+        f.edit("config.json", manifest => { manifest.roles = Object.fromEntries(Object.entries(manifest.roles).reverse()); });
+        const before = loadConfigurationSnapshot(f.path);
+        const candidate = { ...before.config, maxWorkers: before.config.maxWorkers + 1 };
+        assert.equal(commitManagedEdit(before, candidate).kind, "committed");
+        const after = loadConfigurationSnapshot(f.path);
+        assert.equal(after.config.maxWorkers, candidate.maxWorkers);
+        assert.deepEqual(after.config.agentProfiles, before.config.agentProfiles);
+        assert.deepEqual(after.config.modelProfiles, before.config.modelProfiles);
+        assert.deepEqual(after.roles, before.roles);
+    } finally { f.close(); }
+});
 for (const inline of [false,true]) test(`016. First-conversion orphan generations are collected under an ${inline?"inline":"manual"} manifest`,()=>{
  const f=createCompleteConfigurationFixture();try{
   const path=inline?f.input:f.path, before=readFileSync(path), snapshot=loadConfigurationSnapshot(path);

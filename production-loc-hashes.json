@@ -228,11 +228,11 @@
     },
     {
       "path": "apps/oma/src/request-cache.ts",
-      "sha256": "b0f35e25dcdf239a54e612a06bcb86cb9de17b58ee06cd73c1ff182f7a91f560"
+      "sha256": "e3f995d080993f739241255e8adc825e4645411107c6f8fe9535ee86ff3f78ce"
     },
     {
       "path": "apps/oma/src/runner.ts",
-      "sha256": "2fb794a58fb8ff4b079c4ec355c03e99ed1ac0cd9e1351dea7a6d1e792061933"
+      "sha256": "0ce7ddc469beffd8b71f48aca9aa5a5ba735f351eef2372c37a0f53323bdd2a3"
     },
     {
       "path": "apps/oma/src/runtime/assets.ts",
@@ -392,7 +392,7 @@
     },
     {
       "path": "apps/oma/src/runtime/pipeline-recorder.ts",
-      "sha256": "659036232e3b3bf86256b2e100bf21dafae6552d849513336663a56f64576c4b"
+      "sha256": "ad8d228a3bfc6792c697657f3f0c7dc104b352cc397628d187b52271e582aafc"
     },
     {
       "path": "apps/oma/src/runtime/principal-delivery.ts",
@@ -616,7 +616,7 @@
     },
     {
       "path": "packages/config/src/generations.ts",
-      "sha256": "43fa4ca240abf5c384064e0f470deffa0015e1eb707bb22503fbba99d75b7020"
+      "sha256": "76525ea76a653603b7666bc13d14d52555f4e290cccf40003e9433500dc2f1b1"
     },
     {
       "path": "packages/config/src/index.ts",
@@ -624,7 +624,7 @@
     },
     {
       "path": "packages/config/src/operations.ts",
-      "sha256": "0ea828ffbd2383d2de095daf1d3ef7ec47233797dd7c47517425348b2a185fff"
+      "sha256": "c811a524d4d48005bf7c44597964258ddfaf55c4dd5ef29b2b837c98e6f14875"
     },
     {
       "path": "packages/config/src/policy.ts",
@@ -744,7 +744,7 @@
     },
     {
       "path": "packages/domain/src/ask-user-question/questionnaire.ts",
-      "sha256": "80b5323f303e82c2ac7f96cf065d7212511a658aaaf8f5802596bffc5c55531b"
+      "sha256": "33eb4781cbdbe33ad6b0c5844ffb2e86ef251e4068329d9eda8767d483d2662e"
     },
     {
       "path": "packages/domain/src/attestation-relations.ts",
@@ -900,7 +900,7 @@
     },
     {
       "path": "packages/domain/src/review-bounds.ts",
-      "sha256": "5ed2885076904786715d2703cfa8d2b5a33118fe8bfa8e1045cea8249ad87572"
+      "sha256": "c164503ba9f0f9f8054c3312a4e01add35deb1a578dd19c271006e16865b4020"
     },
     {
       "path": "packages/domain/src/review-evaluation.ts",
@@ -1004,7 +1004,7 @@
     },
     {
       "path": "packages/engine/src/interactive-runtime.ts",
-      "sha256": "9c80ae5b3b788b7c5e904b83d51361452976d73684d3f7894066bdb300f7a77c"
+      "sha256": "5c3ed9eea7f222fa6f3de60e7675aadc62b8958d422d9ee8d7ebac0932cbd55c"
     },
     {
       "path": "packages/engine/src/interactive-selections.ts",
@@ -1016,7 +1016,7 @@
     },
     {
       "path": "packages/engine/src/interactive-view.ts",
-      "sha256": "724ce518360cf9db9249d3c5e9155ddf4f3bbdada48f298f82d7a7bf000a59ff"
+      "sha256": "5b5791a874fac6f9914e0f5e6aeffadf3de8de46ba85e3371deed62cae969265"
     },
     {
       "path": "packages/engine/src/interactive.ts",
@@ -1152,7 +1152,7 @@
     },
     {
       "path": "packages/engine/src/principal-events.ts",
-      "sha256": "8050137f1eb3936917ce17d109e46da4b88a58e13b9c66ecae445fe114ea15ba"
+      "sha256": "91adcecb5d53980c37f28fe9396b2b96000495a8681fff75cfad0ff8680ec3ee"
     },
     {
       "path": "packages/engine/src/principal-launch.ts",
@@ -1176,7 +1176,7 @@
     },
     {
       "path": "packages/extension/src/ask-user-question.ts",
-      "sha256": "39634765b1bdf8f483f49eeebe17611ff911766e3054945edb51ae50b62c9977"
+      "sha256": "863d6267d5b7251250fc343ad545ed719d3a2fc1b7c9bb939df34d2f6ec94380"
     },
     {
       "path": "packages/extension/src/collaboration-help.ts",
@@ -1288,7 +1288,7 @@
     },
     {
       "path": "packages/git/src/observe.ts",
-      "sha256": "22c1a53c932f7618ff27cb07c89ac2c1df395e124ecff81bc200620bf96e0b15"
+      "sha256": "7f20ce9667b58c2880d62529dec277e48c6dd1104ad01603d64e8208e2e8e2db"
     },
     {
       "path": "packages/git/src/paths.ts",
@@ -1416,7 +1416,7 @@
     },
     {
       "path": "packages/mail/src/batches.ts",
-      "sha256": "15586bec2f22d9620fdb757e549a72d0f70adefdcb5cf7c44b221919024f042c"
+      "sha256": "a526796ee161ac46e7605033fdaaa693f354b76908d91d21938bb767fe64c03d"
     },
     {
       "path": "packages/mail/src/display.ts",
@@ -1432,15 +1432,15 @@
     },
     {
       "path": "packages/mail/src/index.ts",
-      "sha256": "1595ebd63110c8ec16311aa35f6392c6496293983d7840951d16776c757c9b9b"
+      "sha256": "d2a6de88088bd8c5783e8a54addbf909c4e2ca278f79305f50bbe32262f42ac5"
     },
     {
       "path": "packages/mail/src/materializer.ts",
-      "sha256": "88b21378c4091338ffe68fc70ac61f64cc9f24b0482716e16b1e71d67a75854d"
+      "sha256": "5ae69120bda020fca7f4c1558ce261b2981db2224cb774d9f6a0aa994b51c09f"
     },
     {
       "path": "packages/mail/src/observations.ts",
-      "sha256": "46b94b553157e978d4cc20ca3170f855d7afebba95a5a404337a74ce8fd32d83"
+      "sha256": "3486c3b782ae8f3f6e73ab37b25d8d0ec9951fd25790a58430556bc672ca78fe"
     },
     {
       "path": "packages/mail/src/ports.ts",
@@ -1448,7 +1448,7 @@
     },
     {
       "path": "packages/mail/src/reconcile.ts",
-      "sha256": "75dc9ff9782d9400c85da2c2bb3d0f1271bc845a34b0a40be07f16ac54a4ebec"
+      "sha256": "18465b16dbc15358f73ae671f52e482558070dd0d185d2568553b7d1f88e6d65"
     },
     {
       "path": "packages/mail/src/records.ts",
@@ -1836,7 +1836,7 @@
     },
     {
       "path": "packages/process/src/owned-execution.ts",
-      "sha256": "bba80a706e930493ed6e94826ed512c2da4abd5f76f364a5c7eb7f7eb28b8ec1"
+      "sha256": "1ba9a987ec10bfb87ceece5c82323068e4b6383f8a50c463b2f8dcc4d28b500a"
     },
     {
       "path": "packages/process/src/packet-stream.ts",
@@ -1968,7 +1968,7 @@
     },
     {
       "path": "packages/protocol/src/operation-codec.ts",
-      "sha256": "7163f0385cb20c257e439607540b7637058555edadf994d5a2f107f0dad103d4"
+      "sha256": "e1566e20b0757fed72419e2e8e1934ba2a9c9ac841d9ca49449d8db78412f302"
     },
     {
       "path": "packages/protocol/src/operation-results.ts",
@@ -2036,7 +2036,7 @@
     },
     {
       "path": "packages/reconcile/src/lane.ts",
-      "sha256": "f5c1e8bcf48fecd18df7b3b55c3fdf79150a72fca5345807d39e9c7f4954d25c"
+      "sha256": "5aea9474ffddb47de3172b7e9e1189f931637e929ffbad6c2eb75ddcf3ee80a6"
     },
     {
       "path": "packages/reconcile/src/operations.ts",
@@ -2056,15 +2056,15 @@
     },
     {
       "path": "packages/review/src/acceptance.ts",
-      "sha256": "8ae35fe287d2886bc9c6318dcbc7f1dc229334325945db0f269fe81cec7c9d4c"
+      "sha256": "8376cd638bab0196fa4f866caca1d2447d6992710809b1c007e8390f4739045e"
     },
     {
       "path": "packages/review/src/advancement.ts",
-      "sha256": "203a3d5d6dd404897b2f515578a49579cbaeec29a400327255be8669072ec1e6"
+      "sha256": "9e0b758ffe445708ec5290066dbdd40b09d487b968155de7a6f929a1ffeefa81"
     },
     {
       "path": "packages/review/src/authority.ts",
-      "sha256": "badbae789c5f0e21b47bb8fc43f43f9ffa78c186ada6c6bb6b1f28fe04c70ad7"
+      "sha256": "4fe6e075c094844dabd63494f1f5b34a41fb14e38ecf77fdf47fb8bcf620974c"
     },
     {
       "path": "packages/review/src/index.ts",
@@ -2080,7 +2080,7 @@
     },
     {
       "path": "packages/review/src/preparation.ts",
-      "sha256": "88725b5ababce500301855e94e98b72a2db36cf47764a76d6ebef8b62fed4ecd"
+      "sha256": "dba7ed9ddad59f86ee7923c66e3fe0e6e6499cbe09fc5bf069334435adefe8b6"
     },
     {
       "path": "packages/review/src/status-projection.ts",
@@ -2136,7 +2136,7 @@
     },
     {
       "path": "packages/storage/src/durable-fs.ts",
-      "sha256": "861720c291289249d02c1aa6caf01759edadce3045ceacaaa9793825b1bcf946"
+      "sha256": "40ad546c629447dead13075232639d54a973646bf26d09e6bd1f00cfff72ec5c"
     },
     {
       "path": "packages/storage/src/execution-journal.ts",
@@ -2196,11 +2196,11 @@
     },
     {
       "path": "packages/storage/src/package-staging.ts",
-      "sha256": "7beb9432b5362a48329d79dbf86aac203ebe7a5e8bfe4e535896cd922b697a47"
+      "sha256": "690cf67821d76d718c31740eb78c2c1f83a3e1c816d1dff790cb969953c18758"
     },
     {
       "path": "packages/storage/src/package-tar.ts",
-      "sha256": "4dac2e8a02dc62b87eae5fec21ed4895d1ec24428bdef549817338fecb1c38cb"
+      "sha256": "21ef9000ae1bc26fd667d7f4409c5558e0526f8fe8ac054e910a416c3a3b74f2"
     },
     {
       "path": "packages/storage/src/preaccept-artifact.ts",
@@ -2320,7 +2320,7 @@
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/manifest.json",
-      "sha256": "a281691128628c46c07d9f451f786a9069ef5f536e14f113f41a859b3551826e"
+      "sha256": "515a1a4ef07b55e09a6c6571751d86f3a63b7079364d608940d5e51c3894fb39"
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/node_modules/@borewit/text-codec/LICENSE.txt",
@@ -3388,7 +3388,7 @@
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/hasher.js",
-      "sha256": "6d564ea8e2348ddf86d1561a1e4f25f1e123366171819eefd6689a3fd2ac6470"
+      "sha256": "275e6d86f72b29608cde54cd41719ac7943fc6da014841ee020e49182842fe4d"
     },
     {
       "path": "packages/tool-hashline/src/vendor/pi-hashline-edit-pro/runtime/hashline/index.d.ts",
@@ -4252,7 +4252,7 @@
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/manifest.json",
-      "sha256": "3224c89f37f742fb28b37a2af3822a5ab1cae30cc1f4bb3c9ade02ca885e3e7e"
+      "sha256": "278a5ca263be48596fdf3528a64358de1f5da336b0ef94653ba731051c8ac3a3"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/adapters.d.ts",
@@ -4276,7 +4276,7 @@
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/files.js",
-      "sha256": "29eb1ee275e04323804e989cdb949a708d6e1890f21bb9a825be448c96d3d6d7"
+      "sha256": "7ecc0a7f7022155ad91ee318772cb78eb0518dfad6dcb3979f41007c58f71dfb"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/lsp-client.d.ts",
@@ -4316,7 +4316,7 @@
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/text-edits.js",
-      "sha256": "b144cf9243396bde5b2e984e41a0f00bdd3a2c2c81eb817b798794a3c7615a25"
+      "sha256": "514591ad82e2a19332033498f39aecec1898b07a3999d4790774a5459ac4ae0d"
     },
     {
       "path": "packages/tool-lsp/src/vendor/pi-lsp/runtime/types.d.ts",
@@ -4436,7 +4436,7 @@
     },
     {
       "path": "packages/tool-mcp/src/index.ts",
-      "sha256": "95bc54d0b701e9a49c7eb19459327afc0cb61c522c132dabbafb1191297208f1"
+      "sha256": "066099e8a57b66ad4be535fccd29a2beb2fccdee8ca6dd61a1cf931317b383ec"
     },
     {
       "path": "packages/tool-mcp/src/mcp-sdk-env.ts",
@@ -4452,7 +4452,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/manifest.json",
-      "sha256": "b56114a54bcdb126a17ae79d59fed46be17cdf7a8f83bc85d525ab6211fd0456"
+      "sha256": "a4fe14c2cc021c5968d95aac8a2747fdbdd52cb1b6b04f8b1a8877aaf0d700e5"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/node_modules/@modelcontextprotocol/client/LICENSE",
@@ -12540,7 +12540,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/claude-plugin-loader.js",
-      "sha256": "8784b0d767dcefa9f1b76ad27008832023a2f59567ea3987120182f2710cc0e9"
+      "sha256": "2dae1f02ae8a50264d927e44de07609b698c41d2322e9e4dc6745f606376afc1"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/commands.d.ts",
@@ -12708,7 +12708,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/lifecycle.js",
-      "sha256": "c1dce40a9cef4050ab2006b6b7ad759a57bb7876fa6490f2af566728d38352a5"
+      "sha256": "50f3593e0688a63ba690c0139c1aa6490c49d04f21055667596f5d7d7e401504"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/logger.d.ts",
@@ -12724,7 +12724,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-auth-fetch.js",
-      "sha256": "8023973767e02cc06ce2ce38dc0985792ee09caeb776b993f2d7e468b40cce13"
+      "sha256": "bb78cffa737f7a645df504cf50074d55d67d969b36bf4d8ce973dd008dbee394"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-auth-flow.d.ts",
@@ -12756,7 +12756,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-callback-server.js",
-      "sha256": "2a32a34664656a10855e257aec9d93ae9eb99aa5613d87675ef3823af24104bc"
+      "sha256": "151bc51d7212f2070ff769d4d4eea83c9bf40e3bfb4351e5a555df103c2dc87b"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/mcp-code.d.ts",
@@ -12992,7 +12992,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/request-headers-command.js",
-      "sha256": "947732ba8d68aeec3c5519fe01d83651d76f5d0ca9993663e45fecd3cea6e261"
+      "sha256": "729e81e2c33b6cca40a7dd56ff310ed269dafaf6f0d4e047e79d4b53dcba4e05"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/resource-tools.d.ts",
@@ -13056,7 +13056,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/server-manager.js",
-      "sha256": "034bc9e947d95fa1a481ef50a66907b4d052c8fe24b6fe37f75cf9b80ec73de3"
+      "sha256": "993316694c81b90307cec168118fc2559eec1c69751871c3854e43a2dec24e1a"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/session-approvals.d.ts",
@@ -13200,7 +13200,7 @@
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/runtime/utils.js",
-      "sha256": "b57a3a3867ab1caf3bd47428c0a8ae107caa99b05fb67cf678b4d02d1cfd198e"
+      "sha256": "cf72f9a9d8d34c70a2b0784adbd882c1b4c58c80e28bbb1c200778780e8643ff"
     },
     {
       "path": "packages/tool-mcp/src/vendor/pi-mcp-adapter/upstream-tests/__tests__/abort-signal.test.ts",
@@ -15000,7 +15000,7 @@
     },
     {
       "path": "packages/tool-runtime/src/contained-search.ts",
-      "sha256": "dda76118bef211a502922b9ca04d9460934e2b7f7f381c8c39e02474244c9703"
+      "sha256": "e601c06999f170597d9c8437bda17b411b0145962aade9e781f57a234d3df161"
     },
     {
       "path": "packages/tool-runtime/src/contained-tools.ts",
@@ -15052,7 +15052,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/manifest.json",
-      "sha256": "35376d25f94ee8ca2cdbd58cc87090ef6016cd72a2d777c55853697c9fc2df82"
+      "sha256": "8b49aa2fa4cfaa852c496d4b9a3245636a6e981e6f79475f942b97878e022dca"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/node_modules/.package-lock.json",
@@ -56136,7 +56136,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/anysearch.js",
-      "sha256": "79004993ded845908153e8b0287715a72d6d10b228182f0748537d9d8382aaee"
+      "sha256": "e15373d8ab9743475da37b077d5511326e00f147d6a0c4bc234b504e38b75ae4"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/auth-fetch.d.ts",
@@ -56144,7 +56144,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/auth-fetch.js",
-      "sha256": "520554f0f99c73cce6b6d0607787b30afbdb7c4dd5e9cf7022cb1682aa37c01b"
+      "sha256": "cfba8fb90d74029ba70cd0bcecaa4b1d5a033c50cc2ac1b130a29d642fbd1a02"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/baizhi.d.ts",
@@ -56160,7 +56160,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/bocha.js",
-      "sha256": "34f6d1691296ff7533cdd431e0962349ef70c6991f4cb316bc0327f31e1368ef"
+      "sha256": "23ad3ffbd5f1f4e35afea0c830b58cbe6d1a9bff0fffbd23152232d7e35eb877"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/brave-rate-limit.d.ts",
@@ -56176,7 +56176,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/brave.js",
-      "sha256": "5e209a54615a62299e8ac459f173cd9eb22a35f6de83d259b4d2af5285b3105a"
+      "sha256": "11e5338efa2fd5962ef02755f7fe1b6334722d3cec139c2358e9d8c938d13de0"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/brightdata-unlocker.d.ts",
@@ -56208,7 +56208,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/content-find.js",
-      "sha256": "d7d4a0a040e6f0b4d88b86107fddbb631b7f88099e9046afcfc6ee2b2094fb21"
+      "sha256": "c74742e7fd51922c77e1a7e094b7b15607dbb11c18dfbb4746e02b3d83442a9f"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/crawl4ai.d.ts",
@@ -56216,7 +56216,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/crawl4ai.js",
-      "sha256": "0998385bd4d8e1d9c5d32273421b8ce0db054085360b27e6e5861dd3beb23fca"
+      "sha256": "ae0e9a5c20ca1bf5adfa1799b790957a86bdaa300e02d7d4727c280c8131206a"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/credential-source.d.ts",
@@ -56232,7 +56232,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-page.js",
-      "sha256": "42ce1bff7135b0ae387529938a7f52b8223be9350588f71d79b48274532fa35d"
+      "sha256": "57c91d0ecef6954efa4e383c54c16f87f044dcd814b4dabda35fb7ee473ae845"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-run.d.ts",
@@ -56240,7 +56240,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-run.js",
-      "sha256": "ae8c35924cc987ddad39e52f5b10418a41050908dad715fefd55e47f20029fdf"
+      "sha256": "38529ccca1a5b2377c557973a143afc481afcb9939ee1b7bdd748eb6fe073044"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-server.d.ts",
@@ -56248,7 +56248,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/curator-server.js",
-      "sha256": "88e38eddbbc5312c9dfe82df870d4573b18ae0333aa148e169046066c1fb0c21"
+      "sha256": "7ac763283c3fa619c3cf20476e7d96aaa0917918bf6b3ce8ba5db37d795d2f6f"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/data-uri-sanitize.d.ts",
@@ -56264,7 +56264,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/datalab-pdf-extract.js",
-      "sha256": "5d5c3ceaacdef88ec5bd6acacfac07478e0a2948fafd045ee086ecde1c95878c"
+      "sha256": "d40ffd269efec668cfd05599a913ba3f9e397a7f71470672cff45d4d4d286ee5"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/declared-web-links.d.ts",
@@ -56296,7 +56296,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/exa.js",
-      "sha256": "69995b175e60802982ceb8bd6e32e90e06c425ac87c0022f4da4425c8dd8621c"
+      "sha256": "30cf69580727e6fa16b24e3173a44059e82b175ddabedcf19a844e390ecf722f"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/extract.d.ts",
@@ -56304,7 +56304,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/extract.js",
-      "sha256": "afee48ea817e518cf1534d54ab983104f245e0dcaef124606a8b6cba415b5887"
+      "sha256": "f3c9952a5dd24e4aff26b14c8c948365598e88e6a34bf4c215504d31e1352903"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/feature-config.d.ts",
@@ -56312,7 +56312,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/feature-config.js",
-      "sha256": "14d39f99200fde8018fd17690cf8b5d3d2a209e8db2fa12af05db44ce03181f4"
+      "sha256": "27c406a040ca3d58e388915b906c62b89f7814e94a3ff0cb51abd0ac1e428a15"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/fetch-params.d.ts",
@@ -56328,7 +56328,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/firecrawl.js",
-      "sha256": "e594853af6266bf17d55cd9741349586530036903874bded9d17fd38b2976301"
+      "sha256": "fdb4b7b5260abb300fe2f27f7742d5535a925a7acefc5953251dfffd3eb6000b"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-adc.d.ts",
@@ -56336,7 +56336,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-adc.js",
-      "sha256": "5d0ea3e07c71e5571229c925e52ac97cd8b028168c75e21589de950e538c74ec"
+      "sha256": "210516b6c1b2ce2e4540ec8001f6c2a400374c62a79fe07925a2bae26f9b9b34"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-api.d.ts",
@@ -56344,7 +56344,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-api.js",
-      "sha256": "7466ff3a348dbaf5456f97783718e4fd1f83d88056826b5f430bf358c2f05145"
+      "sha256": "374b68ae117e66e82f97f6b3d761257eb6751d4919b6764b04ec926f35ff420f"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-pdf-extract.d.ts",
@@ -56360,7 +56360,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-search.js",
-      "sha256": "9dacc7fe9ce8a0fcac42bfbe6a199925e4904ad7ed149135b3abdff505285397"
+      "sha256": "364bf9746683a5d4dee465407356546e3628681d085775bdf60e713d45a16f99"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-url-context.d.ts",
@@ -56376,7 +56376,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-web-config.js",
-      "sha256": "57b94f0167b8819029cc8f3a69116cd47f7c14db66907375ff3060aad4dc203a"
+      "sha256": "56971ac120022a057722b5d5bd55b6ad6f19c574949b457068df2a38c538b939"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/gemini-web.d.ts",
@@ -56392,7 +56392,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/github-api.js",
-      "sha256": "3501af2b363ab1c906526bb65a0fc620b4506e30ca2cee814a423bf47f372ca6"
+      "sha256": "df66f2de026d4e7c0b2e1406d24c749555391bd1aae70caf3efd4021fd5e3c8d"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/github-extract.d.ts",
@@ -56400,7 +56400,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/github-extract.js",
-      "sha256": "3842405bb3a5e1334cec3b280fcb12ff4a6686c824b89e881f72fb4e5537272e"
+      "sha256": "e0976bc400d0e8345964611cd21ec4cefbbfe2e29846a5712e61912ce8a22ebf"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/github-issue-pr.d.ts",
@@ -56408,7 +56408,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/github-issue-pr.js",
-      "sha256": "14b00d51ce87f48c0e87361f95c9679fd5eee15717f3520521a2bf8e8b52ada2"
+      "sha256": "1e129a68f03b95857541f2d79abf4ee0d4843393ee2879f6ed48133e2ff8b2d7"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/index.d.ts",
@@ -56416,7 +56416,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/index.js",
-      "sha256": "90558f5c056e0d28acff28e462feb7130f56721509646c12849cee3ebc391449"
+      "sha256": "8a2c55e006ceeae63a05c242c7a4db81302343f95cbb8555c913c8ec91c399cb"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/jina-search.d.ts",
@@ -56424,7 +56424,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/jina-search.js",
-      "sha256": "552c341ffe76fb6042a04cd4bdfae63ac5357d5197e189fdc49236cd6aa37816"
+      "sha256": "f913a87096d854bb9cc7356de861780ffe5d75a553eff6cb482e470187f061a9"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/kagi.d.ts",
@@ -56432,7 +56432,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/kagi.js",
-      "sha256": "0d4b4b0ebe336209b6e68a9ee4f508e74839945d485279fef0469449bc4201e7"
+      "sha256": "73d25c66923b554719d5ba81a132d4c1a672db68f9bb1a538641adda2447a8fb"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/kimi-search.d.ts",
@@ -56440,7 +56440,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/kimi-search.js",
-      "sha256": "b97c76a614fb75f5f136955eeb8c2270dd62e1dd9730ba3a220dd4b13e4df260"
+      "sha256": "28052b9e635397c69b924333a67d5e20b2fbda5e2bb3761755f5119921e58f47"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/mistral-search.d.ts",
@@ -56448,7 +56448,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/mistral-search.js",
-      "sha256": "517b60257a167d25bd6e314aaf4a47fcc07016491bfedfb5ddd7dc7032974425"
+      "sha256": "ebcba71a629104e964805f34bfa100763c22df68a330775e635f632bdece4466"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/ollama.d.ts",
@@ -56456,7 +56456,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/ollama.js",
-      "sha256": "1346f8a560920c41f6067562b1f837b8338e7800e97ba0befe26887650999fa1"
+      "sha256": "0ef86429672b301cd92a40ec3c7f4cf00837e163693bd67c6db7d24a64d0683e"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/openai-search.d.ts",
@@ -56464,7 +56464,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/openai-search.js",
-      "sha256": "7281518052bfb75ac6f62b5732208f50364885128b1a40c2ba2ddf963df6fee4"
+      "sha256": "3178973d8167b5425153bacd682d2d0aa99092361b6359c38a8c484e9db9a716"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/opencode-session-headers.d.ts",
@@ -56480,7 +56480,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/page-query.js",
-      "sha256": "1c78d73eb50d44466845ef9ef7272602fc3554ae70beb9d09d0282206d3bf222"
+      "sha256": "025babf5621f71db70a921e7b9047f81e17168be81e8b666c23cc3d11cf2c674"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/parallel-mcp.d.ts",
@@ -56496,7 +56496,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/parallel.js",
-      "sha256": "c7452ac32e09a7310754ca943156b0978e84020e2428ebb88e499a7b43a8e9fb"
+      "sha256": "25e5bc2db07cdc163ef1858889be49664f47bb01661fb680acbd64e6176898a6"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/pdf-extract.d.ts",
@@ -56504,7 +56504,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/pdf-extract.js",
-      "sha256": "785b27f53ae6702f528ee9d9fd63919457664aefe16061b0d5cce2ee6696b4f5"
+      "sha256": "831e5816a7f8b39f2e6187d891f6e970e05bdaf6aa52e0e3ced8be9cfda93c50"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/perplexity.d.ts",
@@ -56512,7 +56512,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/perplexity.js",
-      "sha256": "d94b57ce055c47dcf548e8d0732990fd763bf559195f0c3766dd146ad29f642d"
+      "sha256": "bcd3e97900524d222caf84c9cb44633d672cb17ab09f3410bf9146f341f3c0ee"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/promise-try.d.ts",
@@ -56524,7 +56524,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/querit.js",
-      "sha256": "8c20d47550d64ce8156b124a64f7291ab00b723f2feae329bd0b3230caff1258"
+      "sha256": "b03c87d4f22a33b51b57ecfa9b201862ddb3132b0b1e208ffccc7078e860dadb"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/query-rewrite.d.ts",
@@ -56572,7 +56572,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/search1api.js",
-      "sha256": "13bd5982c4e821fb343b67fa4d6bb4700c722d9ea0035972f9817f5e8a3f2261"
+      "sha256": "60e28bd91753d1c1e5c71b49371a23b4f4bd3bd709ac4c25e58bf834c8872636"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/searchinfinity.d.ts",
@@ -56580,7 +56580,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/searchinfinity.js",
-      "sha256": "7e96f71003e15ed269910d6518e988bd37f0ca557f34931a98cbbc42a7881a4c"
+      "sha256": "c05b0f88b25af04aa021a28982febf7eee467d7d6e075de320dae4eb49b2a9ba"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/searxng.d.ts",
@@ -56588,7 +56588,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/searxng.js",
-      "sha256": "3c20a252d69cd8b0cf4dc6ad7cbcfdc5fa3402289b235973d6e3afead797d746"
+      "sha256": "b549ba5fe20471361b53f512957a74dfd91bebd68425bcd2d071c1eb795ca90d"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpapi.d.ts",
@@ -56596,7 +56596,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpapi.js",
-      "sha256": "0572cc9857ea478d3694bf8ed1ea663f4485d61b3a372efae069de1e7b9e390e"
+      "sha256": "bf5494c42f45a72eba665ae93b372e2f401fd1e8297755f2f62f231c412d9541"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpbase.d.ts",
@@ -56604,7 +56604,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpbase.js",
-      "sha256": "5528b8f9d6934eb3ef48e1793c37e083f752d303c1c5a35276b7ab8e39c3fe9a"
+      "sha256": "969216b7ee813f0b52300a97271e3b7540665576edbdf3097bda54b05ada8f18"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpdive.d.ts",
@@ -56612,7 +56612,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serpdive.js",
-      "sha256": "85a5c9404efd21440c494bdae115c76c4b71436ca4ae66a7038810a4549e2c49"
+      "sha256": "e7ac738e705fb5f288c894795290eb539da12b19106ebb085fa6456b85856047"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serper.d.ts",
@@ -56620,7 +56620,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serper.js",
-      "sha256": "c90e20770604ea0196a31aac86944f4769dc4b75d22f9d14d6c77f767aff6c67"
+      "sha256": "510ce2864d89275d5991504e21fe042f23cca8de0bdbce56f712044fc51f9028"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serply.d.ts",
@@ -56628,7 +56628,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/serply.js",
-      "sha256": "9e571e454314d421a193de17bda60867e6da20cdb656e7e35fcc622ca701f046"
+      "sha256": "4252e44864dbe0d9062b27fa323fa8d2abf02c3c43fb2f006fda1bdcb7622312"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/source-check.d.ts",
@@ -56644,7 +56644,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/ssrf-protection.js",
-      "sha256": "47ff598d123793dd2ee7549eb9bdcb8dec8a23923738a7825f465d477798e63d"
+      "sha256": "0a95cd5e484be980a72e181c4ccd4ee053a206ae0209775d76347a7d3b095672"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/storage.d.ts",
@@ -56676,7 +56676,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/tavily.js",
-      "sha256": "f4a085c77c1f167602c22d49dee606dda91bdb15107360fa7342c1e8c8c8bb90"
+      "sha256": "5caad79290b737f20897407518961db2cbe06912255138b5069a946ac2d0ed74"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/tinyfish.d.ts",
@@ -56684,7 +56684,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/tinyfish.js",
-      "sha256": "7c0861c8b2eacf92bef245939d68081471e5d8f72a64f016428532852cc03ef3"
+      "sha256": "494b5c016909ff3e7a2019679f4665a67fe5d3bbe0806b22359ecb2d501119ac"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/tool-activation.d.ts",
@@ -56696,11 +56696,11 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/utils.d.ts",
-      "sha256": "35936a27dd97382c81b75e28d64d9cf6579164b5b0c1c5de5a96cfa75ecad9d8"
+      "sha256": "9b81262273311c6414c799144cccc610cbc334573a06d81048267abbf491c6f1"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/utils.js",
-      "sha256": "580cffdb1bdd4b89d397965063f35c6b47bfb466a21a46fcaf1e034adf764f87"
+      "sha256": "a5b7f363a97560410bdb091e436be5307d9fafd1f131b660c5b8808045507983"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/valyu.d.ts",
@@ -56708,7 +56708,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/valyu.js",
-      "sha256": "c4795bc7ece6570c8e903d35f8bb7f117a15299efd7698beb1de0dc65abd6aab"
+      "sha256": "4dcb7767f5e71ece8f56a660e9e9c818e7477d21d1308b6b459ffec9f5087ea1"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/video-extract.d.ts",
@@ -56716,7 +56716,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/video-extract.js",
-      "sha256": "f859fd562e4e01527d0669adea9435a4bcfa5d4e0657eb3997f467a36c4c9dec"
+      "sha256": "e1380e4c83c01a5c2c696c03ca67f9730dab72de40f566e8c7ae42165f852424"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/xai-search.d.ts",
@@ -56724,7 +56724,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/xai-search.js",
-      "sha256": "403959df81bdbb94545d9500d2c0c12a5ee79f8274e7ad48010666238ccc50ec"
+      "sha256": "b0c5788056738c667552d1b09b402b7334ea7cb750d9068de26c2490a314f855"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/xcrawl.d.ts",
@@ -56732,7 +56732,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/xcrawl.js",
-      "sha256": "52841a07f829524df221702dbe105213237cc6f759790d005cde69bebbd11085"
+      "sha256": "5076b31c157742d60b84905c6e34aee913c8d14c5213c4578147588ecd7b1c22"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/you.d.ts",
@@ -56740,7 +56740,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/you.js",
-      "sha256": "d2fb17b594f99af00dc92bb590cf69371c1ef1f96db5c394f835826c44626fbc"
+      "sha256": "c52cd60f0b95dad6fbadaff0fd23650fa9b18f347d533a36d40ea769d55b2a0a"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/youtube-extract.d.ts",
@@ -56748,7 +56748,7 @@
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/youtube-extract.js",
-      "sha256": "1b056f128f87a009ae638949de0599ef3523c0dfbf49a21d3e34c0c58f81004c"
+      "sha256": "3e342236a0ec0dc06cfaf20b9a37bdbda4f0f2378d6df47fa53b372244716ab0"
     },
     {
       "path": "packages/tool-web/src/vendor/pi-web-access/runtime/zai.d.ts",
@@ -57524,15 +57524,15 @@
     },
     {
       "path": "packages/tui/src/app.ts",
-      "sha256": "1997e010aff079a3d8eaa115d245a40d6316517d813b6d7af567f08872198bdf"
+      "sha256": "51eaf2a65bdbb5d246848cb125e715be28811b18225de9945c9e340e97c942e1"
     },
     {
       "path": "packages/tui/src/ask-user-question/component.ts",
-      "sha256": "5ae03def1983443a0408ce9ca7d761ece62bf21f0abf42d09b81b7665658248e"
+      "sha256": "c9df10bde6075f24ff657ce302e3fc3871d86ec0740057ab301140a9235e8c52"
     },
     {
       "path": "packages/tui/src/ask-user-question/presenter.ts",
-      "sha256": "d74fc0a8f3c79d90111d5e8f1bd6099449af09b4cc44ccc5e7458e0e86da1a25"
+      "sha256": "c92cb12d06c10b665465b9ac4e728a7709691891f7197eb9565a3a42c547937a"
     },
     {
       "path": "packages/tui/src/cells.ts",

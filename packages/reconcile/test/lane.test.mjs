@@ -93,3 +93,26 @@ test("004. A settled recovery fence does not skip Resident shutdown or hide its 
   });
   assert.equal(quiesced, 1);
 });
+
+test("005. A hint after the final work check starts another recovery pass", async () => {
+  let passes = 0;
+  const requested = Promise.withResolvers();
+  const lane = new ReconcileLane(async () => {
+    if (++passes === 1) queueMicrotask(() => queueMicrotask(() => {
+      lane.request(); requested.resolve();
+    }));
+  }, error => { throw error; });
+  lane.request();
+  await requested.promise;
+  await lane.join();
+  assert.equal(passes, 2);
+  await lane.close();
+});
+
+test("006. Closing before dispatch prevents queued recovery effects", async () => {
+  let passes = 0;
+  const lane = new ReconcileLane(async () => { passes++; }, error => { throw error; });
+  lane.request();
+  await lane.close();
+  assert.equal(passes, 0);
+});

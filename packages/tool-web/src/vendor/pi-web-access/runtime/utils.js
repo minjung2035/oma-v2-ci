@@ -90,6 +90,12 @@ export async function fetchWithCredentialRedirects(url, init, credentialHeaders)
         const location = response.headers.get("location");
         if (!location)
             return response;
+        // Release the abandoned body before following or refusing its target.
+        // Cleanup must neither wait for the remote stream nor replace its result.
+        try {
+            void response.body?.cancel().catch(() => {});
+        }
+        catch {}
         if (redirects === MAX_API_REDIRECTS) {
             throw new Error(`Too many API redirects from ${url}`);
         }
@@ -444,8 +450,8 @@ async function fetchViaCurlOnce(url, init, proxyUrl) {
         "--output", bodyFile,
         "--write-out", "%{json}",
     ];
-    if (method !== "GET" && method !== "HEAD")
-        args.push("-X", method);
+    if (method === "HEAD") args.push("--head");
+    else if (method !== "GET") args.push("-X", method);
     for (const [name, value] of headers.entries()) {
         if (value === "")
             continue;
@@ -501,7 +507,7 @@ async function fetchViaCurlOnce(url, init, proxyUrl) {
                 signal?.removeEventListener("abort", onAbort);
                 if (signal?.aborted)
                     return reject(new DOMException("The operation was aborted.", "AbortError"));
-                if (code !== 0 && !out.trim()) {
+                if (code !== 0) {
                     return reject(new CurlTransportError(`curl exited with code ${code ?? "unknown"} via ${redactProxyUrl(proxyUrl)}${stderr.trim() ? `: ${stderr.trim()}` : ""}`));
                 }
                 resolve(out);
@@ -543,7 +549,7 @@ async function fetchViaCurlOnce(url, init, proxyUrl) {
     catch {
         // Older curl without %{json}; the header dump already provided the status.
     }
-    const nullBody = status === 204 || status === 205 || status === 304;
+    const nullBody = method === "HEAD" || status === 204 || status === 205 || status === 304;
     const response = new Response(nullBody ? null : new Uint8Array(bodyBuffer), {
         status,
         statusText: statusText || undefined,

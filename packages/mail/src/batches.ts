@@ -1,4 +1,4 @@
-import { mailEntryPresent } from "./observations.js";
+import { mailEntryPresent, withMailInbox } from "./observations.js";
 
 import type { Actor, AuthContext, BatchCompletionInput, MessageId, PreparedBatch } from "@oma/contracts";
 import type { MailLedger, MailEffects } from "./ports.js";
@@ -209,7 +209,7 @@ export class BatchCoordinator {
       this.effects.readMessage(message);
 
       const inbox = this.effects.openInbox(agent);
-      try {
+      withMailInbox(inbox, () => {
         const fresh = mailEntryPresent(inbox.observeInboxMessage("new", message));
         const current = mailEntryPresent(inbox.observeInboxMessage("cur", message));
         if (fresh) {
@@ -217,7 +217,7 @@ export class BatchCoordinator {
           count++;
         } else if (!current) throw new StoreError("STORE_CORRUPT", `missing mailbox delivery ${id}/${agent}`);
         inbox.flushCur(); inbox.flushNew();
-      } finally { inbox.close(); }
+      });
     }
     return count;
   }
