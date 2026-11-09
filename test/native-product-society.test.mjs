@@ -349,7 +349,10 @@ test('010. A seeded Seatbelt Worker integrates its LOW candidate and the canonic
  await until(()=>owned(base).length===0,60000,()=>'no process remains: '+owned(base).join('\n'));
 });
 
-test('011. A Seatbelt Worker engine killed mid-tool takes its detached descendants with it, and the Society still ends without residue',{timeout:900000},async t=>{
+// A blocking Worker tool holds a detached (new-session) descendant; the named
+// trusted process of that Worker is SIGKILLed. Only the whole engine scope can end the
+// descendant, and only after that may the batch reach a new engine.
+async function killedWorker(t,target){
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const worker=request=>/You are a Worker in an OMA coding team\./.test(JSON.stringify(request.messages.filter(message=>message.role==='system'||message.role==='developer')));
@@ -384,13 +387,23 @@ test('011. A Seatbelt Worker engine killed mid-tool takes its detached descendan
  const engine=await until(()=>{const rows=table();const holder=[...rows].find(([,row])=>row.command.includes('setInterval(()=>{},2e3)'));
   for(let pid=holder?.[1].ppid;pid>1&&rows.has(pid);pid=rows.get(pid).ppid)if(rows.get(pid).command.includes('--no-global-search-paths'))return pid;return 0;},60000,
   ()=>'no confined engine above the blocking tool:\n'+[...table()].map(([pid,row])=>`${pid} ${row.ppid} ${row.command}`).filter(line=>line.includes(base)||line.includes('setInterval')).join('\n'));
+ const victim=target==='engine'?engine:await until(()=>[...table()].find(([,row])=>row.command.includes('runner.js')&&/--agent worker-1(\s|$)/.test(row.command))?.[0],60000,
+  ()=>'no worker-1 runner:\n'+owned(base).join('\n'));
  const before=provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').length;
- process.kill(engine,'SIGKILL');
- await until(()=>!alive(escaped),60000,()=>`the detached descendant ${escaped} outlived its SIGKILLed engine ${engine}:\n`+owned(base).join('\n'));
+ process.kill(victim,'SIGKILL');
+ await until(()=>!alive(escaped),target==='engine'?60000:240000,()=>`the detached descendant ${escaped} outlived its SIGKILLed ${target} ${victim}:\n`+owned(base).join('\n'));
  // Only after that whole scope ended may its undelivered batch reach a new engine.
  await until(()=>provider.seen.filter(seen=>worker(seen.body)&&actor(seen.body)==='worker-1').length>before,300000,
   ()=>`worker-1 was not redelivered after its scope ended\nResident logs:\n${residentLogs(base)}`);
  const status=await ended;clearTimeout(timer);
  const terminal=JSON.parse(stdout||'{}');assert.equal(status,0,stderr);assert.equal(terminal.ready,true);
  await until(()=>owned(base).length===0&&!alive(escaped),60000,()=>'no process remains: '+owned(base).join('\n'));
+}
+
+test('011. A Seatbelt Worker engine killed mid-tool takes its detached descendants with it, and the Society still ends without residue',{timeout:900000},async t=>{
+ await killedWorker(t,'engine');
+});
+
+test('012. A Seatbelt Worker runner killed mid-tool still ends its engine scope and descendants, then the batch reaches a new engine',{timeout:900000},async t=>{
+ await killedWorker(t,'runner');
 });
