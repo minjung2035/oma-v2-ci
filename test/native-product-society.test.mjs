@@ -242,11 +242,11 @@ test('013. After its Broker is SIGKILLed and restarted, the same Principal reach
  await until(()=>brokers().find(pid=>pid!==first),240000,()=>'no replacement Broker after SIGKILL: '+owned(base).join('\n'));
  const status=await ended;clearTimeout(timer);
  const terminal=JSON.parse(stdout||'{}');
- const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').slice(-4000);
+ const screen=Buffer.from(terminal.output??'','hex').toString().replace(/\x1b\][^\x07]*\x07/g,'').replace(/\x1b\[[0-9;?]*[A-Za-z]/g,'\n').split(/\r?\n/).filter(line=>/broker|refus|UNSUPPORTED|AUTH|UNAVAILABLE|error/i.test(line)).join('\n').slice(-6000);
  assert.equal(status,0,stderr+screen);assert.equal(terminal.ready,true,screen);
  const later=answers().slice(before);
  assert.ok(later.length>=1,`the Principal made no call after the Broker restart: ${JSON.stringify(answers()).slice(0,3000)}\n${screen}`);
- assert.match(later.at(-1),/ADDRESS_NOT_FOUND/,`the restarted generation did not answer with current authority: ${JSON.stringify(later).slice(0,3000)}\n${screen}`);
+ assert.match(later.at(-1),/ADDRESS_NOT_FOUND/,`the restarted generation did not answer with current authority; last answer:\n${later.at(-1)}\nHost screen:\n${screen}`);
  assert.doesNotMatch(later.at(-1),/BROKER_UNAVAILABLE|AUTH_FAILED/,later.at(-1));
  await until(()=>owned(base).length===0,60000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });

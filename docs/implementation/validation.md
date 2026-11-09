@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `032e7625a3a4cc41abcb8c03b2130f0d5066a16c30e84859c5e6b6ceaf5410f4` (15954 files).
+verification input digest `eace900827dbaa1e65ff79d5fc8d264d5c1278b050df449cfe7c8ce6fdee035f` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4877,3 +4877,5 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `7c58aa18517`의 Native [42627628732](https://github.com/minjung2035/oma-v2-ci/actions/runs/42627628732)에서 네 runtime job(Mac26·Intel·macOS 15·Ubuntu)이 모두 success였다. 제품 시험 001–012를 포함하며, Mac26의 `native-sync-directory` 002 실패는 재현되지 않았다.
 
 `7c58aa18517`의 Architecture verification baseline은 Linux 시간 기준 시험 두 개로 실패했다: `status-responsiveness` 001(변경 요청과 섞인 status 처리 중 event loop 183ms, 기준 100ms. SOURCE146에서도 226ms로 한 번 실패)과 `powercut-lane` 009(복구 child timing 시뮬레이션). 둘 다 이번 macOS 작업이 바꾸지 않은 Linux 경로이고 이전 run에서는 PASS였다. 변경 요청의 동기 fsync가 CI 공유 디스크에서 느려질 때의 변동으로 보며, Linux 기준값은 바꾸지 않는다. `47be9ce35fe`의 Mac26 job은 실패한 단계 없이 runner 쪽에서 취소됐다.
+
+`47be9ce35fe`의 macOS 15에서 새 013이 실패했다: Broker SIGKILL·재시작 뒤 같은 Principal의 두 번째 호출이 `ADDRESS_NOT_FOUND`를 받지 못했다. 나머지 12개는 PASS였다. 실패 메시지는 대화 기록에 반복되는 첫 결과로 잘려서 두 번째 답을 담지 못했다. 이제 013은 마지막 답 전체와 Host 화면의 Broker·거절 줄을 출력한다. Host는 Broker readiness마다 Principal을 다시 등록하고 그때 Broker identity를 다시 attest한다(`society-runtime.ts`의 `register`).
