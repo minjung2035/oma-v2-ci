@@ -45,7 +45,7 @@ G-AUTH 판정: **OPEN**. 남은 항목은 sleep을 포함한 restart 뒤 current
 | 요구 항목(명세 4.3) | 증거 | 판정 |
 |---|---|---|
 | fork·setsid 후손 종료 | 제품 011: Seatbelt Worker 엔진을 SIGKILL하면 새 session의 detached 후손도 끝난다(세 Mac). gate `process`: process group kill만으로는 setsid 후손이 살아남는다. 제품은 group이 아니라 coalition으로 scope를 잡는다 | 닫힘(제품 경로) |
-| leader·runner·broker·host SIGKILL | 제품 008(Broker), 011(엔진 leader). Society 소유권 002·007·008·010(Host·실행 owner SIGKILL, 실행 범위 유지·회수) | 부분: runner 단독 SIGKILL 제품 시험 012 추가(판정 대기) |
+| leader·runner·broker·host SIGKILL | 제품 008(Broker), 011(엔진 leader). Society 소유권 002·007·008·010(Host·실행 owner SIGKILL, 실행 범위 유지·회수) | 닫힘: 제품 012(runner SIGKILL 뒤 엔진 scope·detached 후손 종료, 그 뒤에만 재전달)가 세 Mac에서 PASS(`0cd1849aeab`) |
 | PID/ID 재사용 | gate `mach-token-control`(pidversion), coalition ID는 재사용되지 않는다(명세 4.2의 XNU 근거, `launchd-scope` 관측) | 닫힘 |
 | restart와 재전달 | 제품 011: scope 종료 뒤에만 새 엔진으로 재전달한다. 008: Broker 재시작 | 닫힘 |
 | populated/empty/unknown producer | coalition `coalition_info_resource_usage`: 성공이면 populated, ESRCH이면 empty, 그 밖에는 unknown이다(`audit-session.ts`). storage 003은 unknown 사망을 원본 보존으로 처리한다 | 닫힘 |

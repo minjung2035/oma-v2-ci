@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6831f972511381b02c6ea7acf86dbcf14e8d53335b5ce6b5c08bdf3df93d86b5` (15954 files).
+verification input digest `200f21a8c5dad8ada1ca5f3e4157e47ab5fa60b55c2f6b1bfd7e2667dc56d980` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4869,3 +4869,7 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 ### SOURCE150 결과: 네 runtime job 전체 success
 
 `f2e466b7c23`의 Native [42484637825](https://github.com/minjung2035/oma-v2-ci/actions/runs/42484637825)에서 `common-runtime`의 Mac26·Intel(macos-26-intel)·macOS 15·Ubuntu 네 job이 모두 success였다. 같은 source로 처음 전부 통과한 run이다. 여기에는 제품 경로 001–011, Society 소유권, 공통 suite, installed generation, 독립 설치, Restic storage, Linux native 회귀가 포함된다. darwin-gates는 세 gate 판정이 OPEN이어서 설계상 BLOCKED이다.
+
+### SOURCE151 결과
+
+`0cd1849aeab`에서 제품 시험 001–012가 세 Mac 모두 PASS였다. 새 012도 통과했다. runner를 SIGKILL하면 그 엔진 scope와 detached 후손이 끝나고, 그 뒤에만 batch가 새 엔진으로 다시 전달됐다. Intel·macOS 15·Ubuntu는 job 전체 success였다. Mac26은 공통 suite의 `native-sync-directory` 002 하나가 `execution or scope cleanup is unconfirmed`로 실패했다. 이 시험은 이전 run들에서 PASS였다. 오류 메시지에 원인이 남지 않았으므로, 공용 execution owner가 정리 실패의 원인 요약을 메시지에 함께 남기도록 했다.
