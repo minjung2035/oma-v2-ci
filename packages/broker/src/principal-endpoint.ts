@@ -35,6 +35,7 @@
 import { randomBytes } from "node:crypto";
 import type { Duplex } from "node:stream";
 import type { AuthContext, BatchCompletionInput, PreparedBatch, Request } from "@oma/contracts";
+import { inspect } from "node:util";
 import { StoreError, publicFailure } from "@oma/domain/errors";
 import { INTERNAL_METHODS, internalEnvelopeProblem } from "@oma/protocol/methods";
 import {
@@ -147,7 +148,11 @@ function serveConnection(
     transferred = true;
   } catch (error) {
     ports.observe(error);
-    ports.fail(socket, publicFailure(error));
+    const failure = publicFailure(error);
+    // The caller learns only the code; the Broker's diagnostics keep why.
+    if (failure.code === "INTERNAL_ERROR" || failure.code === "BROKER_UNAVAILABLE")
+      console.error(`broker principal connection refused (${failure.code}):`, inspect(error, { depth: 6, breakLength: Infinity }));
+    ports.fail(socket, failure);
   } finally {
     if (!transferred) {
       try { peer?.releaseConnection(); } catch (error) { ports.cleanupError(error); }

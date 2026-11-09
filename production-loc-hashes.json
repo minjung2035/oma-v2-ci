@@ -508,7 +508,7 @@
     },
     {
       "path": "packages/broker/src/index.ts",
-      "sha256": "eaffc27de62beaa986a818e868975e95cf0fe7bcc4441da7b6ce97cd3e82d638"
+      "sha256": "5cffed4ae1b213d1c0c4b3d1f5c5aeada8750e4e9025f98cffbefd22b6c036a5"
     },
     {
       "path": "packages/broker/src/internal-dispatcher.ts",
@@ -540,7 +540,7 @@
     },
     {
       "path": "packages/broker/src/principal-endpoint.ts",
-      "sha256": "35d730bf27fb46342c8eb408eff2bc37df2285116a72618aa7d98741db9e31ca"
+      "sha256": "f567af0719f7d6acfba4ef1265eae06c77900c1edadfc030386a8ffb066ff7e1"
     },
     {
       "path": "packages/broker/src/process-ancestry.ts",

@@ -359,7 +359,13 @@ export class Broker {
       if (!auth) throw new StoreError("AUTH_FAILED", "execution scope mismatch");
       this.serveFrames(socket, peer, (raw, stream) => this.dispatch(auth, raw as Request, stream), raw => this.preflightPublicStream(auth, raw));
       transferred = true;
-    } catch (error) { this.health.observe(error); this.fail(socket, publicFailure(error)); }
+    } catch (error) {
+      this.health.observe(error);
+      const failure = publicFailure(error);
+      if (failure.code === "INTERNAL_ERROR" || failure.code === "BROKER_UNAVAILABLE")
+        console.error(`broker actor connection refused (${failure.code}):`, inspect(error, { depth: 6, breakLength: Infinity }));
+      this.fail(socket, failure);
+    }
     finally { if (!transferred) { try { peer?.releaseConnection(); } catch (error) { this.cleanupError(error); } } }
   }
   /** Only App composition can supply this directly owned socket and kernel
