@@ -604,3 +604,17 @@ test("033. Reading a message that does not exist is refused to the model and cha
     assert.deepEqual(s.operations(), []);
   });
 });
+
+test("034. A send refused for an unknown address does not hold back the Principal's next send", TIMEOUT, async () => {
+  await withScenario({ residents: ["worker-a"], script: [
+    tools(call("oma_send", { to: ["nobody"], subject: "없는 주소", content: { kind: "text", value: "x" } })), text("그런 agent가 없습니다."),
+    tools(call("oma_send", { to: ["worker-a"], subject: "다시", content: { kind: "text", value: "y" } })), text("보냈습니다."),
+  ] }, async s => {
+    await s.prompt("nobody에게 보내");
+    assert.match(lastResult(s.provider.seen[1]!.body), /ADDRESS_NOT_FOUND/, lastResult(s.provider.seen[1]!.body));
+    await s.prompt("worker-a에게 보내");
+    const second = lastResult(s.provider.seen[3]!.body);
+    assert.doesNotMatch(second, /unresolved|ACCEPTANCE_UNKNOWN|BROKER_UNAVAILABLE/, second);
+    assert.equal(principalSends(s).filter(row => row.state === "succeeded").length, 1, second);
+  });
+});

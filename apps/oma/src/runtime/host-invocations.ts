@@ -3,10 +3,11 @@
  * adapter verifies source linkage and canonical observations; it owns no engine,
  * session writer, credentials, effect executor or work queue. */
 import { basename, dirname, join } from "node:path";
-import type { AuthContext, Json, MailInput, PublicMethods, Receipt, Failure } from "@oma/contracts";
+import type { Address, AuthContext, Json, MailInput, PublicMethods, Receipt, Failure } from "@oma/contracts";
 import type { InvocationMailObservation, InvocationLink, InvocationOrigin, InvocationResolution, InvocationRejection } from "@oma/contracts/public-wire";
 import type { PublicInvocationPort } from "@oma/broker/ports";
 import type { Store } from "@oma/storage";
+import { expandAddresses } from "@oma/mail/routing";
 import { assertActorIdentity, assertCurrentActor } from "@oma/domain/authority";
 import { assertNewAcceptance } from "@oma/domain/admission";
 import { resolvedSpecDigest } from "@oma/domain/spec-identity";
@@ -423,6 +424,14 @@ export class HostInvocations implements PublicInvocationPort {
               canonicalCollaborationJson(("digest" in prepared ? prepared.digest : undefined) ?? null) !== canonicalCollaborationJson(digest ?? null))
             throw new CacheError("REQUEST_KEY_REUSED", "frozen request does not match the original action arguments and stream");
           if (submitted.ok) assertCurrentActor(this.store, auth, "git.submit");
+          // The mail owner's own routing answers an unknown address before
+          // acceptance. Asked here, it closes the original before send; asked
+          // only after the send marker, its definite refusal would leave a sent
+          // original that no later send of this actor may pass.
+          if (binding.method === "mail.send") {
+            const to = (prepared.params as { to?: unknown }).to;
+            if (Array.isArray(to) && to.length > 0) expandAddresses(this.store, to as Address[], this.society);
+          }
           const resolution = "resolution" in prepared ? prepared.resolution : undefined;
           const frozenParams: Json = resolution === undefined ? params.params : JSON.parse(canonicalCollaborationJson({ ...JSON.parse(canonicalCollaborationJson(prepared.params)), resolution }));
           if (binding.method === "agent.create") {

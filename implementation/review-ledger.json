@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 37,
-  "NOT_REVIEWED": 14367,
+  "CHANGED_WITHOUT_ORACLE": 38,
+  "NOT_REVIEWED": 14366,
   "REMOVED": 220
  },
  "lanes": {
@@ -555,7 +555,8 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": []
+   "oracles": [],
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "apps/oma/src/runtime/host-tenure.ts",
@@ -1009,10 +1010,12 @@
   {
    "path": "packages/broker/src/index.ts",
    "primary": null,
-   "status": "NOT_REVIEWED",
-   "by": [],
+   "status": "CHANGED_WITHOUT_ORACLE",
+   "by": [
+    "DR63"
+   ],
    "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "sha256": "019cfc64fdf72bc40101a260111bae6ecc9b90ff693bc6c280360f56492545b1"
   },
   {
    "path": "packages/broker/src/internal-dispatcher.ts",

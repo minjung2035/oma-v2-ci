@@ -2921,7 +2921,7 @@
   }
  ],
  "files": 581,
- "runtimeEdges": 2410,
+ "runtimeEdges": 2411,
  "typeOnlyEdges": 1000,
  "runtimeEdgeMatrix": {
   "L1-kernel -> L1-kernel": 665,
@@ -2931,7 +2931,7 @@
   "L3-workflow -> L3-workflow": 99,
   "L4-orchestration -> L1-kernel": 547,
   "L4-orchestration -> L2-facts": 3,
-  "L4-orchestration -> L3-workflow": 29,
+  "L4-orchestration -> L3-workflow": 30,
   "L4-orchestration -> L4-orchestration": 222,
   "L5-entry -> L1-kernel": 157,
   "L5-entry -> L2-facts": 22,
@@ -2978,9 +2978,9 @@
  },
  "fanOut": {
   "apps/oma/src/entry/broker.ts": 48,
+  "apps/oma/src/runtime/host-invocations.ts": 24,
   "packages/mail/src/index.ts": 24,
   "apps/oma/src/entry/oma-society.ts": 23,
-  "apps/oma/src/runtime/host-invocations.ts": 23,
   "apps/oma/src/runtime/client-runtime.ts": 22,
   "packages/git/src/context-repository.ts": 20,
   "apps/oma/src/broker/invocation-sources.ts": 19,

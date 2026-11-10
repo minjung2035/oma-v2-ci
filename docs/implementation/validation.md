@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `d7c517765215e501a24f81c6dee2c33a823cb4b2a259e894cf47160cb8094c23` (15954 files).
+verification input digest `e5bc168264917e88165422bbec5ec2d79547ee774bd9f5af3ef2aab81ee6f185` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4889,3 +4889,9 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `161ee5ffc6c`의 Mac26에서도 013은 0.3초 만에 실패했고, Broker의 연결 수락 진단에도 새 줄이 없었다. 따라서 거절은 Broker 응답이 아니라 엔진 Client에서 났다. 엔진이 이전 generation의 grant, 즉 죽은 Broker PID로 attested dial을 했다는 해석과 맞는다. supervisor의 `register`는 10초 timeout과 실패 알림이 있지만, Host 화면에 그런 알림은 없었다. 그래서 Host 재등록이 알림 없이 `current()` 검사에서 끝났거나 아예 시작되지 않은 경우가 남는다. 이제 Broker 재시작 뒤의 재등록은 어느 단계에서 무효가 됐는지, 또는 권한이 현재 Broker와 맞춰졌는지를 Host 알림으로 남긴다.
 
 `3a481f02b03`의 Mac26 화면에는 "Principal authority is current with the restarted Broker."가 찍혔다. 재등록과 새 grant 전달은 성공했지만 두 번째 호출은 여전히 0.3초 만에 `BROKER_UNAVAILABLE`이었다. 실패 JSON에는 `request` 필드가 없다. 이것은 Client scope의 로컬 실패가 아니라 Broker 응답의 공개 오류를 그대로 옮긴 형식이다. Broker의 요청 처리 실패 응답(`failureAnswer`)은 INTERNAL_ERROR의 원인만 stderr에 남기고 있었다. 이 경로도 BROKER_UNAVAILABLE의 원인을 남기도록 했다.
+
+### SOURCE152 원인 확정: 주소 없는 Principal 전송이 이후 전송을 막음
+
+`2a06a619222`의 Mac26에서 Broker 진단으로 013의 원인이 확정됐다. 재시작한 Broker의 `HostInvocations.prepareFrozen` → `RequestCache.markInvocationSending`이 "Original invocation … is unresolved; no new execution"(CACHE_UNAVAILABLE → BROKER_UNAVAILABLE)을 냈다. 원인은 Broker 재시작이 아니었다. 첫 `oma_send`는 이미 send marker가 찍힌 뒤 mail owner가 주소를 찾지 못해(ADDRESS_NOT_FOUND) 접수 전에 확정 거절했다. 그런데 그 원본이 sent 상태로 남아, 같은 actor의 이후 `oma_send`가 모두 거절됐다. 모델은 확정 거절을 받고도 "결과 불명, 원본 보존" 안내를 받았다. Linux 시나리오 `scenario-principal` 034가 재시작 없이 이 결함을 재현한다.
+
+수리: host preflight(`prepareFrozen`)가 send marker를 찍기 전에 mail owner의 routing(`expandAddresses`)을 호출한다. 주소가 없으면 기존 `host-preflight` 거절, 즉 보내기 전에 닫힌 원본이 된다. 공개 wire와 durable 거절 형식은 바뀌지 않는다. 034와 015 PASS, Principal 시나리오와 host invocation·receipt 시험 84/84 PASS. send 뒤 접수 전에 확정 거절되는 다른 경우(예: AGENT_NOT_READY)를 기록하려면 새 거절 증거 형식이 필요하다. 그 경우는 공개 계약 변경이므로 이번에 포함하지 않았다.

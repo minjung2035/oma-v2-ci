@@ -292,7 +292,7 @@
     },
     {
       "path": "apps/oma/src/runtime/host-invocations.ts",
-      "sha256": "a1fcb5630ce4a74c37e4a9f61d9fea0795f67f528b976793a7f3899613615667"
+      "sha256": "51b1b146ca72f92310f7862e6cc695ded27a5a7de44627c08d53a496e7c4f093"
     },
     {
       "path": "apps/oma/src/runtime/host-tenure.ts",
