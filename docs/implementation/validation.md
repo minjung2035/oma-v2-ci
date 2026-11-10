@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `b1618ec35a23c5c618afbeb8f33de4fec2b08af3a9cb08cf1a3cf13a7b30ac4f` (15954 files).
+verification input digest `66446379e22a251f38883bfa3faea62f2d2e2ca921ebed35db4acd9e0bd37d32` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4905,3 +4905,9 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 원인 문장은 80칸 터미널에서 잘렸기 때문에, 013은 이제 400칸 터미널에서 실행한다.
 
 `0f20c824ab3`에서는 macOS 15·Intel·Ubuntu가 job 전체 success(제품 13/13)였고, Mac26의 013이 같은 기동 실패(`previous execution scopes remain owned`, 5회 뒤 재시작 중단)로 실패했다. OS와 무관하게 간헐적으로 나는 Broker SIGKILL 뒤 회수 반례다. 넓힌 터미널에서도 개별 slot의 원인은 보이지 않았다. Broker 진입점이 기동 실패와 drain 실패의 바깥 메시지만 출력했기 때문이다. 이제 두 출력 모두 원인 사슬 전체(`inspect`)를 남긴다.
+
+### SOURCE154 결과
+
+`8f44bcc053b`에서 Mac26·macOS 15는 job 전체 success(제품 13/13)였다. Intel은 013이 PASS였고 009가 실패했다. Ubuntu는 `audit` 013이 실패했는데, Broker 기동 실패 출력을 `inspect`로 바꾸면서 `STORE_CORRUPT: immutable file is missing` 형식이 사라졌기 때문이다. 이제 출력은 원래의 `code: message` 첫 줄 뒤에 원인 사슬을 덧붙인다(`audit` 013 PASS).
+
+Intel 009의 원인: Seatbelt Worker의 요청 캐시가 나중에 관측한 receipt를 기록하는 경로(`replaceDerivedFile`)가 `ensureDurableDirectory`로 `/`까지 조상을 열어 fsync했고, `/private`에서 EPERM이 났다(`receipt update failed: contained filesystem operation failed: EPERM`). 그래서 성공한 제출이 Worker에게 결과 불명으로 남았다. 같은 run에서 동시 제출 중 일부가 quarantine `busy`(같은 키로 재시도하는 일시 거절)를 받은 것은 설계대로다. 이제 invocation 기록과 receipt 갱신은 `prepare()`가 HOME까지 이미 durable하게 만든 캐시 디렉터리 안에서 `replaceDerivedFileAt`으로 바꿔 쓴다. request cache·host invocation·receipt·spool 시험 44/44 PASS.

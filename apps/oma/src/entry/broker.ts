@@ -53,6 +53,13 @@ import { residentProjectGit } from "@oma/domain/resident-paths";
 import { SessionStorage } from "../runtime/session-storage.js";
 import type { StorageResident } from "../runtime/session-storage-state.js";
 import { collaborationSocietyBirth, readSessionBirth, requireCollaborationSociety } from "../runtime/session-mode.js";
+
+/** The failure's own code and message first, as before, then its whole cause
+ * chain: a refused recovery names its slots only in the causes. */
+function diagnostic(error: unknown): string {
+  const head = error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error);
+  return `${head}\n${inspect(error, { depth: 6, breakLength: Infinity })}`;
+}
 function usage(): never {
     console.error("usage: broker.js --society <name> [--config <path>] [--state-root <dir> --run-root <dir>]");
     process.exit(4);
@@ -178,7 +185,7 @@ async function main(): Promise<void> {
         })().then(() => { process.exitCode = exitStatus; }, error => {
             // P0V-58: e.g. a Resident whose end the drain could not prove. The
             // Store and lock are given back; the drain did not finish, and says so.
-            console.error("broker drain did not finish:", inspect(error, { depth: 6, breakLength: Infinity }));
+            console.error("broker drain did not finish:", diagnostic(error));
             process.exit(1);
         });
         return stopping;
@@ -402,7 +409,7 @@ async function main(): Promise<void> {
             await stop(0);
             return;
         }
-        console.error("broker startup failed:", inspect(error, { depth: 6, breakLength: Infinity }));
+        console.error("broker startup failed:", diagnostic(error));
         await stop(1);
     }
 }

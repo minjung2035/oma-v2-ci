@@ -21,7 +21,7 @@ import { decodeInvocationBinding, invocationFreezeSha256, invocationFreezeMatche
   type InvocationBinding, type InvocationIdentity } from "./runtime/invocation-codec.js";
 import type { MutationMethod } from "@oma/contracts";
 import type { FreshBuild, RequestOptions } from "@oma/client/request-service";
-import { ensureOwnedDurableDirectoryBeneath, publishNoReplace, replaceDerivedFile as replaceReceiptFile } from "@oma/storage/durable-fs";
+import { ensureOwnedDurableDirectoryBeneath, publishNoReplace, replaceDerivedFileAt } from "@oma/storage/durable-fs";
 import { openBeneath, withinDirectory } from "@oma/native/files";
 import { lockFileDescriptor } from "@oma/native/linux";
 
@@ -343,7 +343,10 @@ export class RequestCache {
     if (!decoded.ok) throw new CacheError("CACHE_CORRUPT", decoded.reason);
     const text = canonicalCollaborationJson(decoded.value);
     if (Buffer.byteLength(text) > this.metadataBytes) throw new CacheError("CACHE_UNAVAILABLE", "original invocation observation exceeds the metadata budget");
-    replaceReceiptFile(this.invocationPath(record.key), text);
+    // Inside the directory prepare() already made durable through the caller's
+    // home: re-walking it to / would open ancestors a confined caller may only search.
+    const path = this.invocationPath(record.key);
+    withinDirectory(path, (parent, name) => replaceDerivedFileAt(parent, name, path, text));
     return decoded.value;
   }
   /** Read-only enumeration of protected linkage, not a work queue. Each binding
@@ -533,7 +536,7 @@ export class RequestCache {
       // readable when that observation cannot fit the bounded local cache.
       if (Buffer.byteLength(encoded) > this.metadataBytes)
         throw new CacheError("CACHE_UNAVAILABLE", "receipt exceeds local cache budget; original request freeze preserved");
-      try { replaceReceiptFile(this.path(key), encoded); }
+      try { const path = this.path(key); withinDirectory(path, (parent, name) => replaceDerivedFileAt(parent, name, path, encoded)); }
       catch (error) { throw new CacheError("CACHE_UNAVAILABLE", `receipt update failed: ${messageOf(error)}`); }
       return updated;
     });
