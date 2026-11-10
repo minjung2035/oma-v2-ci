@@ -2,8 +2,8 @@
  "version": 1,
  "baseline": "b25961cc46532f5e30ff60cc381fed51c59d13ab",
  "summary": {
-  "CHANGED_WITHOUT_ORACLE": 38,
-  "NOT_REVIEWED": 14366,
+  "CHANGED_WITHOUT_ORACLE": 37,
+  "NOT_REVIEWED": 14367,
   "REMOVED": 220
  },
  "lanes": {
@@ -130,8 +130,7 @@
    "primary": null,
    "status": "NOT_REVIEWED",
    "by": [],
-   "oracles": [],
-   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
+   "oracles": []
   },
   {
    "path": "apps/oma/src/application/society-transition.ts",
@@ -1010,12 +1009,10 @@
   {
    "path": "packages/broker/src/index.ts",
    "primary": null,
-   "status": "CHANGED_WITHOUT_ORACLE",
-   "by": [
-    "DR63"
-   ],
+   "status": "NOT_REVIEWED",
+   "by": [],
    "oracles": [],
-   "sha256": "5cffed4ae1b213d1c0c4b3d1f5c5aeada8750e4e9025f98cffbefd22b6c036a5"
+   "note": "Current working-tree bytes have no explicit byte-bound review; historical reviews do not certify these changes."
   },
   {
    "path": "packages/broker/src/internal-dispatcher.ts",

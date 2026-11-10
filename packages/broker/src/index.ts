@@ -444,7 +444,9 @@ export class Broker {
   private failureAnswer(id: string, error: unknown): object {
     this.health.observe(error);
     const failure = publicFailure(error);
-    if (failure.code === "INTERNAL_ERROR") console.error("broker internal request failure:", inspect(error, { depth: 6, breakLength: Infinity }));
+    // The caller learns only the code; the Broker's diagnostics keep why.
+    if (failure.code === "INTERNAL_ERROR" || failure.code === "BROKER_UNAVAILABLE")
+      console.error(`broker ${failure.code === "INTERNAL_ERROR" ? "internal request failure" : "unavailable request"}:`, inspect(error, { depth: 6, breakLength: Infinity }));
     return Broker.errorAnswer(id, failure);
   }
   private preflightPublicStream(auth: AuthContext, envelope: Record<string, unknown>): void {
