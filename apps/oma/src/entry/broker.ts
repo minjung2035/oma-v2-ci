@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { createBroker } from "../broker/broker-composition.js";
 import { assertNativeRuntime } from "../runtime/native-support.js";
 import { createReconcileModule } from "../broker/reconcile-composition.js";
@@ -177,7 +178,7 @@ async function main(): Promise<void> {
         })().then(() => { process.exitCode = exitStatus; }, error => {
             // P0V-58: e.g. a Resident whose end the drain could not prove. The
             // Store and lock are given back; the drain did not finish, and says so.
-            console.error("broker drain did not finish:", error instanceof StoreError ? `${error.code}: ${error.message}\n${error.stack ?? ""}` : error instanceof Error ? error.stack ?? error.message : String(error));
+            console.error("broker drain did not finish:", inspect(error, { depth: 6, breakLength: Infinity }));
             process.exit(1);
         });
         return stopping;
@@ -401,7 +402,7 @@ async function main(): Promise<void> {
             await stop(0);
             return;
         }
-        console.error("broker startup failed:", error instanceof StoreError ? `${error.code}: ${error.message}` : error instanceof Error ? error.stack ?? error.message : String(error));
+        console.error("broker startup failed:", inspect(error, { depth: 6, breakLength: Infinity }));
         await stop(1);
     }
 }

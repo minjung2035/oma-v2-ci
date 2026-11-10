@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `dcce44d9be6174ae7b4961b4344d72f9a7d0c6f0b10104f38543119deda7c321` (15954 files).
+verification input digest `60c4eac944e1d568ad228827886588865887516986d16aef17810dd471d28c48` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4903,3 +4903,5 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 - 002: Personal 하위 process가 30초 뒤에도 남았다. 이전 run에서는 PASS였다.
 
 원인 문장은 80칸 터미널에서 잘렸기 때문에, 013은 이제 400칸 터미널에서 실행한다.
+
+`0f20c824ab3`에서는 macOS 15·Intel·Ubuntu가 job 전체 success(제품 13/13)였고, Mac26의 013이 같은 기동 실패(`previous execution scopes remain owned`, 5회 뒤 재시작 중단)로 실패했다. OS와 무관하게 간헐적으로 나는 Broker SIGKILL 뒤 회수 반례다. 넓힌 터미널에서도 개별 slot의 원인은 보이지 않았다. Broker 진입점이 기동 실패와 drain 실패의 바깥 메시지만 출력했기 때문이다. 이제 두 출력 모두 원인 사슬 전체(`inspect`)를 남긴다.

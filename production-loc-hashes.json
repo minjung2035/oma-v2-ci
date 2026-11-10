@@ -160,7 +160,7 @@
     },
     {
       "path": "apps/oma/src/entry/broker.ts",
-      "sha256": "4778506f0e986085f24019ece8f596d9358699a966ee1ad54f110772f49f2004"
+      "sha256": "56ef1e4bdbaf1ed326e7b398e053f549eec4a43e496b2b21d8df202be1e1eac4"
     },
     {
       "path": "apps/oma/src/entry/candidate-check.ts",
