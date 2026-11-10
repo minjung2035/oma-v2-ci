@@ -3021,7 +3021,7 @@
   "node:string_decoder": 1,
   "node:timers/promises": 12,
   "node:url": 19,
-  "node:util": 15,
+  "node:util": 16,
   "node:zlib": 1,
   "nodemailer": 1,
   "nodemailer/lib/mime-funcs": 1,

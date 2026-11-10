@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `60c4eac944e1d568ad228827886588865887516986d16aef17810dd471d28c48` (15954 files).
+verification input digest `b1618ec35a23c5c618afbeb8f33de4fec2b08af3a9cb08cf1a3cf13a7b30ac4f` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
