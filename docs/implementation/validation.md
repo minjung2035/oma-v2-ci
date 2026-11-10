@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `e5bc168264917e88165422bbec5ec2d79547ee774bd9f5af3ef2aab81ee6f185` (15954 files).
+verification input digest `dcce44d9be6174ae7b4961b4344d72f9a7d0c6f0b10104f38543119deda7c321` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4895,3 +4895,11 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `2a06a619222`의 Mac26에서 Broker 진단으로 013의 원인이 확정됐다. 재시작한 Broker의 `HostInvocations.prepareFrozen` → `RequestCache.markInvocationSending`이 "Original invocation … is unresolved; no new execution"(CACHE_UNAVAILABLE → BROKER_UNAVAILABLE)을 냈다. 원인은 Broker 재시작이 아니었다. 첫 `oma_send`는 이미 send marker가 찍힌 뒤 mail owner가 주소를 찾지 못해(ADDRESS_NOT_FOUND) 접수 전에 확정 거절했다. 그런데 그 원본이 sent 상태로 남아, 같은 actor의 이후 `oma_send`가 모두 거절됐다. 모델은 확정 거절을 받고도 "결과 불명, 원본 보존" 안내를 받았다. Linux 시나리오 `scenario-principal` 034가 재시작 없이 이 결함을 재현한다.
 
 수리: host preflight(`prepareFrozen`)가 send marker를 찍기 전에 mail owner의 routing(`expandAddresses`)을 호출한다. 주소가 없으면 기존 `host-preflight` 거절, 즉 보내기 전에 닫힌 원본이 된다. 공개 wire와 durable 거절 형식은 바뀌지 않는다. 034와 015 PASS, Principal 시나리오와 host invocation·receipt 시험 84/84 PASS. send 뒤 접수 전에 확정 거절되는 다른 경우(예: AGENT_NOT_READY)를 기록하려면 새 거절 증거 형식이 필요하다. 그 경우는 공개 계약 변경이므로 이번에 포함하지 않았다.
+
+### SOURCE153 결과
+
+`d089584c7ea`에서 Mac26·Intel·Ubuntu는 job 전체 success였다. Mac26과 Intel은 제품 시험 13/13 PASS였고, 013(Broker 재시작 뒤 같은 Principal의 현재 권한)이 처음 통과했다. 첫 `oma_send`는 이제 `rejected`/`not-submitted`(host-preflight, ADDRESS_NOT_FOUND)로 정확히 기록된다. macOS 15에서는 두 시험이 실패했다.
+- 013: 재시작한 Broker가 `RUN_TERMINATION_UNKNOWN: previous execution scopes remain owned`로 기동에 실패했고, 5회 반복 뒤 Host가 재시작을 멈췄다. SIGKILL된 Broker가 남긴 실행 scope의 사망을 새 generation이 확인하지 못했다. 이것은 G-PROCESS의 Broker SIGKILL 뒤 회수 반례다.
+- 002: Personal 하위 process가 30초 뒤에도 남았다. 이전 run에서는 PASS였다.
+
+원인 문장은 80칸 터미널에서 잘렸기 때문에, 013은 이제 400칸 터미널에서 실행한다.
