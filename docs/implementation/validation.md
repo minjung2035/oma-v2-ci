@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7dab6dd6b9a2e8dcdc60bd78d8fe95e012c2d2bbf968d075cb317213db7c8ad2` (15954 files).
+verification input digest `a0927d5086fb789a4813c170f870794c2cded97da350642eecf2c8655145f808` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4885,3 +4885,5 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `a1a4872accf`의 Mac26 화면 전체를 보면, 재등록 실패 알림("records could not be refreshed", "rejected", "could not be attested")은 하나도 없었다. 두 번째 호출은 0.5초 만에 실패했다. 실패 형식 `{"code":"BROKER_UNAVAILABLE","message":"BROKER_UNAVAILABLE","retry":"same-key"}`은 Broker의 공개 오류 frame이다. 따라서 요청은 재시작한 Broker에 도달했고, 그 Broker가 원인을 숨긴 채 BROKER_UNAVAILABLE로 답했다. Broker는 지금까지 INTERNAL_ERROR의 원인만 자기 stderr에 남겼다. 이제 BROKER_UNAVAILABLE의 원인도 남긴다. 호출자가 받는 응답은 바뀌지 않는다.
 
 `4218d0f2f60`의 Mac26에서도 013은 0.3초 만에 같은 형식으로 실패했다. Broker 진단 출력에는 새 줄이 없었다. 결과의 `message`가 JSON 문자열 그대로라는 점은 Client `transport`의 `principal.attach` 실패 경로(`failureText(attached.error)`)와 맞는다. 따라서 새 Broker가 거절한 것은 `mail.send`가 아니라 그 앞의 credential attach다. attach 단계의 `BROKER_UNAVAILABLE`은 연결 수락(`serveConnection`)에서 draining이거나 peer 결박이 실패할 때 나오며, 지금까지 `health.observe`만 하고 원인을 남기지 않았다. 이제 Principal과 actor 연결 수락의 INTERNAL_ERROR·BROKER_UNAVAILABLE도 원인을 Broker stderr에 남긴다.
+
+`161ee5ffc6c`의 Mac26에서도 013은 0.3초 만에 실패했고, Broker의 연결 수락 진단에도 새 줄이 없었다. 따라서 거절은 Broker 응답이 아니라 엔진 Client에서 났다. 엔진이 이전 generation의 grant, 즉 죽은 Broker PID로 attested dial을 했다는 해석과 맞는다. supervisor의 `register`는 10초 timeout과 실패 알림이 있지만, Host 화면에 그런 알림은 없었다. 그래서 Host 재등록이 알림 없이 `current()` 검사에서 끝났거나 아예 시작되지 않은 경우가 남는다. 이제 Broker 재시작 뒤의 재등록은 어느 단계에서 무효가 됐는지, 또는 권한이 현재 Broker와 맞춰졌는지를 Host 알림으로 남긴다.

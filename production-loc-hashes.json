@@ -60,7 +60,7 @@
     },
     {
       "path": "apps/oma/src/application/society-runtime.ts",
-      "sha256": "8059212a2a5b41e1bc4202dffff33c53a473c03a9c2c0cda177f0eace4b6e52d"
+      "sha256": "4564580a21c226301376bd840c54964316b749c5777284ba6251e8da394493f6"
     },
     {
       "path": "apps/oma/src/application/society-transition.ts",

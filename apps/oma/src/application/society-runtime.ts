@@ -186,17 +186,23 @@ export class SocietyRuntime {
     const current = (): boolean => !this.finishing && !this.disowned && this.tenure === owner && owner.held &&
       this.controlHandoff === null && owner.brokerAvailable && this.broker === broker && this.currentSession === live && live.running &&
       this.currentHandle === handle && owner.brokerGeneration === generation;
-    if (!current()) return;
+    // Superseded registrations change nothing, but a Human whose Broker
+    // restarted needs to know whether this one restored the Principal.
+    const superseded = (step: string): void => {
+      if (this.currentSession === live && this.tenure === owner && !this.finishing && !this.disowned)
+        this.view.notice(`Principal registration was superseded ${step}; no credential was granted by this attempt.`);
+    };
+    if (!current()) { if (generation > 1) superseded("before it started"); return; }
     try { await principalHostBroker(this.bootstrap.runRoot, this.config.limits, this.hostChannel).prepare(); }
     catch (error) {
       if (this.currentSession === live && this.tenure === owner) this.view.notice(`Principal records could not be refreshed; no new credential was granted: ${exceptionText(error)}`);
       return;
     }
-    if (!current()) return;
+    if (!current()) { superseded("after its record refresh"); return; }
     const credential = await broker.register(handle, pid);
     // A reply belongs to this engine as well as this broker. A late reply
     // from an ended engine cannot grant or revoke its successor's authority.
-    if (!current()) return;
+    if (!current()) { superseded("while the Broker answered"); return; }
     if (credential === null) {
       owner.principalUnregistered();
       this.view.notice("The broker rejected the Principal session. Requests cannot be sent.");
@@ -220,6 +226,7 @@ export class SocietyRuntime {
     }
     live.grant(credential, handle, brokerIdentity);
     owner.principalRegistered();
+    if (generation > 1) this.view.notice("Principal authority is current with the restarted Broker.");
     if (this.delivery === null)
       this.delivery = new PrincipalDelivery({
         get running() { return live.running; },
