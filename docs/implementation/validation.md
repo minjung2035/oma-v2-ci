@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `66446379e22a251f38883bfa3faea62f2d2e2ca921ebed35db4acd9e0bd37d32` (15954 files).
+verification input digest `bd4bfbcb27ad086b37cd2aa9b8eb8c3d02364c860570b2fb870e2a600ce94ec8` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4911,3 +4911,7 @@ storage 실패의 원인은 job helper 종료와 커널 coalition 집계 사이�
 `8f44bcc053b`에서 Mac26·macOS 15는 job 전체 success(제품 13/13)였다. Intel은 013이 PASS였고 009가 실패했다. Ubuntu는 `audit` 013이 실패했는데, Broker 기동 실패 출력을 `inspect`로 바꾸면서 `STORE_CORRUPT: immutable file is missing` 형식이 사라졌기 때문이다. 이제 출력은 원래의 `code: message` 첫 줄 뒤에 원인 사슬을 덧붙인다(`audit` 013 PASS).
 
 Intel 009의 원인: Seatbelt Worker의 요청 캐시가 나중에 관측한 receipt를 기록하는 경로(`replaceDerivedFile`)가 `ensureDurableDirectory`로 `/`까지 조상을 열어 fsync했고, `/private`에서 EPERM이 났다(`receipt update failed: contained filesystem operation failed: EPERM`). 그래서 성공한 제출이 Worker에게 결과 불명으로 남았다. 같은 run에서 동시 제출 중 일부가 quarantine `busy`(같은 키로 재시도하는 일시 거절)를 받은 것은 설계대로다. 이제 invocation 기록과 receipt 갱신은 `prepare()`가 HOME까지 이미 durable하게 만든 캐시 디렉터리 안에서 `replaceDerivedFileAt`으로 바꿔 쓴다. request cache·host invocation·receipt·spool 시험 44/44 PASS.
+
+### SOURCE155 결과
+
+`c4d22d07024`에서 Mac26·macOS 15·Ubuntu는 job 전체 success였다. 제품 시험은 13/13이고, Intel 009의 receipt EPERM 수리 뒤 Mac26 009/010도 PASS였다. Intel에서는 여러 시험이 실패했다. 013의 원인은 시험 타이밍이었다. 느린 Intel에서 첫 호출이 3분 걸렸고, 고정 시각에 보낸 두 번째 요청이 재등록보다 먼저 나갔다. 화면에서 "send it again"이 0.002초 만에 실패한 다음에야 "Principal authority is current with the restarted Broker."가 찍혔다. 재등록 전 요청이 끝난 generation의 grant를 쓰다 실패하는 것은 맞는 동작이다. 이제 013은 그 알림을 확인한 뒤에 두 번째 요청을 보낸다. 같은 Intel run의 002(Personal 하위 process 잔존), 009(Worker 요청 0건), 010, 011, 012(Worker가 후손을 만들지 못함)는 다음 run에서 다시 확인한다.

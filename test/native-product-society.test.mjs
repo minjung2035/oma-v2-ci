@@ -215,7 +215,7 @@ test('005. A scripted Principal in the real Host reaches its Broker over Mach an
  await until(()=>owned(base).length===0,30000,()=>'no Host, Broker or engine process remains: '+owned(base).join('\n'));
 });
 
-test('013. After its Broker is SIGKILLed and restarted, the same Principal reaches the new Broker generation with current authority',{timeout:900000},async t=>{
+test('013. After its Broker is SIGKILLed and restarted, the same Principal reaches the new Broker generation with current authority',{timeout:1200000},async t=>{
  if(!darwin(t))return;
  const {scriptedProvider,tools,call,text,toolResults,continuesTurn}=await import('../dist/test/fixtures/scripted-provider.js');
  const provider=await scriptedProvider(request=>continuesTurn(request)?text('No such Worker.'):
@@ -226,11 +226,11 @@ test('013. After its Broker is SIGKILLed and restarted, the same Principal reach
  writeFileSync(join(agentDir,'settings.json'),JSON.stringify({...JSON.parse(readFileSync(join(agentDir,'settings.json'),'utf8')),defaultProvider:'fake',defaultModel:'scripted'}));
  const hex=value=>Buffer.from(value).toString('hex'),harness=join(import.meta.dirname,'fixtures','pty-harness.py');
  const spec={argv:[process.execPath,entry('oma')],ready:hex('Your ideas, in motion'),readyTimeout:240,
-  steps:[{resize:[60,400],wait:5},{write:hex('send it to nobody'),wait:1},{write:hex('\r'),wait:300},{write:hex('send it again'),wait:1},{write:hex('\r'),wait:200},{write:hex('\x04'),wait:20}]};
+  steps:[{resize:[60,400],wait:5},{write:hex('send it to nobody'),wait:1},{write:hex('\r'),wait:5,expect:hex('Principal authority is current'),expect_timeout:700},{write:hex('send it again'),wait:1},{write:hex('\r'),wait:200},{write:hex('\x04'),wait:20}]};
  const child=spawn('python3',[harness,JSON.stringify(spec)],{cwd:project,stdio:['ignore','pipe','pipe'],
   env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),TERM:'xterm-256color'}});
  let stdout='',stderr='';child.stdout.on('data',bytes=>{stdout+=bytes;});child.stderr.on('data',bytes=>{stderr+=bytes;});
- const timer=setTimeout(()=>child.kill('SIGKILL'),860000);
+ const timer=setTimeout(()=>child.kill('SIGKILL'),1150000);
  const ended=new Promise(resolve=>child.once('exit',code=>resolve(code)));
  const brokers=()=>owned(base).filter(line=>line.includes(entry('broker'))).map(line=>Number(line.trim().split(/\s+/)[0]));
  const answers=()=>provider.seen.flatMap(seen=>toolResults(seen.body).map(result=>result.text));
