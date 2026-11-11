@@ -24,6 +24,9 @@ export interface RpcSocket {
 }
 export interface Alarm { cancel(): void }
 export interface AlarmFactory { after(seconds: number, callback: () => void): Alarm }
+const DIAGNOSED_FAILURES: ReadonlyMap<string, string> = new Map([["INTERNAL_ERROR", "internal request failure"],
+  ["BROKER_UNAVAILABLE", "unavailable request"], ["CANCELLED_BEFORE_COMMIT", "cancelled request"],
+  ["RUN_TERMINATION_UNKNOWN", "request with unconfirmed termination"], ["REF_STATE_UNKNOWN", "request with unknown ref state"]]);
 /** Rearm long configured deadlines instead of truncating them to Node's timer range. */
 export const NODE_ALARMS: AlarmFactory = {
   after(seconds, callback) {
@@ -126,9 +129,10 @@ export class RpcConnection {
     const mapped = code === "ENOSPC" || code === "EDQUOT" ? new StoreError("STORAGE_FULL", "raw transport storage is full") : error;
     const failure = mapped instanceof FrameError ? { code: mapped.code, message: mapped.message, retry: "never" as const } : publicFailure(mapped);
     // The caller only learns the code; the Broker's own diagnostics keep why
-    // an internal failure or an unanswered observation refused this request.
-    if (failure.code === "INTERNAL_ERROR" || failure.code === "BROKER_UNAVAILABLE")
-      console.error(`broker ${failure.code === "INTERNAL_ERROR" ? "internal request failure" : "unavailable request"}:`, inspect(mapped, { depth: 6, breakLength: Infinity }));
+    // an internal failure, an unanswered observation, a cancellation or an
+    // unknown outcome refused this request.
+    const diagnosed = DIAGNOSED_FAILURES.get(failure.code);
+    if (diagnosed !== undefined) console.error(`broker ${diagnosed}:`, inspect(mapped, { depth: 6, breakLength: Infinity }));
     return encodeFrame({ v: 1, id, ok: false, error: failure });
   }
   private fatal(error: unknown, id = this.id()): void {

@@ -504,7 +504,7 @@
     },
     {
       "path": "packages/broker/src/connection.ts",
-      "sha256": "97cd382ff41436ba071b278f79607347ca3ab430bc024ad42f5da8826b378ee7"
+      "sha256": "07e90bbea6f53f1905cddb90f7751bed6e56b3cc4b06b8ced31eba0442ec2fe5"
     },
     {
       "path": "packages/broker/src/index.ts",

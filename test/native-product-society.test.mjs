@@ -72,6 +72,8 @@ async function principalAndWorkerProvider(scriptedProvider,script){
   async close(){await Promise.all([plain.close(),secure.close()]);}};
 }
 const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base));
+// A residue names its parent, state and age, so a late exit is told apart from an orphan.
+const residue=base=>spawnSync('/bin/ps',['-axo','pid=,ppid=,stat=,etime=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base)).join('\n');
 
 test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
  if(!darwin(t))return;
@@ -109,7 +111,7 @@ test('002. A fresh Personal session is born on Darwin and stops without residue'
  const birth=readSessionBirth(root);assert.equal(birth.mode,'personal');assert.equal(birth.cwd,project);
  assert.doesNotMatch(personal.stderr(),/UNSUPPORTED_PROFILE|blocked by/,personal.stderr());
  assert.notEqual(await stop(personal,90000),null,'Personal ends on SIGTERM: '+personal.stderr());
- await until(()=>owned(base).length===0,30000,'no Personal descendant remains: '+owned(base).join('\n'));
+ await until(()=>owned(base).length===0,30000,()=>'no Personal descendant remains: '+residue(base)+'\nPersonal stderr:\n'+personal.stderr().slice(-4000));
 });
 
 test('003. The Host runs a fresh Society in a real terminal: its Broker child opens the Store and Ctrl-D ends everything',{timeout:540000},async t=>{
