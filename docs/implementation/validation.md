@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `6595c5cec804e2fc0d908e38ca52c0a05e54da26dec64475d86436fe564071ff` (15954 files).
+verification input digest `7d88f78f859bd0076d4b4151c79d2bfd0fdd33edd41ec71f5e10235d267c637a` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4923,3 +4923,7 @@ Intel 009의 원인: Seatbelt Worker의 요청 캐시가 나중에 관측한 rec
 - Intel 009: 두 Worker의 제출이 `CANCELLED_BEFORE_COMMIT`(Worker 기록상 acceptance unknown)로 끝났다. worker-3 엔진은 incarnation 1–4 모두 `SESSION_BOUNDARY_UNCONFIRMED: Pi did not accept the delivery command before the acceptance deadline`였다. `c4d22d07024`의 Intel 009에서는 세 Worker가 모두 같은 수락 마감으로 54회 실패했다. Intel runner에서는 runner 시작부터 Pi 세션 생성까지 25–37초가 걸려, 엔진 시작을 포함하는 30초 `receiptWaitSeconds` 수락 예산과 겹친다. 공개 응답은 코드만 담기 때문에 취소 원인 문장이 남지 않았다. 이제 Broker는 `CANCELLED_BEFORE_COMMIT`·`RUN_TERMINATION_UNKNOWN`·`REF_STATE_UNKNOWN`의 원인 사슬도 자기 stderr에 남긴다.
 - Intel 002: 이전 run과 같은 Personal 하위 process 잔존이다. 이제 시험은 마감 시점의 잔여 process의 ppid·상태·경과 시간과 Personal stderr를 남긴다.
 - Mac26 generation 001: job helper의 `require` 실패 경로(perror 뒤 exit 2)만 FIN 전에 끝날 수 있다. helper stderr는 `/dev/null`로 가서 원인이 남지 않았다. 원인은 미확인이다.
+
+### SOURCE157 결과
+
+`5d03cfff8db`에서 Mac26·macOS 15는 job 전체 success였다(제품 13/13, Mac26 generation 001 PASS). Intel job은 제품 시험 도중 GitHub runner 통신 두절("The hosted runner lost communication with the server")로 끝나 결과가 없다. Ubuntu는 `native-process-scope` 006이 실패했다. 시험이 `children` 목록을 읽은 뒤 그 자식이 끝나면, `/proc/<pid>/status` 읽기가 ENOENT가 아니라 ESRCH로 실패한다. 이것은 시험 관측의 경쟁 조건이다. 이제 시험은 ESRCH도 이미 사라진 자식으로 취급한다. Linux 제품 코드는 바꾸지 않았다.

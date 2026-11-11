@@ -109,7 +109,7 @@ test("006. Native scope: setsid double-fork descendant with all inherited FDs cl
           const status = readFileSync(`/proc/${pid}/status`, 'utf8'), match = /^NSpid:\s+([0-9\t ]+)$/m.exec(status);
           return match !== null && Number(match[1].trim().split(/\s+/).at(-1)) === innerPid &&
             Number(/^PPid:\s+([0-9]+)$/m.exec(status)?.[1]) === ticket.witness.pid;
-        } catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+        } catch (error) { if (error.code === 'ENOENT' || error.code === 'ESRCH') return false; throw error; }
       });
     }
     assert.ok(performance.now() < end, JSON.stringify({ message: 'escaped descendant did not become an observed namespace orphan', reportBytes, lastChildren }));
