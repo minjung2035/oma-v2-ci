@@ -1500,7 +1500,7 @@
     },
     {
       "path": "packages/native/src/darwin-job-control.ts",
-      "sha256": "ac4ead6182fcfc0101fdd0a1bb632b19c811ac213073d25ebb4c54069a8fbb2f"
+      "sha256": "347f42b867b6e40d0bc35d80235bef7fc1ee36363a3afef32c07516760030e08"
     },
     {
       "path": "packages/native/src/darwin-job-launch.ts",
@@ -1512,7 +1512,7 @@
     },
     {
       "path": "packages/native/src/darwin-launchd-job.ts",
-      "sha256": "4297fe0314863c514d5a40020c5746cd7d3971427a4c445f21e2eaeb69878823"
+      "sha256": "434de809481e8ec02ac86a0ee0d9a1736d0baf1b4cfc64db5aab6814c5f4f255"
     },
     {
       "path": "packages/native/src/darwin-macho-image.ts",

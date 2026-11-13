@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `454277d85e4ff24c6080aceffb299e46a7bc8ed3901d27f3ae9e3048ad9c6966` (15954 files).
+verification input digest `103cf23f8cb7f80ed15a6e9669a1af81c7dcec5469bbdf63f75c7a6fdc932a2c` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4938,18 +4938,20 @@ Intel 001은 Broker가 첫 runtime generation을 봉인하는 도중 시험의 3
 
 ### SOURCE159 결정: Intel Mac 제외
 
-명세의 지원 목표는 macOS 26 arm64·Linux이고, Intel Mac은 목표가 아니다. 지금까지 Intel은 추가 관측으로만 CI에 있었는데, 엔진 시작 시간과 runner 통신 두절 때문에 판정을 계속 지연시켰다. 그래서 Intel은 제외한다.
-- CI matrix에서 `macos-26-intel`을 뺐다.
-- `assertNativeRuntime`은 Darwin x64를 `UNSUPPORTED_PROFILE`("OMA on macOS requires Apple silicon (arm64)")로 거절한다.
-- Darwin 전용 native 호출의 x64 분기(`$INODE64` 심볼, x64 cdhash 선택, x64 Restic pin)를 지웠다. 제품 시험 004의 x64 Restic 거절 분기도 지웠다.
-- Mach-O 파서는 universal binary 안의 x64 slice를 읽어야 하므로 유지한다. Linux x64는 바꾸지 않았다.
-- 이 결정 이전 기록의 Intel 결과는 이력으로만 남는다.
-
-### SOURCE159 결정: Intel Mac 제외
-
 명세의 지원 목표는 macOS 26 arm64·Linux이고, Intel Mac은 목표가 아니다. macOS 26은 Intel Mac을 지원하는 마지막 macOS다. 지금까지 Intel은 추가 관측으로만 CI에 있었는데, 엔진 시작 시간과 runner 통신 두절 때문에 판정을 계속 지연시켰다. 사용자 결정으로 Intel은 제외한다.
 - CI matrix에서 `macos-26-intel`을 뺐다.
 - `assertNativeRuntime`은 Darwin x64를 `UNSUPPORTED_PROFILE`("OMA on macOS requires Apple silicon (arm64)")로 거절한다.
 - Darwin 전용 native 호출의 x64 분기(`$INODE64` 심볼, x64 cdhash 선택, x64 Restic pin)를 지웠다. 제품 시험 004의 x64 Restic 거절 분기도 지웠다.
 - Mach-O 파서는 universal binary 안의 x64 slice를 읽어야 하므로 유지한다. Linux x64는 바꾸지 않았다.
 - 이 결정 이전 기록의 Intel 결과는 이력으로만 남는다.
+
+### SOURCE160 Mac26 002 회복과 job helper 진단 경로
+
+결과
+
+`a963d9f85b3`에서 Ubuntu·macOS 15는 job 전체 success였다. Mac26은 제품 시험 13/13 PASS로, SOURCE158의 002 수정이 확인됐다. Mac26 공통 suite는 468/469였다. `native-root-reference-candidate` 001의 Seatbelt 반복이 `RUN_TERMINATION_UNKNOWN: job helper ended before a terminal response`로 실패했다(612ms). 같은 시험의 일반 job 반복은 통과했다. 이 서명은 SOURCE157의 Mac26 generation 001과 같고, Mac26에서만 나왔다.
+
+조치
+
+helper는 `require`·`mach_ok` 실패를 stderr에 쓰고 exit 2로 끝나는데, launchd 정의가 stderr를 `/dev/null`로 보내서 원인이 남지 않았다. 이제 job control은 실행마다 private 0700 디렉터리에 `stderr` 파일을 O_EXCL로 만들어 열어 두고, launchd `StandardErrorPath`를 그 파일로 지정한다. helper가 terminal 응답 없이 끝나면 열린 descriptor로 앞 4096 bytes만 읽어 오류 cause에 붙인다. 이 text는 판정에 쓰지 않는다. 파일과 디렉터리는 job 자원과 함께 반환된다. stdout과 workload bytes는 여전히 helper의 private channel로만 다닌다. 원인은 다음 Mac26 재발에서 이 cause로 판정한다.
+

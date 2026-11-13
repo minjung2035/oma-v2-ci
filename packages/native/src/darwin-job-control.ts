@@ -1,7 +1,10 @@
 /** One-shot kernel job mechanics. The shared execution owner must publish
  * identity before reading prepared and recheck authority before release.
  * Image checks cover mapped main images, not scripts, role or installation. */
-import { closeSync, fstatSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, readFileSync, readSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdirAt, openAt, unlinkAt } from "@oma/file-descriptors";
 import { createHash } from "node:crypto";
 import { Socket } from "node:net";
 import { randomUUID } from "node:crypto";
@@ -58,6 +61,31 @@ export interface DarwinJobControl {
 type Data = Extract<MachMessage, { kind: "data" }>;
 function unknown(message: string, cause?: unknown): StoreError {
   return new StoreError("RUN_TERMINATION_UNKNOWN", message, { cause });
+}
+/** The helper's stderr, held in a private 0700 directory. Only its bounded
+ * prefix is read through the held descriptor, as cause text for a helper that
+ * ended without a terminal response; it decides nothing. */
+function helperDiagnostic(owners: (() => void)[]): { path: string; text(): string } {
+  const temporary = realpathSync(tmpdir()), parent = openDirectory(temporary), entry = "oma-job-" + randomUUID();
+  let directory = -1, file = -1, created = false, fileCreated = false;
+  const release = (): void => cleanupAll([
+    () => { if (file >= 0) closeSync(file); },
+    () => { if (fileCreated) unlinkAt(directory, "stderr"); },
+    () => { if (directory >= 0) closeSync(directory); },
+    () => { if (created) unlinkAt(parent, entry, true); },
+    () => closeSync(parent),
+  ]);
+  try {
+    mkdirAt(parent, entry, 0o700); created = true;
+    directory = openAt(parent, entry, constants.O_RDONLY | constants.O_DIRECTORY);
+    file = openAt(directory, "stderr", constants.O_RDWR | constants.O_CREAT | constants.O_EXCL, 0o600); fileCreated = true;
+  } catch (error) { return withCleanup(() => { throw error; }, release); }
+  owners.push(release);
+  return { path: join(temporary, entry, "stderr"), text() {
+    const bytes = Buffer.alloc(4096);
+    try { return bytes.subarray(0, readSync(file, bytes, 0, bytes.length, 0)).toString("utf8").trim(); }
+    catch (error) { return `unreadable helper diagnostic: ${error instanceof Error ? error.message : String(error)}`; }
+  } };
 }
 function selected(path: string, expected?: string): readonly string[] {
   const fd = withinDirectory(path, (parent, name) => openRegularBeneath(parent, name));
@@ -132,8 +160,9 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
     const endpoint = createMachEndpoint(); owners.push(() => endpoint.receive.close(), () => endpoint.send.close());
     const sink = listenMachDiscardService(label + ".discard"); owners.push(() => sink.close());
     const sinkSend = lookupMachService(label + ".discard"); owners.push(() => sinkSend.close());
+    const diagnostic = helperDiagnostic(owners);
     attempted = true;
-    const registration = submitLaunchdJob({ label, startSuspended: true, machServices: [serviceName],
+    const registration = submitLaunchdJob({ label, startSuspended: true, machServices: [serviceName], stderrPath: diagnostic.path,
       command: { executable: helper, argv: [serviceName, ...token.map(String)], env: {}, cwd: "/",
         timeoutMs: null, stdoutBytes: 0, stderrBytes: 0 } }, 10000, invoke);
     startLaunchdJob(registration, 10000, invoke);
@@ -219,7 +248,7 @@ export async function startDarwinJobControl(source: CommandSpec, files: readonly
           if (!terminalDone && ownerStopped) {
             terminalDone = true; finish({ kind: "stopped" });
             pending?.no(new StoreError("CANCELLED_BEFORE_COMMIT", "job helper stopped at its owner's request")); pending = undefined;
-          } else if (!terminalDone) failed(unknown("job helper ended before a terminal response"));
+          } else if (!terminalDone) failed(unknown("job helper ended before a terminal response", diagnostic.text() || undefined));
           finishRoot();
         }
       } catch (error) { failed(error instanceof Error ? error : unknown("job control observation failed", error)); }
