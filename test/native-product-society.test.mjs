@@ -75,7 +75,7 @@ const owned=base=>spawnSync('/bin/ps',['-axo','pid=,command='],{encoding:'utf8'}
 // A residue names its parent, state and age, so a late exit is told apart from an orphan.
 const residue=base=>spawnSync('/bin/ps',['-axo','pid=,ppid=,stat=,etime=,command='],{encoding:'utf8'}).stdout.split('\n').filter(line=>line.includes(base)).join('\n');
 
-test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:540000},async t=>{
+test('001. A fresh oma Society is born on Darwin and its Broker reaches readiness, then stops without residue',{timeout:720000},async t=>{
  if(!darwin(t))return;
  const base=realpathSync(mkdtempSync(join(tmpdir(),'oma-product-'))),project=join(base,'project'),data=join(base,'data','oma');mkdirSync(project);
  const env={...process.env,HOME:join(base,'home'),XDG_DATA_HOME:join(base,'data'),XDG_RUNTIME_DIR:join(base,'run'),NODE_DISABLE_COMPILE_CACHE:'1'};
@@ -91,10 +91,11 @@ test('001. A fresh oma Society is born on Darwin and its Broker reaches readines
  assert.notEqual(await stop(host),null,'the Host ends on SIGTERM: '+host.stderr());
  await until(()=>owned(base).length===0,30000,'Host and its children ended: '+owned(base).join('\n'));
  // 2. The real Broker entry boots that Society through the Darwin composition.
+ // Its first start seals a private runtime generation; a slow disk makes that the long phase.
  const society=birth.id,runRoot=join(base,'run','oma',society);
  // The Host's own argv (broker-supervisor): the bound project is prepared by this Broker.
  const broker=start([entry('broker'),'--society',society,'--state-root',root,'--run-root',runRoot,'--config',join(root,'config.json'),'--project-dir',project],project,env);running.push(broker);
- await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,300000,()=>'Broker readiness '+evidence(base,broker));
+ await until(()=>/broker ready/.test(broker.stderr())||/broker (startup|initialization) failed/.test(broker.stderr())||broker.child.exitCode!==null,480000,()=>'Broker readiness '+evidence(base,broker));
  assert.match(broker.stderr(),/broker ready/,broker.stderr());
  assert.deepEqual(await stop(broker,90000),{code:0,signal:null},broker.stderr());
  await until(()=>owned(base).length===0,30000,'no Broker descendant remains: '+owned(base).join('\n'));

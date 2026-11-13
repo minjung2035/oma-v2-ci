@@ -123,10 +123,17 @@ def main():
     result["expectMissed"] = missed
     print(json.dumps(result))
     if status is None:
+        # Darwin answers EPERM for a group whose members are already exiting;
+        # the direct child is still ours to end and reap.
         try:
             os.killpg(pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+        except PermissionError:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         os.waitpid(pid, 0)
 
 main()
