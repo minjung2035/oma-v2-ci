@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `103cf23f8cb7f80ed15a6e9669a1af81c7dcec5469bbdf63f75c7a6fdc932a2c` (15954 files).
+verification input digest `1bb4f77f23a32e8af57f92cdd699e25766ddc9813d6733fa899037de78afc3d6` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4954,4 +4954,13 @@ Intel 001은 Broker가 첫 runtime generation을 봉인하는 도중 시험의 3
 조치
 
 helper는 `require`·`mach_ok` 실패를 stderr에 쓰고 exit 2로 끝나는데, launchd 정의가 stderr를 `/dev/null`로 보내서 원인이 남지 않았다. 이제 job control은 실행마다 private 0700 디렉터리에 `stderr` 파일을 O_EXCL로 만들어 열어 두고, launchd `StandardErrorPath`를 그 파일로 지정한다. helper가 terminal 응답 없이 끝나면 열린 descriptor로 앞 4096 bytes만 읽어 오류 cause에 붙인다. 이 text는 판정에 쓰지 않는다. 파일과 디렉터리는 job 자원과 함께 반환된다. stdout과 workload bytes는 여전히 helper의 private channel로만 다닌다. 원인은 다음 Mac26 재발에서 이 cause로 판정한다.
+
+### SOURCE161 독립 read cursor의 호출자 목록
+
+명세 6절은 독립 read cursor를 positioned I/O, kernel reopen, private verified copy 중 목적별로 고르라고 한다. Darwin에서는 duplicate가 cursor를 공유한다(gate `file-descriptors`). 제품 호출자를 전수 조사했다.
+- 위치 없는 `readSync`, FD의 `readFileSync`, `start` 없는 FD stream은 모두 같은 owner가 연 FD였다(diagnostics·status·mail·context·cache·download cache·job image 선택 등).
+- 빌린 FD는 위치 지정 read를 쓰거나(`submit-spool`·`file-digest`·`execution-journal`·`arrival-journal`·`package-tar`·`resident-logs`·`batch-view`), private verified copy를 만든다(quarantine의 `copyDescriptorToEntry`).
+- 예외는 다섯 곳이다. `readBounded`와 `readFrozenLength`는 호출자가 막 연 FD를 받는다. 나머지 셋은 pipe를 읽는데, pipe에는 file cursor가 없다.
+
+이 목록을 architecture 규칙 `surface/independent-read-cursor`로 고정했다. 목록 밖의 cursor read와 쓰이지 않는 목록 항목은 finding이다. 수락·거절·near miss 시험은 `surface-rules` 023이다. G-FILES의 이 항목은 닫힘으로 바꿨다. gate 전체는 OPEN이다.
 

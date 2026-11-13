@@ -15,14 +15,14 @@ gate 전체는 모든 항목이 닫혀야 PASS다. `scripts/verify-native.mjs`�
 | directory-relative open/list/effect, no-follow·beneath | gate `files`: beneath 탈출 errno 107, symlink errno 62, 교체 뒤 held root 유지, held directory lock 0. 공통 suite의 owned-directory·durable-fs 시험(세 Mac success) | 닫힘 |
 | regular entry pin/repair, mode-000 | gate `files`: mode-000 pin EACCES(13)는 unknown으로 남고, held inode repair는 0. FIFO event pin 확인. owned-directory 001–009 | 닫힘 |
 | `/dev/fd` duplicate·descriptor exec 반례 | gate `file-descriptors`: duplicate는 같은 inode에 cursor를 공유한다. FD exec는 swap 전후와 unlink 뒤 모두 errno 13이다. 제품은 이 경로를 쓰지 않는다 | 닫힘(반례를 배제로 판정) |
-| 독립 read cursor | 기존 readable FD의 positioned I/O 또는 private verified copy를 쓴다. gate `file-descriptors`의 공유 cursor 반례를 대체 경로로 쓰지 않는다 | 부분: 제품 호출자별 capability 목록이 아직 없다 |
+| 독립 read cursor | gate `file-descriptors`: duplicate는 cursor를 공유한다. 그래서 제품은 빌린 FD의 cursor를 읽지 않는다. architecture 규칙 `surface/independent-read-cursor`는 cursor를 움직이는 read(위치 없는 `readSync`, FD의 `readFileSync`, `start` 없는 FD stream)를 그 FD를 연 owner 안에서만 허용한다. 빌린 FD는 위치 지정 read(`submit-spool`·`file-digest`·`execution-journal`·`package-tar` 등)로 읽거나, quarantine처럼 `copyDescriptorToEntry`로 private verified copy를 만든다. 예외는 사유와 함께 목록에 있는 다섯 곳이다: 호출자가 막 연 FD를 받는 `readBounded`·`readFrozenLength`, cursor가 없는 pipe 셋. 쓰지 않는 예외 항목도 finding이다. 규칙의 수락·거절 시험은 `surface-rules` 023이다 | 닫힘(제품 경로). vendored 코드는 규칙 밖이다 |
 | exact executable | gate `suspended-image`: 정지 image A/B 양성과, B를 map한 뒤 경로를 A로 되돌린 반례를 release 전에 거절한다. `launchd-image`: `SpawnConstraint.cdhash` 단독 결박은 배제된다. 제품 `darwin-job-control`은 정지 target의 audit origin cdhash를 설치본 bytes에서 계산한 hash와 대조하고, 불일치면 release하지 않는다. `native-runtime-generation` 001은 private Node와 의존성을 봉인한 generation을 쓴다(세 Mac) | 부분: main image만 결박한다. script·module·library bytes는 봉인된 generation이 보증하고, loader context와 PID 재사용 대조는 G-AUTH와 함께 남는다 |
 | no-replace publish와 parent flush | gate `files`: link publish 성공, 중복 link EEXIST(17), directory flush 0. durable-fs 시험(세 Mac) | 닫힘 |
 | Seatbelt 경로 정책 | gate `seatbelt-files`: writable·readonly·denied, symlink·hardlink 거절, 보호 parent pin. 제품 Worker probe의 private read 거절·shared write 거절(세 Mac) | 닫힘 |
 | Society lock과 fence 수명 | Society 소유권 12/12(세 Mac): Host SIGKILL 뒤 takeover 거절, 실행 범위 전체 사망까지 fence 유지, 충돌 port 거절 | 닫힘 |
 | 외부 writer(SQLite·Git)의 root 결박 | Git quarantine은 정지 scope에서 검증한 뒤 import한다(gate `git-setup-quarantine`, 제품 009). SQLite는 Broker가 소유한 state root 아래에 있다 | 부분: validation이 남긴 StateRoot capture, private work/source fetch, 진단 writer 결박과 수명 인수가 남았다 |
 
-G-FILES 판정: **OPEN**. 남은 항목은 독립 cursor의 호출자별 capability 목록, main image 밖 bytes의 결박 근거 정리, 외부 writer 결박 세 가지다.
+G-FILES 판정: **OPEN**. 남은 항목은 main image 밖 bytes의 결박 근거 정리와 외부 writer 결박 두 가지다.
 
 ## G-AUTH
 

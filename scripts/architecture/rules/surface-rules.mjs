@@ -875,6 +875,86 @@ function moduleBoundaryRules(root, findings) {
   }
 }
 
+/** macOS native spec 6, G-FILES "independent read cursor": a descriptor's
+ * cursor belongs to its open file description, which a duplicate, a fileport
+ * or an inherited slot shares. A read that advances the cursor -- `readSync`
+ * with no position, `readFileSync` of a descriptor, a descriptor stream with
+ * no `start` -- is therefore written only on a descriptor the same function
+ * opened. A borrowed descriptor is read at explicit positions or copied. The
+ * few cursor readers of a borrowed descriptor are listed with their reason. */
+const CURSOR_BORROWERS = Object.freeze({
+  "apps/oma/src/runtime/input-effects.ts#readBounded": "every caller passes the descriptor it just opened (readLocal, submit bundle, context walk)",
+  "packages/storage/src/context-files.ts#readFrozenLength": "its one caller opens the entry beneath the held parent and closes it after",
+  "apps/oma/src/entry/candidate-check.ts#<anonymous>": "fd 8 is the inherited one-byte release pipe; a pipe has no file cursor",
+  "apps/oma/src/runtime/candidate-checks.ts#<anonymous>": "the stream reads the read end of a controlPipe this owner created",
+  "packages/platform-linux/src/namespace-execution.ts#launchBlockedNamespace": "the stream reads the read end of a pipe this owner created",
+});
+const OPENERS = /^open[A-Z]?|^openSync$/;
+function enclosingFunction(node) {
+  for (let current = node.parent; current; current = current.parent)
+    if (ts.isFunctionLike(current)) return current;
+  return null;
+}
+function functionName(fn) {
+  if (fn === null) return "<module>";
+  if (fn.name && ts.isIdentifier(fn.name)) return fn.name.text;
+  if (ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)) return fn.parent.name.text;
+  return "<anonymous>";
+}
+function opensLocally(scope, name) {
+  let opened = false;
+  // The value comes from an open: directly, or through a resolver such as
+  // withinDirectory(path, (parent, name) => openRegularBeneath(parent, name)).
+  const opener = expression => {
+    let found = false;
+    if (expression) eachNode(expression, inner => { if (ts.isCallExpression(inner) && OPENERS.test(calleeName(inner) ?? "")) found = true; });
+    return found;
+  };
+  eachNode(scope, node => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name && opener(node.initializer)) opened = true;
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        ts.isIdentifier(node.left) && node.left.text === name && opener(node.right)) opened = true;
+  });
+  return opened;
+}
+function cursorReadRules(root, findings) {
+  const used = new Set();
+  for (const file of authoredFiles(root)) {
+    if (isVendoredExtension(file)) continue;
+    const source = sourceOf(root, file);
+    eachNode(source, node => {
+      if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return;
+      const callee = node.expression.text, args = node.arguments;
+      let descriptor;
+      if (callee === "readSync" && (args.length < 5 || args[4].kind === ts.SyntaxKind.NullKeyword)) descriptor = args[0];
+      else if (callee === "readFileSync" && args[0] && !ts.isStringLiteralLike(args[0]) && !ts.isTemplateExpression(args[0]) &&
+        ts.isIdentifier(args[0]) && /fd|descriptor/i.test(args[0].text)) descriptor = args[0];
+      else if (callee === "createReadStream" && args[1] && ts.isObjectLiteralExpression(args[1])) {
+        const keys = args[1].properties.map(property => property.name && propertyName(property.name));
+        if (keys.includes("fd") && !keys.includes("start")) {
+          const fd = args[1].properties.find(property => property.name && propertyName(property.name) === "fd");
+          descriptor = ts.isPropertyAssignment(fd) ? fd.initializer : fd.name;
+        }
+      }
+      if (descriptor === undefined) return;
+      const fn = enclosingFunction(node), key = `${file}#${functionName(fn)}`;
+      if (Object.hasOwn(CURSOR_BORROWERS, key)) { used.add(key); return; }
+      // A closure (a cleanup callback, a stream generator) reads what its
+      // enclosing owner opened: the nearest scope that binds the name decides.
+      if (ts.isIdentifier(descriptor))
+        for (let scope = fn; ; scope = enclosingFunction(scope)) {
+          if (opensLocally(scope ?? source, descriptor.text)) return;
+          if (scope === null) break;
+        }
+      findings.push(finding("independent-read-cursor", file,
+        `${callee} advances the cursor of ${descriptor.getText(source)} in ${functionName(fn)}, which did not open it; a borrowed descriptor is read at explicit positions or copied`));
+    });
+  }
+  for (const key of Object.keys(CURSOR_BORROWERS))
+    if (!used.has(key) && exists(root, key.slice(0, key.indexOf("#"))))
+      findings.push(finding("independent-read-cursor", key.slice(0, key.indexOf("#")), `lists ${key} as a cursor borrower, and it reads no borrowed cursor`));
+}
+
 export function surfaceRuleFindings(root) {
   const findings = [];
   moduleBoundaryRules(root, findings);
@@ -895,5 +975,6 @@ export function surfaceRuleFindings(root) {
   errorWordsRules(root, findings);
   openSpikeRules(root, findings);
   socketCallbackEffectRules(root, findings);
+  cursorReadRules(root, findings);
   return findings;
 }

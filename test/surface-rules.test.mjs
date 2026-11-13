@@ -519,3 +519,26 @@ test("022. Moved LSP sources keep the verified deferred-load and extension closu
   withTree({ [file]: 'import type { Store } from "../../storage/src/store.js";' },
     findings => assert.ok(has(findings, "extension-closure")));
 });
+
+test("023. Independent-read-cursor (native spec 6): a cursor read takes only a descriptor its own owner opened", () => {
+  const file = "packages/storage/src/reader.ts";
+  // Accept: the function opened it; a closure reads what its owner opened; a borrowed descriptor read at positions.
+  for (const text of [
+    "export function a(path) { const fd = openSync(path, 0); try { return readSync(fd, b, 0, 1, null); } finally { closeSync(fd); } }",
+    "export function a(path) { const fd = withinDirectory(path, (p, n) => openRegularBeneath(p, n)); return withCleanup(() => readFileSync(fd), () => closeSync(fd)); }",
+    "export function a(fd) { return readSync(fd, b, 0, 1, 0) + readSync(fd, b, 0, 1, position); }",
+    "export function a(fd) { return createReadStream('', { fd, start: 0 }); }",
+  ]) withTree({ [file]: text }, findings => clean(findings, "independent-read-cursor"));
+  // Reject: each cursor read of a borrowed descriptor.
+  for (const text of [
+    "export function a(fd) { return readSync(fd, b, 0, 1, null); }",
+    "export function a(fd) { return readSync(fd, b); }",
+    "export function a(fd) { return readFileSync(fd); }",
+    "export function a(fd) { return createReadStream('', { fd }); }",
+    "export function a(fd) { return createReadStream('', { fd: fd, autoClose: true }); }",
+    "export function a() { return readSync(6, b); }",
+  ]) withTree({ [file]: text }, findings => assert.ok(findings.some(value => value.rule === "independent-read-cursor" && value.file === file), text));
+  // Near miss: a path read and a directory handle's readSync are not descriptor cursors.
+  withTree({ [file]: "export function a(path, dir) { readFileSync(path); readFileSync('/x'); return dir.readSync(); }" },
+    findings => clean(findings, "independent-read-cursor"));
+});
