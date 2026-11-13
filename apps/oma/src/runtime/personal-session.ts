@@ -37,7 +37,22 @@ export async function runPersonalSession(options: { readonly root: string; reado
   ensureOwnedUserDirectory(birth.history, options.dataRoot);
   const lockPath = join(options.root, "history.lock"), lease = ProcessLock.tryAcquire(lockPath);
   if (lease === null) throw new StoreError("BROKER_UNAVAILABLE", "That Personal session is open in another oma window");
-  let child: ChildProcess;
+  // Host-loss handlers precede the child. A signal that lands between spawn
+  // and a later registration would end this host by default and orphan the
+  // engine; a JS handler runs only after spawn returns, so it finds the child.
+  let child: ChildProcess | undefined, closed = false;
+  const errors: unknown[] = [], signals = HOST_LOSS_SIGNALS;
+  const attempt = (action: () => void): void => { try { action(); } catch (error) { errors.push(error); } };
+  const forward = (signal: NodeJS.Signals): void => {
+    if (child === undefined || closed || child.exitCode !== null || child.signalCode !== null) return;
+    const target = child;
+    attempt(() => {
+      if (!target.kill(signal)) throw new StoreError("BROKER_UNAVAILABLE", `Personal could not forward ${signal}`);
+    });
+  };
+  const handlers = signals.map(signal => () => forward(signal));
+  const release = (): void => { signals.forEach((name, index) => attempt(() => { process.off(name, handlers[index]!); })); };
+  for (const signal of HOST_LOSS_SIGNALS) process.on(signal, handlers[signals.indexOf(signal)]!);
   try {
     const runtime = resolvePiRuntime({ stateRoot: join(options.dataRoot, "personal"), libdir: options.libdir });
     const argv = ["--import", join(options.libdir, DEPLOYMENT_LAYOUT.interactiveToolsPreload),
@@ -49,27 +64,20 @@ export async function runPersonalSession(options: { readonly root: string; reado
     lease.assertHeld(lockPath);
     child = spawnSessionInteractive(process.execPath, argv, birth.cwd, env, lease.descriptor);
   } catch (error) {
+    release();
     try { lease.close(); } catch (cleanup) { throw new AggregateError([error, cleanup], "Personal launch and cleanup failed"); }
     throw error;
   }
+  const owned = child;
   return new Promise((resolve, reject) => {
-    let next: PersonalExit["next"], closed = false;
-    const errors: unknown[] = [], signals = HOST_LOSS_SIGNALS;
-    const attempt = (action: () => void): void => { try { action(); } catch (error) { errors.push(error); } };
-    const forward = (signal: NodeJS.Signals): void => {
-      if (closed || child.exitCode !== null || child.signalCode !== null) return;
-      attempt(() => {
-        if (!child.kill(signal)) throw new StoreError("BROKER_UNAVAILABLE", `Personal could not forward ${signal}`);
-      });
-    };
-    const handlers = signals.map(signal => () => forward(signal));
+    let next: PersonalExit["next"];
     try {
       // Register actual close before acquiring any other listener. Setup failure
       // requests cleanup but cannot return this writer's lease before close.
-      child.once("close", (code, signal) => {
+      owned.once("close", (code, signal) => {
         if (closed) return;
         closed = true;
-        signals.forEach((name, index) => attempt(() => { process.off(name, handlers[index]!); }));
+        release();
         attempt(() => { lease.close(); });
         if (errors.length > 0) {
           reject(errors.length === 1 ? errors[0] : new AggregateError(errors, "Personal execution and cleanup failed"));
@@ -78,8 +86,8 @@ export async function runPersonalSession(options: { readonly root: string; reado
         const status = code ?? (signal === null ? 1 : 128 + (constants.signals[signal] ?? 0));
         resolve({ code: status, ...(status === 0 && next !== undefined ? { next } : {}) });
       });
-      child.on("error", error => { errors.push(error); });
-      child.on("message", value => {
+      owned.on("error", error => { errors.push(error); });
+      owned.on("message", value => {
         if (closed || !value || typeof value !== "object" || Array.isArray(value)) return;
         const message = value as Record<string, unknown>;
         if (next !== undefined || message.type !== "switch" || Object.keys(message).some(key => key !== "type" && key !== "session" && key !== "mode")) return;
@@ -88,10 +96,9 @@ export async function runPersonalSession(options: { readonly root: string; reado
         if (message.session === undefined) next = {};
         else if (typeof message.session === "string") next = { session: message.session };
       });
-      for (const signal of HOST_LOSS_SIGNALS) process.on(signal, handlers[signals.indexOf(signal)]!);
     } catch (error) {
       errors.push(error);
-      attempt(() => { stopOwnedChild(child); });
+      attempt(() => { stopOwnedChild(owned); });
     }
   });
 }

@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `7d88f78f859bd0076d4b4151c79d2bfd0fdd33edd41ec71f5e10235d267c637a` (15954 files).
+verification input digest `dc28fa9867f56c5d4cd0c379956d4bde2cc42374638c2cc6afb05a386d9d9112` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4927,3 +4927,9 @@ Intel 009의 원인: Seatbelt Worker의 요청 캐시가 나중에 관측한 rec
 ### SOURCE157 결과
 
 `5d03cfff8db`에서 Mac26·macOS 15는 job 전체 success였다(제품 13/13, Mac26 generation 001 PASS). Intel job은 제품 시험 도중 GitHub runner 통신 두절("The hosted runner lost communication with the server")로 끝나 결과가 없다. Ubuntu는 `native-process-scope` 006이 실패했다. 시험이 `children` 목록을 읽은 뒤 그 자식이 끝나면, `/proc/<pid>/status` 읽기가 ENOENT가 아니라 ESRCH로 실패한다. 이것은 시험 관측의 경쟁 조건이다. 이제 시험은 ESRCH도 이미 사라진 자식으로 취급한다. Linux 제품 코드는 바꾸지 않았다.
+
+### SOURCE158 결과
+
+`ebcbe94d891`에서 macOS 15·Ubuntu는 job 전체 success였다. Mac26은 제품 시험 12/13으로, 002만 실패했다. Intel은 001·002·003·011·013이 실패했다. 011은 worker-3의 Pi 수락 마감이었고, 003은 시험 하네스의 `killpg` EPERM이었다.
+
+002의 원인을 새 진단으로 찾았다. 잔여 `pi-personal`의 ppid는 1, 상태는 S, 경과 시간은 30초였다. Host가 자식보다 먼저 끝나 엔진이 고아로 남은 것이다. 로컬 Linux에서 birth 직후 SIGTERM으로 재현했다. Host는 `signal: SIGTERM`(기본 동작)으로 끝났고, 자식은 ppid 1로 남았다. `spawnSessionInteractive`가 자식을 만든 뒤 HOST_LOSS 처리기를 등록하기까지 약 3ms의 틈이 있었다. 그 사이에 온 신호는 Host를 기본 동작으로 끝냈다. 이제 처리기는 spawn 전에 등록된다. JS 처리기는 spawn이 돌아온 뒤에 실행되므로 자식에게 신호를 전달한다. 실패 경로에서는 처리기를 반환한다. 같은 재현을 15회 반복해 잔여 0이었다. Personal 시험 36/36 PASS. 틈이 동기 코드 안에 있어 결정적 단위 시험은 만들 수 없고, 제품 002가 이 경로를 덮는다.
