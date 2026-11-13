@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `1bb4f77f23a32e8af57f92cdd699e25766ddc9813d6733fa899037de78afc3d6` (15954 files).
+verification input digest `aabdb9f1d9048d22549af7dffa725ce240e034e93379b7f21eaca5217c7ac24d` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4963,4 +4963,8 @@ helper는 `require`·`mach_ok` 실패를 stderr에 쓰고 exit 2로 끝나는데
 - 예외는 다섯 곳이다. `readBounded`와 `readFrozenLength`는 호출자가 막 연 FD를 받는다. 나머지 셋은 pipe를 읽는데, pipe에는 file cursor가 없다.
 
 이 목록을 architecture 규칙 `surface/independent-read-cursor`로 고정했다. 목록 밖의 cursor read와 쓰이지 않는 목록 항목은 finding이다. 수락·거절·near miss 시험은 `surface-rules` 023이다. G-FILES의 이 항목은 닫힘으로 바꿨다. gate 전체는 OPEN이다.
+
+### SOURCE162 Apple silicon 두 Mac 전체 success
+
+`ddae8a7ec93`에서 세 runtime job이 모두 success였다. Mac26과 macOS 15가 각각 공통 469/469, 제품 시험 13/13, generation 3/3 PASS다. Intel 제외 뒤 Apple silicon 두 OS가 같은 source에서 처음 모두 통과했다. 제품 013(Broker 재시작 뒤 같은 Principal의 현재 권한)도 두 Mac에서 PASS여서, G-AUTH의 restart 반례를 닫힘으로 바꿨다. sleep/wake와 서명 Keychain은 그대로 열려 있다. 이번 실행에서 job helper 조기 종료는 재발하지 않았다. SOURCE160의 진단 경로는 다음 재발 때 원인을 남긴다.
 

@@ -16,13 +16,13 @@ gate 전체는 모든 항목이 닫혀야 PASS다. `scripts/verify-native.mjs`�
 | regular entry pin/repair, mode-000 | gate `files`: mode-000 pin EACCES(13)는 unknown으로 남고, held inode repair는 0. FIFO event pin 확인. owned-directory 001–009 | 닫힘 |
 | `/dev/fd` duplicate·descriptor exec 반례 | gate `file-descriptors`: duplicate는 같은 inode에 cursor를 공유한다. FD exec는 swap 전후와 unlink 뒤 모두 errno 13이다. 제품은 이 경로를 쓰지 않는다 | 닫힘(반례를 배제로 판정) |
 | 독립 read cursor | gate `file-descriptors`: duplicate는 cursor를 공유한다. 그래서 제품은 빌린 FD의 cursor를 읽지 않는다. architecture 규칙 `surface/independent-read-cursor`는 cursor를 움직이는 read(위치 없는 `readSync`, FD의 `readFileSync`, `start` 없는 FD stream)를 그 FD를 연 owner 안에서만 허용한다. 빌린 FD는 위치 지정 read(`submit-spool`·`file-digest`·`execution-journal`·`package-tar` 등)로 읽거나, quarantine처럼 `copyDescriptorToEntry`로 private verified copy를 만든다. 예외는 사유와 함께 목록에 있는 다섯 곳이다: 호출자가 막 연 FD를 받는 `readBounded`·`readFrozenLength`, cursor가 없는 pipe 셋. 쓰지 않는 예외 항목도 finding이다. 규칙의 수락·거절 시험은 `surface-rules` 023이다 | 닫힘(제품 경로). vendored 코드는 규칙 밖이다 |
-| exact executable | gate `suspended-image`: 정지 image A/B 양성과, B를 map한 뒤 경로를 A로 되돌린 반례를 release 전에 거절한다. `launchd-image`: `SpawnConstraint.cdhash` 단독 결박은 배제된다. 제품 `darwin-job-control`은 정지 target의 audit origin cdhash를 설치본 bytes에서 계산한 hash와 대조하고, 불일치면 release하지 않는다. `native-runtime-generation` 001은 private Node와 의존성을 봉인한 generation을 쓴다(세 Mac) | 부분: main image만 결박한다. script·module·library bytes는 봉인된 generation이 보증하고, loader context와 PID 재사용 대조는 G-AUTH와 함께 남는다 |
+| exact executable | gate `suspended-image`: 정지 image A/B 양성과, B를 map한 뒤 경로를 A로 되돌린 반례를 release 전에 거절한다. `launchd-image`: `SpawnConstraint.cdhash` 단독 결박은 배제된다. 제품 `darwin-job-control`은 정지 target의 audit origin cdhash를 설치본 bytes에서 계산한 hash와 대조하고, 불일치면 release하지 않는다. `native-runtime-generation` 001은 private Node와 의존성을 봉인한 generation을 쓴다(세 Mac) | 부분. main image 밖 bytes의 근거는 이렇다. generation은 설치본을 private 0700 root에 복사하고, 복사 뒤 inventory를 `deploymentDigest`와 다시 대조한 다음 모든 entry에 user-immutable flag를 건다. `launchNode`는 설치된 `.js/.mjs/.cjs` entry만 받는다. `DYLD_*`·`LD_*`·`NODE_OPTIONS`·`NODE_PATH`를 거절하고 `--no-global-search-paths`로 실행한다. preload는 봉인 entry만 허용하고, Actor writable root가 겹치면 거절한다. generation 001(Mac26·macOS 15 PASS)은 Seatbelt 안에서 flag 해제·`r+` open·hardlink가 EPERM이고, global module fallback과 원본 경로 read가 거절되며, 의존성은 private root에서 해석됨을 확인한다. PID 재사용은 audit token pidversion pin이 막는다(G-AUTH 닫힘). 남은 것: Seatbelt 밖의 같은 UID process는 user-immutable flag를 해제할 수 있다. 이를 위협 범위로 볼지 판정이 필요하다 |
 | no-replace publish와 parent flush | gate `files`: link publish 성공, 중복 link EEXIST(17), directory flush 0. durable-fs 시험(세 Mac) | 닫힘 |
 | Seatbelt 경로 정책 | gate `seatbelt-files`: writable·readonly·denied, symlink·hardlink 거절, 보호 parent pin. 제품 Worker probe의 private read 거절·shared write 거절(세 Mac) | 닫힘 |
 | Society lock과 fence 수명 | Society 소유권 12/12(세 Mac): Host SIGKILL 뒤 takeover 거절, 실행 범위 전체 사망까지 fence 유지, 충돌 port 거절 | 닫힘 |
 | 외부 writer(SQLite·Git)의 root 결박 | Git quarantine은 정지 scope에서 검증한 뒤 import한다(gate `git-setup-quarantine`, 제품 009). SQLite는 Broker가 소유한 state root 아래에 있다 | 부분: validation이 남긴 StateRoot capture, private work/source fetch, 진단 writer 결박과 수명 인수가 남았다 |
 
-G-FILES 판정: **OPEN**. 남은 항목은 main image 밖 bytes의 결박 근거 정리와 외부 writer 결박 두 가지다.
+G-FILES 판정: **OPEN**. 남은 항목은 두 가지다. 하나는 Seatbelt 밖 같은 UID process의 immutable 해제를 위협 범위로 볼지의 판정, 다른 하나는 외부 writer 결박이다.
 
 ## G-AUTH
 
@@ -35,10 +35,10 @@ G-FILES 판정: **OPEN**. 남은 항목은 main image 밖 bytes의 결박 근거
 | 살아 있는 그 process, PID 재사용 | gate `mach-token-control`: pidversion이 다르면 ESRCH, genuine token만 신호한다. `mach-stream-stale`: 송신자가 죽은 뒤 받은 메시지의 audit binding을 거절한다 | 닫힘 |
 | 인계·전달 반례 | gate `mach-stream-handoff`: 다른 process로 넘어간 endpoint의 bytes 0, audit binding 거절. `mach-audit-async`: 취소된 binding 거절, 선택한 image 불일치는 unavailable | 닫힘 |
 | 기대한 Broker(Host→Broker) | Society 소유권 012: Host는 자기 Broker child를 private child identity로 Mach에 연결하고, non-child나 반환된 identity를 거절한다. 제품 005: Principal engine→Broker Mach 인증 호출(세 Mac) | 닫힘 |
-| 현재 run 소속과 현재 권한 | 제품 008: Broker SIGKILL 뒤 재시작한 generation에서 계속 동작한다. 011: 엔진 사망 뒤 scope 종료가 확인돼야 재전달한다. 상속 FD는 명시 채널만 남는다(gate `seatbelt-kept-fds`) | 부분: Broker 재시작 뒤 같은 Principal이 새 generation에 현재 권한으로 닿는 제품 시험 013 추가(판정 대기). 실제 sleep/wake는 [NATIVE-006](../macos-platform.md)상 CI 밖 미검증 범위다 |
+| 현재 run 소속과 현재 권한 | 제품 008: Broker SIGKILL 뒤 재시작한 generation에서 계속 동작한다. 011: 엔진 사망 뒤 scope 종료가 확인돼야 재전달한다. 상속 FD는 명시 채널만 남는다(gate `seatbelt-kept-fds`) | 부분: restart 반례는 닫혔다. 제품 013(Broker SIGKILL·재시작 뒤 같은 Principal이 새 generation에 현재 권한으로 닿음)이 같은 source `ddae8a7ec93`에서 Mac26·macOS 15 모두 PASS다. 실제 sleep/wake는 [NATIVE-006](../macos-platform.md)상 CI 밖 미검증 범위로 남는다 |
 | 서명 Keychain | 명세 9절: scripted credential은 signed Keychain·잠김/TCC 검증이 아니다 | 열림: release 서명 Keychain·SIP 검증이 없다. NATIVE-006은 서명 Keychain·TCC를 CI의 scripted credential과 다른 별도 미검증 범위로 둔다. 실제 서명 release와 물리 Mac이 필요하다 |
 
-G-AUTH 판정: **OPEN**. 남은 항목은 sleep을 포함한 restart 뒤 current capability 반례와 release 서명 Keychain·SIP 검증이다.
+G-AUTH 판정: **OPEN**. 남은 항목은 실제 sleep/wake 뒤 current capability 반례와 release 서명 Keychain·SIP 검증이다. 둘 다 물리 Mac과 서명 release가 필요하다.
 
 ## G-PROCESS
 
