@@ -71,9 +71,9 @@ let darwinStatLayoutChecked = false;
  * observation, not an entry pin, repair capability or proof about a later open.
  * SDK offsets are independently asserted by the real Darwin C probe. */
 function darwinStatAt(fd: number, name: string, bigint: boolean): Stats | BigIntStats {
-  if (!["arm64", "x64"].includes(process.arch))
-    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin stat requires a supported 64-bit inode ABI");
-  darwinStat ??= load(null).func(process.arch === "x64" ? "fstatat$INODE64" : "fstatat", "int",
+  if (process.arch !== "arm64")
+    throw new StoreError("UNSUPPORTED_PROFILE", "Darwin stat requires Apple silicon");
+  darwinStat ??= load(null).func("fstatat", "int",
     ["int", "const char *", "void *", "int"]);
   const bytes = Buffer.alloc(144);
   if (!darwinStatLayoutChecked) {

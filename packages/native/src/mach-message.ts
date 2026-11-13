@@ -31,7 +31,7 @@ interface MachCalls {
 }
 let calls: MachCalls | undefined;
 function mach(): MachCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "Mach messages require the Darwin 64-bit backend");
   if (calls !== undefined) return calls;
   const library = load(null);

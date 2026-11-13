@@ -12,7 +12,7 @@
 - unknown은 dead/absent/success가 아니다. 전체 후손 종료가 필요한 효과에 direct-child exit나 process scan을 대신 쓰지 않는다. 이 제품 계약을 변경하려면 별도 사용자 결정이 필요하다.
 - Worker는 자기 허용 영역만 사용한다. broker DB·receipt·canonical Git·다른 actor·host credential은 보호한다. 일반 network 공유·실행 quota 없음은 유지한다.
 - Mac native는 새 state root에서 시작한다. 기존 VM state/disk/archive, native Personal history, accepted bytes는 자동 변환·삭제하지 않는다.
-- 첫 지원 목표는 macOS 26 arm64·Linux다. macOS 15는 호환성 관측이다. root daemon·EndpointSecurity entitlement·private coalition 제어·최소 OS 상향은 기본 의존성이 아니다.
+- 첫 지원 목표는 macOS 26 arm64·Linux다. macOS 15는 호환성 관측이다. Intel Mac(Darwin x64)은 지원하지 않는다. native 진입점이 `UNSUPPORTED_PROFILE`로 거절하고, CI도 관측하지 않는다. 아래 표의 Intel 기록은 그 결정 전의 이력이다. Intel Mac(Darwin x64)은 지원하지 않는다. native 진입점이 `UNSUPPORTED_PROFILE`로 거절하고, CI도 관측하지 않는다. 아래 표의 Intel 기록은 그 결정 전의 이력이다. root daemon·EndpointSecurity entitlement·private coalition 제어·최소 OS 상향은 기본 의존성이 아니다.
 
 ## 2. 구조와 재사용
 

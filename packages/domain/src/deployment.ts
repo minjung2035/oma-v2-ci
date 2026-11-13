@@ -98,15 +98,14 @@ export const RESTIC_RELEASE = Object.freeze({
       binarySha256: "2fb45ac6f9071b6f20eb883953a188f9e7c7cb6bbe43c67a2e47ada4e85ee7f0" }),
   }),
   darwin: Object.freeze({
-    x64: Object.freeze({ archive: "restic_0.19.1_darwin_amd64.bz2",
-      archiveSha256: "c38d579622cf602f665234c5a8c315030b6cf70656028fe6dc29a786b60e5f35",
-      binarySha256: "b2b553b402b9971b0c3f673d880397a421526f55a08f21fe5b82b5dd9e049a08" }),
     arm64: Object.freeze({ archive: "restic_0.19.1_darwin_arm64.bz2",
       archiveSha256: "7be0a144ccc377880f294204aa271d76e4b79554b42a751151d425ce6ebac143",
       binarySha256: "06582569ff2f10e1935a6f12187c76db02f0bae99e6e54098f2cdc374766d768" }),
   }),
 });
 export function resticReleaseFor(platform: string, arch: string) {
-  if ((platform !== "linux" && platform !== "darwin") || (arch !== "x64" && arch !== "arm64")) return null;
-  return RESTIC_RELEASE[platform][arch];
+  if (platform === "linux" && (arch === "x64" || arch === "arm64")) return RESTIC_RELEASE.linux[arch];
+  // macOS is Apple silicon only.
+  if (platform === "darwin" && arch === "arm64") return RESTIC_RELEASE.darwin.arm64;
+  return null;
 }

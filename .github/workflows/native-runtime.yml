@@ -24,7 +24,7 @@ jobs:
       matrix:
         # This work branch qualifies on Darwin; other manual runs default to Linux.
         # Linux first: its regression evidence is cheap and must not be starved by later pushes.
-        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-26-intel", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
+        os: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' && inputs.run_darwin) && fromJSON('["ubuntu-24.04", "macos-26", "macos-15"]') || fromJSON('["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     steps:
@@ -218,8 +218,7 @@ jobs:
           if ! npm run check:package-isolation > .scratch/native-runtime/darwin-packed-isolation.log 2>&1; then cat .scratch/native-runtime/darwin-packed-isolation.log; exit 1; fi
       - name: Back up, verify and restore real Society storage with the pinned Restic on Darwin
         id: darwin_storage
-        # The pinned x64 Restic is unsigned and is refused on Darwin; product test 004 qualifies that refusal.
-        if: ${{ !cancelled() && runner.os == 'macOS' && runner.arch == 'ARM64' && steps.native_build.outcome == 'success' }}
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.native_build.outcome == 'success' }}
         timeout-minutes: 10
         run: |
           mkdir -p .scratch/native-runtime

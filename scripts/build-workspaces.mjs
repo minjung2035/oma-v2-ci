@@ -83,7 +83,7 @@ for (const workspace of rebuilding) {
     const fixedCodeArguments = [];
     if (executable.fixedCodeDirectory !== undefined) {
       const { machoImageCdHashes } = await import("@oma/native/darwin-macho-image");
-      const selected = machoImageCdHashes(readFileSync(join(root, workspace.path, "dist", executable.fixedCodeDirectory)), process.arch === "arm64" ? "arm64" : "x64");
+      const selected = machoImageCdHashes(readFileSync(join(root, workspace.path, "dist", executable.fixedCodeDirectory)), "arm64");
       if (selected.length !== 1) throw new Error("fixed native creator requires one CodeDirectory");
       fixedCodeArguments.push(`-DOMA_FENCE_EXPECTED_HASH="${selected[0]}"`);
     }

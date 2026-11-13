@@ -12,7 +12,7 @@ interface AuditTokenCalls {
 }
 let calls: AuditTokenCalls | undefined;
 function native(): AuditTokenCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "audit-token accessors require Darwin 64-bit BSM");
   if (calls !== undefined) return calls;
   const library = load("/usr/lib/libbsm.dylib");

@@ -13,8 +13,8 @@ function initialize() {
     open: libc.func("int openat(int fd, const char *name, int flags, ...)"),
     mkdir: libc.func("int mkdirat(int fd, const char *name, unsigned int mode)"),
     unlink: libc.func("int unlinkat(int fd, const char *name, int flags)"),
-    fdopendir: libc.func(process.platform === "darwin" && process.arch === "x64" ? "fdopendir$INODE64" : "fdopendir", "void *", ["int"]),
-    readdir: libc.func(process.platform === "darwin" && process.arch === "x64" ? "readdir$INODE64" : "readdir", "void *", ["void *"]),
+    fdopendir: libc.func("fdopendir", "void *", ["int"]),
+    readdir: libc.func("readdir", "void *", ["void *"]),
     closedir: libc.func("int closedir(void *directory)"),
   };
 }

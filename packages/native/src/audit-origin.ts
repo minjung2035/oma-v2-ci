@@ -22,7 +22,7 @@ interface AuditCalls {
 }
 let calls: AuditCalls | undefined;
 function native(): AuditCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "audit-origin observation requires Darwin 64-bit Security.framework");
   if (calls !== undefined) return calls;
   const security = load("/System/Library/Frameworks/Security.framework/Security");

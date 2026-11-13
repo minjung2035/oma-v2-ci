@@ -2886,7 +2886,7 @@ SOURCE61 전체 architecture·transaction·durable boundary·document·spec inve
 
 아래 값은 문서 기록 후 **구조 검사의 입력 identity**다. 전체 runtime 실행의 입력 hash는 위 별도 manifest가 소유하며, 구조 digest를 갱신해 runtime PASS를 만들지 않는다.
 
-verification input digest `5947587f942ad12259d9725327bbe5ad5dad4e1685aa86aeb4060c1e2243dbb1` (15954 files).
+verification input digest `454277d85e4ff24c6080aceffb299e46a7bc8ed3901d27f3ae9e3048ad9c6966` (15954 files).
 
 소스 목록은 [production-files.txt](../../production-files.txt), per-file hash는 [production-loc-hashes.json](../../production-loc-hashes.json)에 있다. 이전 cloc 2.08 측정은 354 files / 35,832 code LOC였다. 이 역사적 기록은 현재 source의 LOC claim이 아니며 새 측정값으로 사용하지 않는다. 현재 LOC는 CI artifact `production-loc.json`과 `production-measurement-hashes.json`에서 확인한다.
 
@@ -4935,3 +4935,21 @@ Intel 009의 원인: Seatbelt Worker의 요청 캐시가 나중에 관측한 rec
 002의 원인을 새 진단으로 찾았다. 잔여 `pi-personal`의 ppid는 1, 상태는 S, 경과 시간은 30초였다. Host가 자식보다 먼저 끝나 엔진이 고아로 남은 것이다. 로컬 Linux에서 birth 직후 SIGTERM으로 재현했다. Host는 `signal: SIGTERM`(기본 동작)으로 끝났고, 자식은 ppid 1로 남았다. `spawnSessionInteractive`가 자식을 만든 뒤 HOST_LOSS 처리기를 등록하기까지 약 3ms의 틈이 있었다. 그 사이에 온 신호는 Host를 기본 동작으로 끝냈다. 이제 처리기는 spawn 전에 등록된다. JS 처리기는 spawn이 돌아온 뒤에 실행되므로 자식에게 신호를 전달한다. 실패 경로에서는 처리기를 반환한다. 같은 재현을 15회 반복해 잔여 0이었다. Personal 시험 36/36 PASS. 틈이 동기 코드 안에 있어 결정적 단위 시험은 만들 수 없고, 제품 002가 이 경로를 덮는다.
 
 Intel 001은 Broker가 첫 runtime generation을 봉인하는 도중 시험의 300초 준비 대기를 넘겼다. generation 복사는 빠른 Mac에서도 30–185초로 편차가 크다. 시험은 이제 이 cold start를 480초까지 기다린다(시험 전체 720초). Intel 003은 Host가 Ctrl-D 뒤 10초 안에 끝나지 않았는데, 하네스의 `killpg`가 Darwin EPERM으로 예외를 내서 그 원인이 가려졌다. 하네스는 이제 EPERM이면 직접 자식을 끝내고 회수한다.
+
+### SOURCE159 결정: Intel Mac 제외
+
+명세의 지원 목표는 macOS 26 arm64·Linux이고, Intel Mac은 목표가 아니다. 지금까지 Intel은 추가 관측으로만 CI에 있었는데, 엔진 시작 시간과 runner 통신 두절 때문에 판정을 계속 지연시켰다. 그래서 Intel은 제외한다.
+- CI matrix에서 `macos-26-intel`을 뺐다.
+- `assertNativeRuntime`은 Darwin x64를 `UNSUPPORTED_PROFILE`("OMA on macOS requires Apple silicon (arm64)")로 거절한다.
+- Darwin 전용 native 호출의 x64 분기(`$INODE64` 심볼, x64 cdhash 선택, x64 Restic pin)를 지웠다. 제품 시험 004의 x64 Restic 거절 분기도 지웠다.
+- Mach-O 파서는 universal binary 안의 x64 slice를 읽어야 하므로 유지한다. Linux x64는 바꾸지 않았다.
+- 이 결정 이전 기록의 Intel 결과는 이력으로만 남는다.
+
+### SOURCE159 결정: Intel Mac 제외
+
+명세의 지원 목표는 macOS 26 arm64·Linux이고, Intel Mac은 목표가 아니다. macOS 26은 Intel Mac을 지원하는 마지막 macOS다. 지금까지 Intel은 추가 관측으로만 CI에 있었는데, 엔진 시작 시간과 runner 통신 두절 때문에 판정을 계속 지연시켰다. 사용자 결정으로 Intel은 제외한다.
+- CI matrix에서 `macos-26-intel`을 뺐다.
+- `assertNativeRuntime`은 Darwin x64를 `UNSUPPORTED_PROFILE`("OMA on macOS requires Apple silicon (arm64)")로 거절한다.
+- Darwin 전용 native 호출의 x64 분기(`$INODE64` 심볼, x64 cdhash 선택, x64 Restic pin)를 지웠다. 제품 시험 004의 x64 Restic 거절 분기도 지웠다.
+- Mach-O 파서는 universal binary 안의 x64 slice를 읽어야 하므로 유지한다. Linux x64는 바꾸지 않았다.
+- 이 결정 이전 기록의 Intel 결과는 이력으로만 남는다.

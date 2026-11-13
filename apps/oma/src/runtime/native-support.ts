@@ -5,4 +5,7 @@ import { StoreError } from "@oma/domain/errors";
 export function assertNativeRuntime(): void {
   if (process.platform !== "linux" && process.platform !== "darwin")
     throw new StoreError("UNSUPPORTED_PROFILE", "OMA native execution requires Linux or macOS");
+  // The macOS target is Apple silicon; an Intel Mac has no qualified native path.
+  if (process.platform === "darwin" && process.arch !== "arm64")
+    throw new StoreError("UNSUPPORTED_PROFILE", "OMA on macOS requires Apple silicon (arm64)");
 }

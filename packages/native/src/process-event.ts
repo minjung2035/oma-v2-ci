@@ -19,7 +19,7 @@ interface EventCalls {
 }
 let calls: EventCalls | undefined;
 function native(): EventCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "process events require the Darwin 64-bit backend");
   if (calls !== undefined) return calls;
   const library = load(null);

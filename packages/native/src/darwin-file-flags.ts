@@ -9,11 +9,11 @@ const USER_IMMUTABLE = 2;
 let calls: { stat(fd: number, bytes: Buffer): number; flags(fd: number, value: number): number } | undefined;
 function unsupported(message: string): never { throw new StoreError("UNSUPPORTED_PROFILE", message); }
 function native() {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch) || (process.getuid?.() ?? 0) <= 0)
+  if (process.platform !== "darwin" || process.arch !== "arm64" || (process.getuid?.() ?? 0) <= 0)
     unsupported("immutable inode flags require an ordinary Darwin owner");
   if (calls === undefined) {
     const library = load(null);
-    calls = { stat: library.func(process.arch === "x64" ? "fstat$INODE64" : "fstat", "int", ["int", "void *"]),
+    calls = { stat: library.func("fstat", "int", ["int", "void *"]),
       flags: library.func("int fchflags(int fd, unsigned int flags)") };
   }
   return calls;

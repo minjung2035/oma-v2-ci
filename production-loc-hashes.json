@@ -364,7 +364,7 @@
     },
     {
       "path": "apps/oma/src/runtime/native-support.ts",
-      "sha256": "727973c14283faca49f04b0e00ab677bf54df8c3104af55748add2f55ca08c16"
+      "sha256": "699097c09ed72c783a0a2ced36100d23b724fe29febc1f76f4e7f97672c96176"
     },
     {
       "path": "apps/oma/src/runtime/packages/index.ts",
@@ -808,7 +808,7 @@
     },
     {
       "path": "packages/domain/src/deployment.ts",
-      "sha256": "2eb9a0e61a6d570c13b53bf5ff6be4af439a337b7bf5eb1172c1e73aae15d7f6"
+      "sha256": "071c69100bbbb6c90f56ed561de5f00d9942e1b2feadbaed6afda79662835e0c"
     },
     {
       "path": "packages/domain/src/derived.ts",
@@ -1224,7 +1224,7 @@
     },
     {
       "path": "packages/file-descriptors/src/index.ts",
-      "sha256": "ab21ca5b45be054b4d74c83a3589418f17b914d32918d9c8722273722da11db1"
+      "sha256": "3cd4d3f186cc4bfbd001aed284d812580c68f564bd33c2bb24354b59ab09390c"
     },
     {
       "path": "packages/git/package.json",
@@ -1472,15 +1472,15 @@
     },
     {
       "path": "packages/native/src/audit-origin.ts",
-      "sha256": "a6fd258eca0f451bd20a76cd1d51faa85673923221d26d98173fecdb77190e60"
+      "sha256": "7a679a0b65a2c1467ac97b9d6c93c852b5cf5ac66b33e8bfba65995863a2be36"
     },
     {
       "path": "packages/native/src/audit-session.ts",
-      "sha256": "33cd9d26d65868b53ee42576ac71ddb265d00690539e66b301d9f0d3215c6415"
+      "sha256": "255e37bdb6d7d74b1cfe1f45e5c1f8d362dcbac3215cea585aed9c177d33dfe2"
     },
     {
       "path": "packages/native/src/audit-token.ts",
-      "sha256": "7d9a8980dfcad16b09a45c06f2a29ffc18330134e469845c69885a2b78b554ad"
+      "sha256": "06921ffb53bd973086013c3f203fb95b802b5476dede4961e7ed4c615f9fab1a"
     },
     {
       "path": "packages/native/src/cleanup.ts",
@@ -1492,7 +1492,7 @@
     },
     {
       "path": "packages/native/src/darwin-file-flags.ts",
-      "sha256": "466dc48588c823f81b9e515756dfb025396ec47fc63f8ed136920d25049d1939"
+      "sha256": "da5d6f9c74f9a1061c51492683515f72b099efd6b2eae13d92fcd8aa4ba8b7b5"
     },
     {
       "path": "packages/native/src/darwin-job-assets.ts",
@@ -1500,7 +1500,7 @@
     },
     {
       "path": "packages/native/src/darwin-job-control.ts",
-      "sha256": "738dbbd6e2b42a67440f4c323501e00453ffff44eea76e980fe5d9cfd8c19497"
+      "sha256": "ac4ead6182fcfc0101fdd0a1bb632b19c811ac213073d25ebb4c54069a8fbb2f"
     },
     {
       "path": "packages/native/src/darwin-job-launch.ts",
@@ -1524,11 +1524,11 @@
     },
     {
       "path": "packages/native/src/darwin-society-fence.ts",
-      "sha256": "88db10cbe8fe604604d44ce98958c1bdd988945544f4c5c36e8799e7de994be1"
+      "sha256": "460cd683fe82d9d77aa7bc416c87d3025231bd8e350c3ee993340ddf91312382"
     },
     {
       "path": "packages/native/src/darwin-supervisor.ts",
-      "sha256": "6183d6e50ff1fb80db03dd08f5f54d9ed08b008146be545c633d177f0ea1f78e"
+      "sha256": "40326a17eb1656d856d53b84e769b04d18aa6fbde95b474e007cbece3d24edd2"
     },
     {
       "path": "packages/native/src/descriptor-path.ts",
@@ -1536,7 +1536,7 @@
     },
     {
       "path": "packages/native/src/directory-layout.ts",
-      "sha256": "1efe60056176c4a2ffdf76f9fcb65f84d90b19df40fdef8012f98d91f803bfb2"
+      "sha256": "1128e54335f8edaefbc320d99cd899cf82a72f9b87249001f898782163ef4554"
     },
     {
       "path": "packages/native/src/files.ts",
@@ -1560,7 +1560,7 @@
     },
     {
       "path": "packages/native/src/mach-message.ts",
-      "sha256": "cdb05f65b288bce5815b5ae11a33ef015b596f99ce5da0c45df7dba537798004"
+      "sha256": "78d8367dc2d7a5de9b472dcbd3ae1e824537b2530f8fe9963e89d6ffa61a858a"
     },
     {
       "path": "packages/native/src/mach-poll.ts",
@@ -1584,7 +1584,7 @@
     },
     {
       "path": "packages/native/src/posix-files.ts",
-      "sha256": "e5d984ec027bb5116f8f4c7845fa52776b7b3acef418eaae8296733ea9f1dd71"
+      "sha256": "cd2d018a1db7f9ae98264c44df5411735ba02eea008b2a3cb20da30dcb837393"
     },
     {
       "path": "packages/native/src/private-parent.ts",
@@ -1592,7 +1592,7 @@
     },
     {
       "path": "packages/native/src/process-event.ts",
-      "sha256": "919862b584e371beab92439b4c5218a550db2ed09d8de80e537f50b9d06d0adb"
+      "sha256": "a8cebb2815ca7acd4ebc55ca809a3e5d26361d65b3445116d9c2795d485d7ea0"
     },
     {
       "path": "packages/native/src/process-lock.ts",
@@ -1632,7 +1632,7 @@
     },
     {
       "path": "packages/native/src/sqlite-root.ts",
-      "sha256": "7ea0c2ca209b36316d27efb2f1f9829867a55d81b3f45a8e86edf97733b8d086"
+      "sha256": "64ef10f671859a0d56a7541853599fdb50022e89359032c88c6200c7f1420f61"
     },
     {
       "path": "packages/native/src/sqlite-root/main.c",

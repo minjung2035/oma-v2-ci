@@ -13,7 +13,7 @@ import { withAsyncCleanup } from "@oma/native/cleanup";
 import { digestDescriptor } from "@oma/storage/cache-trees";
 
 const pin = resticReleaseFor(process.platform, process.arch);
-if (pin === null) throw new Error("Session storage tool setup requires a pinned Linux/macOS x64 or arm64 release");
+if (pin === null) throw new Error("Session storage tool setup requires a pinned Linux x64/arm64 or macOS arm64 release");
 const dataHome = process.env.XDG_DATA_HOME ?? (process.env.HOME ? join(process.env.HOME, ".local/share") : null);
 if (dataHome === null || !dataHome.startsWith("/")) throw new Error("An absolute HOME or XDG_DATA_HOME is required");
 const boundary = join(dataHome, "oma-toolchain"), directory = join(boundary, "restic", RESTIC_RELEASE.version, `${process.platform}-${process.arch}`);
@@ -53,7 +53,6 @@ await withAsyncCleanup(async () => {
   fchmodSync(executable, 0o755); fsyncSync(executable);
   if (process.platform === "darwin") {
     // Darwin refuses descriptor exec; the job helper binds the mapped image to the pin.
-    // The pinned x64 release carries no code signature, so it cannot be bound and is refused.
     const { verifyInstalledDarwinRestic } = await import("@oma/process/restic");
     console.log((await verifyInstalledDarwinRestic(target, executable)).trim());
   } else {

@@ -15,10 +15,10 @@ let filesystemCall: ((fd: number, output: Buffer) => number) | undefined;
  * on the actual OS. Type numbers belong to Darwin, not Linux's magic table.
  * A held directory is observed; this grants no write or storage authority. */
 export function darwinDirectoryFilesystem(fd: number): DarwinDirectoryFilesystem {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "Darwin filesystem observation requires the 64-bit backend");
   if (!Number.isSafeInteger(fd) || fd < 0 || !fstatSync(fd).isDirectory()) throw new TypeError("filesystem observation requires a directory descriptor");
-  filesystemCall ??= load(null).func(process.arch === "arm64" ? "fstatfs" : "fstatfs$INODE64", "int", ["int", "void *"]);
+  filesystemCall ??= load(null).func("fstatfs", "int", ["int", "void *"]);
   const output = Buffer.alloc(2168);
   if (filesystemCall(fd, output) !== 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "Darwin directory filesystem could not be observed");

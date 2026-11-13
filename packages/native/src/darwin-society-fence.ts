@@ -21,11 +21,11 @@ export function darwinSocietyFencePort(name: string): number {
   return 1024 + Number.parseInt(identity(name).slice(0, 8), 16) % (49152 - 1024);
 }
 function assets() {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch) || (process.getuid?.() ?? 0) <= 0)
+  if (process.platform !== "darwin" || process.arch !== "arm64" || (process.getuid?.() ?? 0) <= 0)
     throw new StoreError("UNSUPPORTED_PROFILE", "Darwin Society fences require an ordinary supported Darwin owner");
   const producer = fileURLToPath(new URL("./society-fence/oma-society-fence-producer", import.meta.url));
   const control = fileURLToPath(new URL("./society-fence/oma-society-fence-control", import.meta.url));
-  const hashes = machoImageCdHashes(readFileSync(producer), process.arch === "arm64" ? "arm64" : "x64");
+  const hashes = machoImageCdHashes(readFileSync(producer), "arm64");
   if (hashes.length !== 1) throw new StoreError("UNSUPPORTED_PROFILE", "fixed fence producer has no unique mapped CodeDirectory");
   return { producer, control, hash: hashes[0]! };
 }

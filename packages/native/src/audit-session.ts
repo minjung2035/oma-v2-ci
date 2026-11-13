@@ -38,7 +38,7 @@ interface ProcCalls {
 }
 let calls: ProcCalls | undefined;
 function native(): ProcCalls {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     throw new StoreError("UNSUPPORTED_PROFILE", "Darwin coalition control requires the 64-bit libproc backend");
   calls ??= (() => {
     const library = load(null), proc = load("/usr/lib/libproc.dylib");

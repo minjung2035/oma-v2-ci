@@ -6,7 +6,7 @@ import { cleanupAll } from "./cleanup.js";
 
 function refuse(message: string): never { throw new StoreError("UNSUPPORTED_PROFILE", message); }
 export function protectDarwinSupervisor(): void {
-  if (process.platform !== "darwin" || !["arm64", "x64"].includes(process.arch))
+  if (process.platform !== "darwin" || process.arch !== "arm64")
     refuse("supervisor protection requires Darwin 64-bit signing information");
   const security = load("/System/Library/Frameworks/Security.framework/Security"),
     foundation = load("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation");

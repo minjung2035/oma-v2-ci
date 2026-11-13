@@ -69,7 +69,7 @@ function selected(path: string, expected?: string): readonly string[] {
       before[key as "dev"] !== after[key as "dev"])) throw unknown("job image changed during selection");
     if (expected !== undefined && createHash("sha256").update(bytes).digest("hex") !== expected)
       throw new StoreError("UNSUPPORTED_PROFILE", "selected native image differs from its trusted installation digest");
-    return machoImageCdHashes(bytes, process.arch === "arm64" ? "arm64" : "x64");
+    return machoImageCdHashes(bytes, "arm64");
   }, () => closeSync(fd));
 }
 async function image(pin: DarwinProcessPin, hashes: readonly string[], retry = true): Promise<DarwinProcessPin> {
